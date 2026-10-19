@@ -26,6 +26,7 @@ export async function fetchSample(opts: { after?: number; gender?: string; categ
 export interface ReviewRow {
   id: number; brand: string; name: string; gender: string | null; category: string | null; subcategory: string | null;
   feed_slot: string | null; feed_ready: boolean; image_status: string; image_reason: string | null; feed_image_url: string | null;
+  feed_bg_color: string | null; feed_whiten: number | null;
   store: string; model: string; cost_usd: number | null;
   attributes: {
     style_weights: Record<string, number>; colors: string[]; pattern: string; material: string; silhouette: string; fit: string;
@@ -35,7 +36,7 @@ export interface ReviewRow {
 }
 
 /** Read-only list of classified products for /review. Calls only the read-only review_list function. */
-export async function fetchReview(args: { source?: string; category?: string; feed_slot?: string; feed_ready?: boolean; after?: number; limit?: number }) {
+export async function fetchReview(args: { source?: string; category?: string; feed_slot?: string; gender?: string; feed_ready?: boolean; after?: number; limit?: number }) {
   const res = await fetch(URL_, {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.DRAPE_PIPELINE_TOKEN ?? ""}`, "content-type": "application/json" },

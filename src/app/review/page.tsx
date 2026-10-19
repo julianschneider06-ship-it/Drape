@@ -6,11 +6,16 @@ export const metadata: Metadata = { title: "Review – Drape", robots: { index: 
 export const dynamic = "force-dynamic";
 
 const PAGE = 24;
-const STORES = ["taylorstitch", "fashionnova", "pangaia", "armedangels", "outdoorvoices", "kith", "aimeleondore", "allbirds", "representclo", "rains", "gymshark"];
+const STORES = [
+  "taylorstitch", "fashionnova", "pangaia", "armedangels", "outdoorvoices", "kith", "aimeleondore", "allbirds", "representclo", "rains", "gymshark",
+  "simonmiller", "stinegoya", "nanushka", "lisasaysgah", "nililotan", "khaite", "cuyana", "thefrankieshop", "outerknown", "sportyandrich",
+  "colorfulstandard", "noah", "universalworks", "oliverspencer", "toddsnyder", "blundstone", "thursdayboots", "ancientgreeksandals", "birdies", "koio",
+];
+const GENDERS = ["women", "men", "unisex"];
 const TYPES = ["tops", "bottoms", "dresses", "outerwear", "shoes", "accessories"];
 const SLOTS = ["top", "bottom", "shoes", "full_body", "none"];
 
-type Params = { store?: string; type?: string; slot?: string; ready?: string; after?: string };
+type Params = { store?: string; type?: string; slot?: string; gender?: string; ready?: string; after?: string };
 const pick = (v: string | undefined, allowed: string[]) => (v && allowed.includes(v) ? v : undefined);
 
 const href = (p: Params) => {
@@ -35,6 +40,7 @@ function Card({ r }: { r: ReviewRow }) {
         <p className="mt-1 flex flex-wrap items-center gap-1">
           <span className="rounded bg-neutral-900 px-1.5 py-0.5 text-white">{r.feed_slot}</span>
           {a.is_outer_layer && <span className="rounded bg-neutral-200 px-1.5 py-0.5">outer layer</span>}
+          {r.feed_bg_color && <span title={`backdrop ${r.feed_bg_color}`} className="inline-block h-3.5 w-3.5 rounded-full border border-neutral-300" style={{ backgroundColor: r.feed_bg_color }} />}
           <span className={`rounded px-1.5 py-0.5 ${r.feed_ready ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
             {r.feed_ready ? "feed_ready" : `needs_image_work · ${r.image_reason}`}
           </span>
@@ -61,10 +67,10 @@ function Card({ r }: { r: ReviewRow }) {
 
 export default async function ReviewPage({ searchParams }: { searchParams: Promise<Params> }) {
   const sp = await searchParams;
-  const store = pick(sp.store, STORES), type = pick(sp.type, TYPES), slot = pick(sp.slot, SLOTS), ready = pick(sp.ready, ["yes", "no"]);
+  const store = pick(sp.store, STORES), type = pick(sp.type, TYPES), slot = pick(sp.slot, SLOTS), gender = pick(sp.gender, GENDERS), ready = pick(sp.ready, ["yes", "no"]);
   const after = Number(sp.after) > 0 ? Number(sp.after) : undefined;
-  const rows = await fetchReview({ source: store, category: type, feed_slot: slot, feed_ready: ready ? ready === "yes" : undefined, after, limit: PAGE });
-  const cur: Params = { store, type, slot, ready };
+  const rows = await fetchReview({ source: store, category: type, feed_slot: slot, gender, feed_ready: ready ? ready === "yes" : undefined, after, limit: PAGE });
+  const cur: Params = { store, type, slot, gender, ready };
 
   const group = (name: keyof Params, label: string, values: string[]) => (
     <div className="-mx-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
@@ -85,6 +91,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
         {group("store", "store", STORES)}
         {group("type", "type", TYPES)}
         {group("slot", "slot", SLOTS)}
+        {group("gender", "gender", GENDERS)}
         {group("ready", "feed ready", ["yes", "no"])}
       </div>
       <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{rows.map((r) => <Card key={r.id} r={r} />)}</ul>
