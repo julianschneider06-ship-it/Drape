@@ -1,42 +1,51 @@
-# Drape – Arbeitsregeln für Claude
+# Drape – Working rules for Claude
 
-Drape ist eine personalisierte Fashion-Discovery-Website: ein vertikal scrollbarer Feed aus Outfits (TikTok-Prinzip), in dem einzelne Produkte angetippt, geliked und gesammelt werden. Mobil zuerst, minimalistisch, weißer Hintergrund. Kein klassischer Online-Shop.
+Drape is a personalized fashion discovery website: a vertically scrolling feed of complete outfits (TikTok principle) in which individual products can be tapped, liked and collected. Mobile first, minimalist, white background. Not a classic online shop.
 
-Der Nutzer hat keine Coding-Erfahrung. Er steuert das gesamte Projekt über Claude (Chat und Claude Code). Antworten an ihn: Deutsch, einfache Worte, kurz.
+The user has no coding experience and steers the whole project through Claude (chat and Claude Code). Reply to the user in English, in simple words, short.
 
-## Grundsätze (Priorität in dieser Reihenfolge)
+## Principles (in order of priority)
 
-1. **Schneller Fortschritt zuerst.** Geradeaus denken, nicht über Randfälle grübeln, nicht an jeder Stelle absichern. Lieber etwas Lauffähiges liefern und danach verbessern.
-2. **Security und Rechte sind vorerst zurückgestellt.** Sie kommen am Ende des Projekts. Bis dahin auf das Minimum reduzieren: keine Härtung, keine Angriffsszenarien, keine Rechtsprüfung (Scraping-Rechte, Datenschutz, Lizenzen), keine Rückfragen dazu. Ausnahmen, die keinen Aufwand kosten und immer gelten:
-   - Geheime Schlüssel (Supabase `service_role`/secret key, API-Schlüssel kostenpflichtiger Dienste) kommen **nie** ins Git-Repo und **nie** in Browser-Code. Sie liegen nur als Umgebungsvariablen in Vercel bzw. Supabase.
-   - Alles, was Geld kostet (kostenpflichtige KI-Aufrufe, Supabase-Upgrades, Domains), darf nicht öffentlich auslösbar sein.
-   - Aufgeschobene Security-Themen werden in `docs/security-backlog.md` notiert, damit sie am Ende nicht vergessen werden.
-3. **Claude erledigt alles selbst.** Der Nutzer soll nie selbst auf Vercel, GitHub oder Supabase arbeiten müssen. Fehlt eine Berechtigung, Verbindung oder Einstellung, sofort anfragen und direkt ändern, nicht auf den Nutzer abwälzen. Nur wenn es technisch unmöglich ist (z. B. Konto anlegen, Zahlung freigeben), dem Nutzer den kürzesten Weg nennen.
-4. **Probleme nicht nur flicken.** Bei jedem Fehler zuerst die Ursache recherchieren (Logs, Dokumentation, Websuche), dann erklären, was los ist, dann beheben und, soweit möglich, die Ursache so verbessern, dass das Problem nicht wiederkommt. Immer aus eigener Initiative den nächsten sinnvollen Schritt vorschlagen, nicht warten.
-5. **Blockaden nicht umgehen.** Wird etwas durch eine Richtlinie des Systems abgelehnt (403 vom Proxy, gesperrte Domain), nicht mit Tricks umgehen, sondern melden und einen legitimen Weg vorschlagen.
+1. **Fast progress first.** Think straight ahead, don't brood over edge cases, don't secure every spot. Ship something that runs, then improve it.
+2. **Security and legal/rights topics are postponed.** They come at the end of the project. Until then keep them to the minimum: no hardening, no attack scenarios, no legal review (scraping rights, privacy, licenses), no questions about them. Exceptions that cost no effort and always apply:
+   - Secret keys (Supabase `service_role`/secret key, API keys of paid services) **never** go into the Git repo and **never** into browser code. They live only as environment variables in Vercel or Supabase.
+   - Anything that costs money (paid AI calls, Supabase upgrades, domains) must not be triggerable by the public.
+   - Postponed security topics are noted in `docs/security-backlog.md` so they are not forgotten at the end.
+3. **Claude does everything itself.** The user should never have to work in Vercel, GitHub or Supabase directly. If a permission, connection or setting is missing, ask for it right away and change it directly instead of pushing the work to the user. Only if it is technically impossible (e.g. creating an account, approving a payment), give the user the shortest path.
+4. **Don't just patch problems.** On every error, research the cause first (logs, documentation, web search), then explain what is going on, then fix it and, as far as possible, improve the root cause so the problem does not come back. Always suggest the next sensible step on your own initiative instead of waiting.
+5. **Don't work around blocks.** If something is denied by a system policy (403 from the proxy, blocked domain), do not use tricks. Report it and suggest a legitimate way.
 
-## Technik
+## Project setup (status: Phase 1 done)
 
-- **Stack:** Next.js (App Router, TypeScript, Tailwind), Supabase (Postgres, Login), Vercel (Hosting), GitHub (Code). Später als PWA für den iPhone-Homescreen.
-- **Deployment:** Push auf `main` deployt automatisch über Vercel.
-- **Datenmodell-Prinzip:** Produkte sind die Objekte, die Nutzer liken und speichern. Outfits werden aus Produkten zusammengesetzt und **nicht** als eigene Einheit gespeichert.
-- **Kein Dislike.** Personalisierung lernt aus Onboarding (Stilrichtungen), Likes und impliziten Signalen (Weiterscrollen, Verweildauer, Antippen).
-- **Produktklassifizierung:** Stil ist eine Kombination von Eigenschaften, nie eine einzelne Kategorie.
-- **Mobil zuerst.** Jede Oberfläche zuerst für ein Smartphone-Display bauen, dann für größere Bildschirme.
+- **GitHub:** `julianschneider06-ship-it/drape`, branch `main`.
+- **Vercel:** project `drape` (id `prj_JSMzTYnpPOwINsbWnRes24mGv2kk`), personal account (no team), framework preset `nextjs`. Live at `https://drape-julian-schneider.vercel.app`. Public access, Vercel Authentication is off. Push to `main` deploys automatically.
+- **Supabase:** project `Drape` (ref `ntknoxzhljktxhsbudlr`, region `eu-west-1`), API URL `https://ntknoxzhljktxhsbudlr.supabase.co`. No tables yet.
+- **Environment variables already set in Vercel** (production, preview, development): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. A secret key is not set yet; if needed, add it in Vercel only.
+- **Vercel tool note:** when using the Vercel MCP tools, do not pass `teamId`. The account is personal, and passing the team id returns 403. Build logs are readable with `list_deployment_events`.
+- **Sandbox note:** the cloud environment's network access must be **Trusted** or **Full** so `npm install` can reach the registry. If `registry.npmjs.org` returns 403, tell the user to switch the environment's network access setting (do not work around it).
 
-## Phasenplan
+## Tech
 
-1. Setup: Repo, Vercel, Supabase verbunden, leere App live
-2. Feed mit Testdaten (ca. 100 Produkte), vertikaler Outfit-Feed, Produkt antippen, Like
-3. Onboarding (Stilauswahl), Login, „Meine Sammlung“
-4. Produktklassifizierung per KI aus dem Produktbild
-5. Outfit-Logik und Personalisierung
-6. Scraping echter Produktdaten (z. B. Zalando)
-7. Security und Rechte
+- **Stack:** Next.js (App Router, TypeScript, Tailwind), Supabase (Postgres, Auth), Vercel (hosting), GitHub (code). Later as a PWA for the iPhone home screen.
+- **Data model principle:** Products are the objects users like and save. Outfits are assembled from products and are **not** stored as their own saved unit.
+- **No dislike.** Personalization learns from onboarding (style directions), likes and implicit signals (scrolling past, dwell time, tapping a product).
+- **Product classification:** Style is a combination of attributes, never a single category.
+- **Mobile first.** Build every screen for a smartphone display first, then for larger screens.
 
-## Arbeitsweise in Claude Code
+## Phase plan
 
-- Commit-Nachrichten kurz auf Deutsch oder Englisch, ein Commit pro abgeschlossenem Schritt.
-- Nach jedem Schritt prüfen, ob der Vercel-Build grün ist, bevor etwas als fertig gemeldet wird.
-- Neue Bibliotheken dürfen ohne Rückfrage hinzugefügt werden, wenn sie dem Fortschritt dienen.
-- Am Ende jeder Antwort in einem Satz sagen, was als Nächstes dran ist.
+1. Setup: repo, Vercel, Supabase connected, empty app live (**done**)
+2. Feed with test data (about 100 products), vertical outfit feed, tap a product, like
+3. Onboarding (style selection), login, "My collection"
+4. Product classification via AI from the product image
+5. Outfit logic and personalization
+6. Scraping real product data (e.g. Zalando)
+7. Security and legal/rights
+
+## Working in Claude Code
+
+- Commit messages short, in English, one commit per finished step.
+- After every step check that the Vercel build is green before reporting anything as done.
+- New libraries may be added without asking if they serve progress.
+- Create database tables and migrations yourself (Supabase tools or SQL migrations in the repo).
+- End every reply with one sentence saying what comes next.
