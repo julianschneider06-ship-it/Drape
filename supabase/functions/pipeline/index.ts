@@ -9,19 +9,23 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-async function tokenOk(req: Request): Promise<boolean> {
+// Returns the token's label, or null. Tokens labelled "vercel-*" are read-only (web app).
+async function tokenLabel(req: Request): Promise<string | null> {
   const got = (req.headers.get("authorization") ?? "").replace(/^Bearer /, "");
-  if (got.length < 32) return false;
+  if (got.length < 32) return null;
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(got));
   const hash = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  const { data } = await db.from("pipeline_tokens").select("token_hash").eq("token_hash", hash).maybeSingle();
-  return !!data;
+  const { data } = await db.from("pipeline_tokens").select("label").eq("token_hash", hash).maybeSingle();
+  return data?.label ?? null;
 }
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
-  if (!(await tokenOk(req))) return json({ error: "unauthorized" }, 401);
+  const label = await tokenLabel(req);
+  if (!label) return json({ error: "unauthorized" }, 401);
   const { action, ...a } = await req.json();
+  const readOnlyOk = action === "sample" || (action === "rpc" && a.fn === "review_list");
+  if (label.startsWith("vercel") && !readOnlyOk) return json({ error: "forbidden for this token" }, 403);
 
   switch (action) {
     case "source_upsert": {
@@ -64,6 +68,14 @@ Deno.serve(async (req) => {
       const e = await db.from("product_embeddings").upsert(a.embedding, { onConflict: "product_id,kind,model,dims" }).select("id").single();
       if (e.error) return json({ error: e.error.message }, 500);
       return json({ classification_id: c.data.id, embedding_id: e.data.id });
+    }
+    case "rpc": {
+      // Only allow-listed database functions. None of them can reach a paid service.
+      const ALLOWED = ["backfill_product_images", "images_todo", "images_apply", "queue_enqueue", "claim_classification_batch",
+        "queue_finish", "classify_inputs", "classification_store", "pick_classification_sample", "review_list"];
+      if (!ALLOWED.includes(a.fn)) return json({ error: "function not allowed" }, 403);
+      const { data, error } = await db.rpc(a.fn, a.args ?? {});
+      return error ? json({ error: error.message }, 500) : json({ data });
     }
     case "sample": {
       // Read-only, cursor-paginated product list for /sample.
