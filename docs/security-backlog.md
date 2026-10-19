@@ -7,3 +7,4 @@ Bewusst zurückgestellt, bis der Kern fertig ist (Phase 7). Neue Punkte hier erg
 - Rechtliche Prüfung des Scrapings (Zalando u. a.), Bildrechte, Affiliate-Alternativen
 - Datenschutz: Datenschutzerklärung, Cookie-Hinweis, Löschung von Nutzerdaten
 - Rate Limiting für Endpunkte, die Kosten verursachen (KI-Klassifizierung)
+- Gemini-API-Schlüssel (`GEMINI_API_KEY` in Vercel) neu erzeugen und ersetzen: Er wurde im Chat eingefügt und liegt dort im Verlauf
