@@ -6,7 +6,7 @@ The user has no coding experience and steers the whole project through Claude (c
 
 ## Principles (in order of priority)
 
-1. **Fast progress first.** Think straight ahead, don't brood over edge cases, don't secure every spot. Ship something that runs, then improve it.
+1. **Fast progress first.** Think straight ahead, don't brood over edge cases, don't secure every spot. Ship something that runs, then improve it. The one limit: never take a shortcut that blocks scalability (see "Scalability" below).
 2. **Security and legal/rights topics are postponed.** They come at the end of the project. Until then keep them to the minimum: no hardening, no attack scenarios, no legal review (scraping rights, privacy, licenses), no questions about them. Exceptions that cost no effort and always apply:
    - Secret keys (Supabase `service_role`/secret key, API keys of paid services) **never** go into the Git repo and **never** into browser code. They live only as environment variables in Vercel or Supabase.
    - Anything that costs money (paid AI calls, Supabase upgrades, domains) must not be triggerable by the public.
@@ -14,6 +14,17 @@ The user has no coding experience and steers the whole project through Claude (c
 3. **Claude does everything itself.** The user should never have to work in Vercel, GitHub or Supabase directly. If a permission, connection or setting is missing, ask for it right away and change it directly instead of pushing the work to the user. Only if it is technically impossible (e.g. creating an account, approving a payment), give the user the shortest path.
 4. **Don't just patch problems.** On every error, research the cause first (logs, documentation, web search), then explain what is going on, then fix it and, as far as possible, improve the root cause so the problem does not come back. Always suggest the next sensible step on your own initiative instead of waiting.
 5. **Don't work around blocks.** If something is denied by a system policy (403 from the proxy, blocked domain), do not use tricks. Report it and suggest a legitimate way.
+
+## Scalability (core requirement, applies even in fast mode)
+
+Scalability is very important to the user. Design for millions of products and users from day one. Cheap choices that would block scaling later are not allowed, even when moving fast.
+
+- **Source adapters.** Product data enters through a source-adapter layer (crawler, affiliate feed, ...). Every adapter normalizes into the same product schema, so sources are swappable and new shops can be added without touching the rest. The same product from several shops merges into one canonical product with several offers.
+- **Background work, never in the request path.** Ingestion and AI classification run as batched, idempotent background jobs (queue, cron, edge functions). Classify each product once and store attributes plus an embedding (pgvector). Never re-classify unchanged products.
+- **Fast feed.** Feed requests use precomputed or cached candidate pools, indexed queries and cursor pagination. No full-table scans, no heavy computation per request.
+- **User signals.** Store interactions in an append-only event log and keep a compact per-user taste vector that is updated incrementally. Plan for partitioning or archiving of events.
+- **Cost control.** Batch AI calls, cache results, and keep paid calls out of public reach.
+- Record architecture decisions that matter for scale in `docs/architecture.md`.
 
 ## Project setup (status: Phase 1 done)
 
