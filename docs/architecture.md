@@ -70,3 +70,10 @@ AI classification is not part of this step. `classification_queue` exists and is
 - **Brand clean-up without changing keys.** `brandKey`/`keyBrand`: the display brand can be renamed (Gymshark) while the canonical key keeps using the old string, so re-ingest never creates duplicates. Existing rows were updated with an idempotent `update ... where brand like 'Gymshark |%'`.
 - **Scale levers for the classification job:** parallel workers are safe (`for update skip locked`); cost per product is ~$0.0011-0.0013; Gemini batch mode (-50%) is the next lever for the million-product run.
 - **Operational note:** the Supabase MCP tool hangs on destructive SQL (DROP/DELETE/TRUNCATE); migrations are written without them.
+
+## Results: full classification (taxonomy v2, 3.1 Flash-Lite, low resolution), 2026-10-19
+
+- 8,558 active products, ALL classified (0 failures, 0 invalid JSON rows), 8,558 image embeddings. 7,118 (83%) are feed_ready; 1,377 need image work because a model is in the photo, 39 low suitability, 24 need a cutout.
+- Cost of the full run: $9.75 classification + $0.99 embeddings (incl. the first 201 products on 3.5 Flash-Lite, $0.57). About $0.0013 per product. 8,357 products in ~50 min with 2 parallel workers (~2.8 products/s); the data-derived retry policy skipped the runner-up retry for Fashion Nova, Armedangels and Gymshark (~470 saved calls).
+- feed_ready per slot (AI gender): top men 1,340 / women 1,304; bottom men 414 / women 660; shoes men 322 / women 996; full_body women 455 (men 18: men's sets/jumpsuits barely exist in these shops). Unisex items: top 689, bottom 116, shoes 406.
+- Weak spots: stores that only photograph on models (Armedangels 2%, Gymshark 8%, Fashion Nova 14%, The Frankie Shop 22%, Outdoor Voices 23%); the free pre-selection only keeps 2 candidates per product, so a packshot at position 3-5 is never seen. Quick wins: keep 3 candidates, and retry when suitability < 0.7 (not only < 0.5) for stores where the runner-up usually helps (Noah, Kith, Khaite).
