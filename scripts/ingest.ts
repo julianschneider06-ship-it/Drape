@@ -8,7 +8,7 @@ import { sink, toRow } from "../src/ingest/sink";
 const args = process.argv.slice(2);
 const flag = (n: string) => args.includes(`--${n}`);
 const values = (n: string) => args.flatMap((a, i) => (a === `--${n}` ? [args[i + 1]] : []));
-const max = Number(values("max")[0] ?? 200); // max kept products per source
+const defaultMax = Number(values("max")[0] ?? 200); // max kept products per source (a source can override with options.max)
 const only = values("source");
 const dry = flag("dry-run");
 
@@ -18,6 +18,7 @@ async function run(slug: string) {
   const cfg = SOURCES.find((s) => s.slug === slug)!;
   const adapter = createAdapter(cfg);
   const feeds = adapter.feedCount ?? 1;
+  const max = Number((cfg.options as { max?: number } | undefined)?.max ?? defaultMax);
   const perFeed = Math.ceil(max / feeds);
   const stats = { fetched: 0, kept: 0, skipped: 0, new_offers: 0, pages: 0 };
   const keptInFeed: number[] = Array(feeds).fill(0);

@@ -10,6 +10,8 @@ export interface ShopifyOptions {
   defaultGender?: Gender | null; // used when title/type/tags give no signal
   /** Optional collection feeds, e.g. [{handle:"mens-clothing", gender:"men"}]. Default: whole catalogue. */
   feeds?: { handle?: string; gender?: Gender }[];
+  exclude?: string[]; // categories to skip at ingestion (e.g. ["accessories"]: not used by the feed slots)
+  max?: number; // products to keep for this store (default: the CLI --max)
   maxPages?: number; // safety cap per feed
   minDelayMs?: number;
 }
@@ -75,7 +77,8 @@ export class ShopifyAdapter implements SourceAdapter {
     colour = colour ?? colourTag?.trim() ?? null;
 
     const category = inferCategory(p.product_type, p.title, tags.filter((t) => /categor/i.test(t)).join(" "), tags.join(" "));
-    const gender = inferGender(feed.gender ?? this.o.defaultGender ?? null, p.product_type, p.title, tags.join(" "), p.handle);
+    if (this.o.exclude?.includes(category)) return null;
+    const gender = inferGender(feed.gender ?? this.o.defaultGender ?? null, p.product_type, p.title, tags.join(" "), p.handle, p.vendor);
 
     // Price of the cheapest available variant (else cheapest overall).
     const avail = p.variants.filter((v) => v.available);
