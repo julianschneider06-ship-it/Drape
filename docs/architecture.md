@@ -35,3 +35,9 @@ AI classification is not part of this step. `classification_queue` exists and is
 - `/sample` orders by id, so it is grouped by shop. The real feed will use precomputed candidate pools.
 - 400 hidden orphan product rows (status `hidden`) remain from the first sample run; delete them when convenient.
 - At millions of rows: partition `raw_items` by source or archive old payloads; run `ingest_batch` calls from a queue or cron (Edge Function / Vercel cron).
+
+## Classification (taxonomy v1, tested on one product)
+
+- Taxonomy and strict JSON schema: `src/classify/taxonomy.ts` (`TAXONOMY_VERSION = "v1"`). 10 style weights (0..1, never a single label), category, gender, colors, pattern, material, silhouette, fit, boldness, formality, outfit_role, season, confidence. Output is forced by `responseJsonSchema` and validated again with Ajv.
+- Results: `product_classifications` (unique per product + taxonomy version + model, so nothing is classified twice) and `product_embeddings` (`vector(1536)`, L2-normalized, from the product image). Model name and version, token usage, cost and latency are stored with each row.
+- One-product test: `npx tsx scripts/classify-one.ts <product_id>`. About $0.0011 and 3.4 s per product (classification + image embedding).

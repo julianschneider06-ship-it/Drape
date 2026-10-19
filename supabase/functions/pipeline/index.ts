@@ -53,6 +53,18 @@ Deno.serve(async (req) => {
       const { data, error } = await db.rpc("ingest_batch", { p_source_id: a.source_id, p_run_id: a.run_id, p_items: a.items });
       return error ? json({ error: error.message }, 500) : json(data);
     }
+    case "product_get": {
+      const { data, error } = await db.from("products").select("id,brand,name,gender,category,colour,primary_image_url").eq("id", a.id).single();
+      return error ? json({ error: error.message }, 500) : json({ product: data });
+    }
+    case "classification_store": {
+      // Upsert by (product, taxonomy, model): re-running replaces, never duplicates.
+      const c = await db.from("product_classifications").upsert(a.classification, { onConflict: "product_id,taxonomy_version,model" }).select("id").single();
+      if (c.error) return json({ error: c.error.message }, 500);
+      const e = await db.from("product_embeddings").upsert(a.embedding, { onConflict: "product_id,kind,model,dims" }).select("id").single();
+      if (e.error) return json({ error: e.error.message }, 500);
+      return json({ classification_id: c.data.id, embedding_id: e.data.id });
+    }
     case "sample": {
       // Read-only, cursor-paginated product list for /sample.
       const limit = Math.min(Number(a.limit ?? 48), 100);
