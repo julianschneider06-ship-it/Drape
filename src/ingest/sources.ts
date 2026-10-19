@@ -15,7 +15,7 @@ export const SOURCES: SourceConfig[] = [
   shopify("allbirds", "Allbirds", "https://allbirds.com", "USD"),
   shopify("representclo", "Represent", "https://representclo.com", "USD", { brand: "Represent", defaultGender: "men" }),
   shopify("rains", "Rains", "https://rains.com", "EUR"),
-  shopify("gymshark", "Gymshark", "https://gymshark.com", "USD"),
+  shopify("gymshark", "Gymshark", "https://gymshark.com", "USD", { brand: "Gymshark", keyBrand: "Gymshark | Be a visionary." }),
   // Inactive stub: blocked by bot protection, needs a partner feed.
   { slug: "zalando-de", name: "Zalando DE", kind: "zalando", baseUrl: "https://en.zalando.de", active: false },
 ];

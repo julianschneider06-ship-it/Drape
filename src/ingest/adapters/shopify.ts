@@ -6,6 +6,7 @@ import type { Cursor, Gender, NormalizedProduct, Page, RawItem, SourceAdapter, S
 export interface ShopifyOptions {
   currency: string; // products.json has no currency; comes from the store's /meta.json
   brand?: string; // override when `vendor` is not the brand
+  keyBrand?: string; // keep building canonical keys from this string (brand renamed after products already existed)
   defaultGender?: Gender | null; // used when title/type/tags give no signal
   /** Optional collection feeds, e.g. [{handle:"mens-clothing", gender:"men"}]. Default: whole catalogue. */
   feeds?: { handle?: string; gender?: Gender }[];
@@ -87,6 +88,7 @@ export class ShopifyAdapter implements SourceAdapter {
       externalId: raw.externalId,
       url: `${this.cfg.baseUrl}/products/${p.handle}`,
       brand: (this.o.brand ?? p.vendor).trim(),
+      brandKey: this.o.keyBrand?.trim(),
       name,
       gender,
       category,

@@ -50,7 +50,7 @@ export function toRow(p: NormalizedProduct, raw: RawItem, sourceSlug: string) {
     // Without a known colour we cannot be sure two items are the same, so they stay separate.
     canonical_key: hash(
       p.colour
-        ? [normKey(p.brand), normKey(p.name), normKey(p.colour), p.gender ?? ""].join("|")
+        ? [normKey(p.brandKey ?? p.brand), normKey(p.name), normKey(p.colour), p.gender ?? ""].join("|")
         : ["unmerged", sourceSlug, p.externalId].join("|"),
     ),
     price_cents: p.priceCents, compare_at_cents: p.compareAtCents, currency: p.currency,

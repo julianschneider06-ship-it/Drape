@@ -4,7 +4,7 @@ import sharp from "sharp";
 const clamp = (x: number) => Math.max(0, Math.min(1, x));
 
 export interface ImageIn { id: number; url: string; pos: number; alt: string | null; width: number | null; height: number | null }
-export interface ImageScore { id: number; bg_whiteness: number | null; object_fill: number | null; view_hint: string; score: number; feed_rank?: number }
+export interface ImageScore { id: number; bg_whiteness: number | null; object_fill: number | null; view_hint: string; score: number; feed_rank?: number; bg_color: string | null; whiten_factor: number | null }
 
 const GOOD = /\b(front|flat|still|packshot|pack[-_ ]?shot|pdp|ghost|cutout|hero|studio|ecom|e-?comm|product[-_ ]?shot)\b|[-_ ](f|ff)\.(jpe?g|png|webp)/i;
 const MODEL = /\b(model|look|lifestyle|worn|wearing|on[-_ ]?model|campaign|editorial|street|outfit|styled|style)\b/i;
@@ -25,7 +25,7 @@ export function viewHint(url: string, alt: string | null): string {
  * bg = how plain AND bright the border is (white studio = 1, light grey backdrop ~0.6, busy scene = low).
  * fill = share of the frame covered by the bounding box of everything that differs from the border colour.
  */
-export async function pixelStats(url: string): Promise<{ bg: number; fill: number } | null> {
+export async function pixelStats(url: string): Promise<{ bg: number; fill: number; color: string; whiten: number } | null> {
   const thumb = url + (url.includes("?") ? "&" : "?") + "width=200";
   const res = await fetch(thumb, { signal: AbortSignal.timeout(20_000) });
   if (!res.ok) return null;
@@ -47,11 +47,15 @@ export async function pixelStats(url: string): Promise<{ bg: number; fill: numbe
     if (dist(data[i], data[i + 1], data[i + 2]) > 24) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
   }
   const fill = maxX < 0 ? 0 : ((maxX - minX + 1) * (maxY - minY + 1)) / (w * h);
-  return { bg: plain * brightness, fill };
+  const hex = "#" + med.map((v) => v.toString(16).padStart(2, "0")).join("");
+  const luma = 0.2126 * med[0] + 0.7152 * med[1] + 0.0722 * med[2];
+  // CSS filter: brightness(whiten) turns this backdrop white (capped so a dark backdrop is not blown out).
+  const whiten = luma >= 200 ? +Math.min(1.3, 255 / Math.max(luma, 1)).toFixed(3) : 1;
+  return { bg: plain * brightness, fill, color: hex, whiten };
 }
 
 
-export function combine(img: ImageIn, px: { bg: number; fill: number } | null): ImageScore {
+export function combine(img: ImageIn, px: { bg: number; fill: number; color: string; whiten: number } | null): ImageScore {
   const name = `${decodeURIComponent(img.url.split("?")[0].split("/").pop() ?? "")} ${img.alt ?? ""}`;
   const hint = viewHint(img.url, img.alt);
   let hintScore = 0.5;
@@ -68,5 +72,5 @@ export function combine(img: ImageIn, px: { bg: number; fill: number } | null): 
   const ratio = img.width && img.height ? img.width / img.height : null;
   const aspectScore = ratio == null ? 0.5 : ratio >= 0.7 && ratio <= 1.1 ? 1 : ratio >= 0.55 && ratio <= 1.4 ? 0.6 : 0.2;
   const score = 0.35 * bg + 0.2 * clamp(fillScore) + 0.25 * hintScore + 0.1 * posScore + 0.1 * aspectScore;
-  return { id: img.id, bg_whiteness: px ? +bg.toFixed(3) : null, object_fill: px ? +fill.toFixed(3) : null, view_hint: hint, score: +score.toFixed(4) };
+  return { id: img.id, bg_whiteness: px ? +bg.toFixed(3) : null, object_fill: px ? +fill.toFixed(3) : null, view_hint: hint, score: +score.toFixed(4), bg_color: px?.color ?? null, whiten_factor: px?.whiten ?? null };
 }

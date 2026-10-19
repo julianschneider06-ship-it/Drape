@@ -7,6 +7,8 @@ export interface NormalizedProduct {
   externalId: string; // stable id inside the source; the upsert key together with the source
   url: string;
   brand: string;
+  /** What the canonical key is built from (defaults to brand). Lets a display brand be cleaned up without changing product keys. */
+  brandKey?: string;
   name: string;
   gender: Gender | null;
   category: Category;

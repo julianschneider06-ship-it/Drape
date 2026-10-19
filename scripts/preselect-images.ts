@@ -35,7 +35,7 @@ async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
       const list = (scored.get(p.product_id) ?? []).sort((a, b) => b.score - a.score);
       list.forEach((s, i) => { s.feed_rank = i + 1; results.push(s); });
       // images beyond the cap: mark analyzed with no rank so they are not picked up again
-      for (const extra of p.images.slice(MAX_PER_PRODUCT)) results.push({ id: extra.id, bg_whiteness: null, object_fill: null, view_hint: "unknown", score: 0, feed_rank: 99 });
+      for (const extra of p.images.slice(MAX_PER_PRODUCT)) results.push({ id: extra.id, bg_whiteness: null, object_fill: null, view_hint: "unknown", score: 0, feed_rank: 99, bg_color: null, whiten_factor: null });
       products++;
     }
     images += results.length;

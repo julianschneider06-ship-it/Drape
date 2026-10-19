@@ -2,6 +2,8 @@
 import { STYLES, STYLE_KEYS } from "./styles";
 
 export const TAXONOMY_VERSION = "v2";
+// Prompt revision (stored in usage, part of the input hash). 2 = plain light-neutral backdrops count as feed-suitable.
+export const PROMPT_REV = 2;
 
 export const FEED_SLOTS = ["top", "bottom", "shoes", "full_body", "none"] as const;
 export const CATEGORIES = ["tops", "bottoms", "dresses", "outerwear", "shoes", "accessories"] as const;
@@ -94,8 +96,8 @@ Other fields:
 Image judgement (about THIS image only):
 - has_model: true if a person or mannequin body is visible wearing or holding the item.
 - view: front | back | side | detail | flat_lay | on_model.
-- background: white (plain white/very light studio) | neutral (plain but coloured or grey) | busy (scene, room, outdoors, pattern).
-- feed_suitability 0..1: how well this image works as a feed image, which must be a frontal product shot on a plain white background, product only, no model, whole item visible. 1 = perfect; below 0.5 = unusable.
-- needs_cutout: true if the image has a busy background or a model, so the item would have to be cut out first.
+- background: white (plain white or very light studio backdrop, including off-white, light grey and warm beige) | neutral (plain but clearly coloured or mid/dark grey) | busy (scene, room, outdoors, pattern, gradient).
+- feed_suitability 0..1: how well this image works as a feed image, which must be a frontal product shot on a plain light background, product only, no model, whole item visible. A plain light-neutral backdrop (white, off-white, light grey, warm beige) is as good as pure white: do NOT lower the score for it. 1 = perfect; below 0.5 = unusable.
+- needs_cutout: true only if the background is busy or strongly coloured, or a person/mannequin is in the image, so the item would have to be cut out first. A plain light backdrop means false.
 
 Return only JSON.`;

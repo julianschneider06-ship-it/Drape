@@ -72,7 +72,8 @@ Deno.serve(async (req) => {
     case "rpc": {
       // Only allow-listed database functions. None of them can reach a paid service.
       const ALLOWED = ["backfill_product_images", "images_todo", "images_apply", "queue_enqueue", "claim_classification_batch",
-        "queue_finish", "classify_inputs", "classification_store", "pick_classification_sample", "review_list"];
+        "queue_finish", "classify_inputs", "classification_store", "pick_classification_sample", "review_list",
+        "store_retry_policy", "refresh_feed_bg"];
       if (!ALLOWED.includes(a.fn)) return json({ error: "function not allowed" }, 403);
       const { data, error } = await db.rpc(a.fn, a.args ?? {});
       return error ? json({ error: error.message }, 500) : json({ data });

@@ -12,7 +12,7 @@ import {
 } from "../src/config/models";
 import { GEMINI_API_BASE, MODELS } from "../src/config/models";
 import { rpc } from "../src/ingest/gateway";
-import { CLASSIFICATION_SCHEMA, PROMPT, TAXONOMY_VERSION } from "../src/classify/taxonomy-v2";
+import { CLASSIFICATION_SCHEMA, PROMPT, PROMPT_REV, TAXONOMY_VERSION } from "../src/classify/taxonomy-v2";
 
 const args = process.argv.slice(2);
 const opt = (n: string) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : undefined; };
@@ -21,10 +21,11 @@ const flag = (n: string) => args.includes(`--${n}`);
 const KEY = process.env.GEMINI_API_KEY!;
 const MODEL = opt("model") ?? MODELS.classifier;
 const CAP = Number(opt("cap") ?? 0.8);
-const CONCURRENCY = Number(opt("concurrency") ?? 6);
+const CONCURRENCY = Number(opt("concurrency") ?? 16);
 const LIMIT = Number(opt("limit") ?? Infinity);
-const RES = opt("res"); // optional media resolution for the image tokens
+const RES = opt("res") ?? process.env.DRAPE_MEDIA_RES ?? "low"; // image resolution: low = ~38% cheaper, same slot/category/feed-ready on 50/50 products
 const FORCE = flag("force"); // ignore the unchanged-input skip
+const NOSTORE = flag("no-store"); // experiments: call the model and log, but write nothing to the database
 const DIRECT = flag("direct"); // process --ids directly, without the queue (used for model comparison runs)
 const UPDATE_PRODUCT = !flag("no-product-update") && MODEL === MODELS.classifier; // only the primary model drives feed fields
 const EMBED_DIMS = 1536;
@@ -95,20 +96,25 @@ async function embed(img: { mime: string; b64: string }) {
   return { vec: raw.map((x) => x / norm), tokens, cost: (tokens * EMBEDDING_IMAGE_PRICE_PER_M) / 1e6, usage: r.json.usageMetadata };
 }
 
-const stats = { claimed: 0, classified: 0, skipped_unchanged: 0, failed: 0, invalid_json_first_try: 0, retried_runner_up: 0,
+let policy: Record<string, { skip_retry?: boolean }> = {}; // per-store retry policy, derived from past results
+const stats = { skipped_retry_policy: 0, skipped_already_v2: 0, claimed: 0, classified: 0, skipped_unchanged: 0, failed: 0, invalid_json_first_try: 0, retried_runner_up: 0,
   runner_up_better: 0, cost: 0, embed_cost: 0, ms: 0, in_tokens: 0, out_tokens: 0, feed_ready: 0, capped: false };
 let modelVersionMeta: string | undefined, embVersionMeta: string | undefined;
 
 async function processProduct(item: any, q: { id: number | null }) {
   const images: { url: string; rank: number }[] = item.images;
   if (!images.length) throw new Error("no pre-selected image");
-  const hash = sha([TAXONOMY_VERSION, MODEL, item.brand, item.name, ...images.map((i) => i.url), RES ?? ""].join("|"));
+  // Already classified with this taxonomy by any model: never classify again (unless --force or a --direct comparison).
+  if (!FORCE && !DIRECT && item.has_v2) { stats.skipped_already_v2++; if (q.id) await rpc("queue_finish", { p_id: q.id, p_ok: true, p_error: null }); return; }
+  const hash = sha([TAXONOMY_VERSION, PROMPT_REV, MODEL, item.brand, item.name, ...images.map((i) => i.url), RES ?? ""].join("|"));
   if (!FORCE && item.existing_hash === hash) { stats.skipped_unchanged++; if (q.id) await rpc("queue_finish", { p_id: q.id, p_ok: true, p_error: null }); return; }
 
   const attempts: Attempt[] = [await classifyImage(item, images[0].url)];
   if (!attempts[0].valid) stats.invalid_json_first_try++;
   const first = attempts[0].attrs?.feed_suitability ?? 0;
-  if ((!attempts[0].valid || first < RETRY_BELOW_SUITABILITY) && images[1]) {
+  const skipRetry = !!policy[item.store]?.skip_retry; // store where the runner-up practically never helps
+  if ((!attempts[0].valid || first < RETRY_BELOW_SUITABILITY) && images[1] && skipRetry) stats.skipped_retry_policy++;
+  if ((!attempts[0].valid || first < RETRY_BELOW_SUITABILITY) && images[1] && !skipRetry) {
     stats.retried_runner_up++;
     attempts.push(await classifyImage(item, images[1].url));
   }
@@ -125,12 +131,12 @@ async function processProduct(item: any, q: { id: number | null }) {
   const cost = attempts.reduce((s, x) => s + x.cost, 0);
   const ms = attempts.reduce((s, x) => s + x.ms, 0);
 
-  await rpc("classification_store", { p: {
+  if (!NOSTORE) await rpc("classification_store", { p: {
     product_id: item.id, queue_id: q.id ?? undefined, update_product: UPDATE_PRODUCT,
     classification: {
       taxonomy_version: TAXONOMY_VERSION, model: MODEL, model_version: modelVersionMeta, attributes: a, confidence: a.confidence, valid: true,
-      usage: { ...best.usage, responseModelVersion: best.modelVersion, mediaResolution: RES ?? "default",
-        attempts: attempts.map((x) => ({ image: x.url, valid: x.valid, feed_suitability: x.attrs?.feed_suitability ?? null, cost_usd: x.cost, in: x.usage.promptTokenCount, out: x.usage.candidatesTokenCount })) },
+      usage: { ...best.usage, responseModelVersion: best.modelVersion, mediaResolution: RES ?? "default", promptRev: PROMPT_REV,
+        attempts: attempts.map((x) => ({ image: x.url, valid: x.valid, has_model: x.attrs?.has_model ?? null, feed_suitability: x.attrs?.feed_suitability ?? null, cost_usd: x.cost, in: x.usage.promptTokenCount, out: x.usage.candidatesTokenCount })) },
       cost_usd: cost, latency_ms: ms, source_image_url: best.url, input_hash: hash,
     },
     embedding: emb ? { model: MODELS.embedding, model_version: embVersionMeta, dims: EMBED_DIMS, embedding: `[${emb.vec.join(",")}]`,
@@ -142,8 +148,10 @@ async function processProduct(item: any, q: { id: number | null }) {
   for (const x of attempts) { stats.in_tokens += x.usage.promptTokenCount ?? 0; stats.out_tokens += (x.usage.candidatesTokenCount ?? 0) + (x.usage.thoughtsTokenCount ?? 0); }
   if (ready) stats.feed_ready++;
   if (LOG) appendFileSync(LOG, JSON.stringify({ id: item.id, model: MODEL, brand: item.brand, name: item.name, image: best.url, attempts: attempts.length,
-    ready, reason, cost, ms, feed_slot: a.feed_slot, category: a.category, subcategory: a.subcategory, has_model: a.has_model, view: a.view,
-    background: a.background, suitability: a.feed_suitability, needs_cutout: a.needs_cutout }) + "\n");
+    store: item.store, ready, reason, cost, ms, feed_slot: a.feed_slot, category: a.category, subcategory: a.subcategory, has_model: a.has_model, view: a.view,
+    background: a.background, suitability: a.feed_suitability, needs_cutout: a.needs_cutout,
+    pattern: a.pattern, material: a.material, color0: a.colors?.[0], silhouette: a.silhouette, fit: a.fit, gender: a.gender,
+    top_style: Object.entries(a.style_weights as Record<string, number>).sort((x, y) => y[1] - x[1])[0][0] }) + "\n");
 }
 
 (async () => {
@@ -165,6 +173,7 @@ async function processProduct(item: any, q: { id: number | null }) {
   const t0 = Date.now();
   while (stats.claimed < LIMIT) {
     if (stats.cost + stats.embed_cost >= CAP) { stats.capped = true; console.log(`COST CAP $${CAP} reached, stopping`); break; }
+    policy = await rpc("store_retry_policy");
     const claimed = DIRECT
       ? ids!.slice(stats.claimed, stats.claimed + CONCURRENCY).map((product_id) => ({ id: null as number | null, product_id }))
       : await rpc<{ id: number | null; product_id: number }[]>("claim_classification_batch", { p_n: Math.min(CONCURRENCY, LIMIT - stats.claimed), p_tax: TAXONOMY_VERSION });
@@ -182,5 +191,7 @@ async function processProduct(item: any, q: { id: number | null }) {
     }));
     console.log(`claimed ${stats.claimed} classified ${stats.classified} failed ${stats.failed} cost $${(stats.cost + stats.embed_cost).toFixed(4)} (${((Date.now() - t0) / 1000) | 0}s)`);
   }
+  console.log("feed bg refreshed:", await rpc("refresh_feed_bg"));
+  console.log("store retry policy:", JSON.stringify(policy));
   console.log(JSON.stringify({ model: MODEL, taxonomy: TAXONOMY_VERSION, ...stats, total_cost: stats.cost + stats.embed_cost, wall_seconds: (Date.now() - t0) / 1000 }, null, 2));
 })().catch((e) => { console.error(e); process.exit(1); });
