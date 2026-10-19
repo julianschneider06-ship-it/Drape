@@ -1,5 +1,5 @@
 // Free image pre-selection backfill. Idempotent: only images without analyzed_at are processed.
-// Usage: npx tsx scripts/preselect-images.ts [--limit-products N]
+// Runs as the step after ingestion (npm run ingest:all) and as a backfill. Usage: npx tsx scripts/preselect-images.ts [--limit-products N]
 import { rpc } from "../src/ingest/gateway";
 import { combine, pixelStats, type ImageIn, type ImageScore } from "../src/images/score";
 
@@ -14,6 +14,8 @@ async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
 }
 
 (async () => {
+  // New products only carry the images the ingest normalizer kept; pull all of them (with alt text) from the raw payloads first.
+  await rpc("backfill_product_images");
   let after = 0, products = 0, images = 0;
   const t0 = Date.now();
   while (products < limit) {

@@ -51,3 +51,11 @@ AI classification is not part of this step. `classification_queue` exists and is
 - **Later: image work job (not built).** Products with `needs_image_work` get processed by a separate background job (background removal / cutout or regeneration), the result is stored in OUR OWN storage (rights, speed, stable URLs), the product gets a new `feed_image_url`, and `feed_ready` flips to true. Nothing else changes.
 - **Embeddings** are made from the final chosen image (1536 dims, L2-normalized) with an HNSW cosine index (`product_embeddings_hnsw_idx`).
 - **Cost levers at scale:** Gemini batch mode (50% off), a cheaper model, lower image resolution (`mediaResolution`), context caching for the long static prompt, and classifying each product once.
+
+## Test results: 200 products (taxonomy v2, gemini-3.5-flash-lite), 2026-10-19
+
+- 201 classified (incl. product #10), 0 failures, JSON invalid on the first try in 3 of 303 calls (~1%), always fixed by the single retry.
+- Cost: $0.0028 per product incl. runner-up retries (about 50% of products retry), plus $0.00012 for the image embedding. Cheaper `gemini-3.1-flash-lite` (the 2.5 Flash-Lite is closed to new users): $0.0019 per product, same feed_slot/category on 50/50 products, 96% same feed_ready.
+- First image rejected by Gemini (suitability < 0.5) for 50% of products; the runner-up was better in 34 of 102 retries. Stores that only photograph on models (Fashion Nova, Armedangels, Gymshark, Outdoor Voices) are 11-44% feed_ready; stores with packshots (Taylor Stitch, Aimé Leon Dore, Kith, Allbirds, Pangaia, Rains) are 73-100%.
+- Embedding neighbours (5 seeds) look visually sensible: jackets near shirt jackets/bombers, shoes near shoes, dresses near dresses. They also pick up photo style (Pangaia's warm-grey backdrop).
+- Ideas not yet tested: `mediaResolution` low (image tokens are ~half of the input), context caching of the static prompt, skipping the runner-up retry for model-only shops, Gemini batch mode (-50%).
