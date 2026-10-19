@@ -11,3 +11,6 @@ Bewusst zurückgestellt, bis der Kern fertig ist (Phase 7). Neue Punkte hier erg
 - Supabase: Die Pipeline-Tabellen haben RLS ohne Policies (nur Service-Rolle schreibt/liest). Später prüfen, ob für `/sample` und den Feed gezielte Lese-Policies oder ein eigener Lese-Pfad nötig sind
 - Supabase: Bereits vorhandene Funktion `public.rls_auto_enable()` ist für anon/authenticated ausführbar (Advisor-Warnung, nicht von uns angelegt) – Rechte entziehen
 - Pipeline-Zugang: Edge Function `pipeline` ist mit einem geteilten Token (Tabelle `pipeline_tokens` (nur Hash)) geschützt; vor dem Launch rotieren und durch den echten Supabase-Secret-Key oder Cron-Jobs ersetzen
+- Rechte: Eigene Kopien der Produktbilder speichern (Supabase Storage / eigenes Bucket) statt Hotlinking von Shop-CDNs; Bildrechte und Lizenzen klären (relevant für Freisteller/Regeneration)
+- Pipeline-Token der Web-App ist nur lesend (`vercel-*`); der KI-Job läuft ausschließlich als Batch-Skript außerhalb des Webs. Gemini-Key vor Launch rotieren und nur als Secret im Job-Runner halten
+- Supabase-MCP hängt bei destruktiven SQL-Befehlen (DROP/DELETE/TRUNCATE, vermutlich Freigabe-Prompt); Aufräumen von Altdaten (400 versteckte Produkte) später gezielt freigeben
