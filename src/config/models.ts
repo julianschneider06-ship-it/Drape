@@ -9,3 +9,19 @@ export const MODELS = {
 
 export const GEMINI_API_BASE =
   process.env.GEMINI_API_BASE ?? "https://generativelanguage.googleapis.com/v1beta";
+
+// Cheaper model used for quality/cost comparison (override with DRAPE_MODEL_CLASSIFIER_CHEAP).
+export const CHEAP_CLASSIFIER = process.env.DRAPE_MODEL_CLASSIFIER_CHEAP ?? "gemini-2.5-flash-lite";
+
+// Paid-tier standard list prices, USD per 1M tokens (ai.google.dev/gemini-api/docs/pricing, checked 2026-10-19).
+export const PRICES: Record<string, { in: number; out: number }> = {
+  "gemini-3.5-flash-lite": { in: 0.3, out: 2.5 },
+  "gemini-3.1-flash-lite": { in: 0.25, out: 1.5 },
+  "gemini-2.5-flash-lite": { in: 0.1, out: 0.4 },
+};
+export const EMBEDDING_IMAGE_PRICE_PER_M = 0.45;
+
+// A product is feed-ready only if its chosen image is good enough (see docs/architecture.md).
+export const FEED_READY_MIN_SUITABILITY = Number(process.env.DRAPE_FEED_READY_MIN ?? 0.7);
+// Below this the job retries once with the runner-up image.
+export const RETRY_BELOW_SUITABILITY = 0.5;
