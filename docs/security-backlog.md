@@ -10,4 +10,4 @@ Bewusst zurückgestellt, bis der Kern fertig ist (Phase 7). Neue Punkte hier erg
 - Gemini-API-Schlüssel (`GEMINI_API_KEY` in Vercel) neu erzeugen und ersetzen: Er wurde im Chat eingefügt und liegt dort im Verlauf
 - Supabase: Die Pipeline-Tabellen haben RLS ohne Policies (nur Service-Rolle schreibt/liest). Später prüfen, ob für `/sample` und den Feed gezielte Lese-Policies oder ein eigener Lese-Pfad nötig sind
 - Supabase: Bereits vorhandene Funktion `public.rls_auto_enable()` ist für anon/authenticated ausführbar (Advisor-Warnung, nicht von uns angelegt) – Rechte entziehen
-- Pipeline-Zugang: Edge Function `pipeline` ist mit einem geteilten Token (`PIPELINE_TOKEN`) geschützt; vor dem Launch rotieren und durch den echten Supabase-Secret-Key oder Cron-Jobs ersetzen
+- Pipeline-Zugang: Edge Function `pipeline` ist mit einem geteilten Token (Tabelle `pipeline_tokens` (nur Hash)) geschützt; vor dem Launch rotieren und durch den echten Supabase-Secret-Key oder Cron-Jobs ersetzen
