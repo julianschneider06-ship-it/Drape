@@ -26,7 +26,7 @@ Scalability is very important to the user. Design for millions of products and u
 - **Cost control.** Batch AI calls, cache results, and keep paid calls out of public reach.
 - Record architecture decisions that matter for scale in `docs/architecture.md`.
 
-## Project setup (status: Phase 1 done)
+## Project setup (done so far)
 
 - **GitHub:** `julianschneider06-ship-it/drape`, branch `main`.
 - **Vercel:** project `drape` (id `prj_JSMzTYnpPOwINsbWnRes24mGv2kk`), personal account (no team), framework preset `nextjs`. Live at `https://drape-julian-schneider.vercel.app`. Public access, Vercel Authentication is off. Push to `main` deploys automatically.
@@ -41,17 +41,19 @@ Scalability is very important to the user. Design for millions of products and u
 - **Data model principle:** Products are the objects users like and save. Outfits are assembled from products and are **not** stored as their own saved unit.
 - **No dislike.** Personalization learns from onboarding (style directions), likes and implicit signals (scrolling past, dwell time, tapping a product).
 - **Product classification:** Style is a combination of attributes, never a single category.
+- **AI provider:** Google Gemini (Google AI Studio) for image classification and multimodal embeddings, behind a model adapter so providers can be swapped (Claude, Voyage, ...). Store the model name and version with every classification and embedding. The API key lives only as a secret (Supabase Edge Function secret or Vercel environment variable), never in the repo or browser.
 - **Mobile first.** Build every screen for a smartphone display first, then for larger screens.
 
-## Phase plan
+## Rough roadmap (context only)
 
-1. Setup: repo, Vercel, Supabase connected, empty app live (**done**)
-2. Feed with test data (about 100 products), vertical outfit feed, tap a product, like
-3. Onboarding (style selection), login, "My collection"
-4. Product classification via AI from the product image
-5. Outfit logic and personalization
-6. Scraping real product data (e.g. Zalando)
-7. Security and legal/rights
+The user tells you step by step what to work on right now. Do not start later steps on your own; you may suggest the next one. Rough order:
+
+1. Setup (done)
+2. Data pipeline with a real product sample (source adapter, normalized schema), then AI classification (attributes + embeddings)
+3. Outfit feed with like and product view
+4. Personalization (event log, taste vector, ranking)
+5. Onboarding, login, "My collection"
+6. More sources at scale (partner feeds), then security and legal/rights
 
 ## Working in Claude Code
 
