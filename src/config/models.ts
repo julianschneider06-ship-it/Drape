@@ -11,7 +11,7 @@ export const GEMINI_API_BASE =
   process.env.GEMINI_API_BASE ?? "https://generativelanguage.googleapis.com/v1beta";
 
 // Cheaper model used for quality/cost comparison (override with DRAPE_MODEL_CLASSIFIER_CHEAP).
-export const CHEAP_CLASSIFIER = process.env.DRAPE_MODEL_CLASSIFIER_CHEAP ?? "gemini-2.5-flash-lite";
+export const CHEAP_CLASSIFIER = process.env.DRAPE_MODEL_CLASSIFIER_CHEAP ?? "gemini-3.1-flash-lite"; // gemini-2.5-flash-lite is listed but closed to new users
 
 // Paid-tier standard list prices, USD per 1M tokens (ai.google.dev/gemini-api/docs/pricing, checked 2026-10-19).
 export const PRICES: Record<string, { in: number; out: number }> = {

@@ -24,6 +24,8 @@ const CAP = Number(opt("cap") ?? 0.8);
 const CONCURRENCY = Number(opt("concurrency") ?? 6);
 const LIMIT = Number(opt("limit") ?? Infinity);
 const RES = opt("res"); // optional media resolution for the image tokens
+const FORCE = flag("force"); // ignore the unchanged-input skip
+const DIRECT = flag("direct"); // process --ids directly, without the queue (used for model comparison runs)
 const UPDATE_PRODUCT = !flag("no-product-update") && MODEL === MODELS.classifier; // only the primary model drives feed fields
 const EMBED_DIMS = 1536;
 const LOG = process.env.DRAPE_CLASSIFY_LOG; // optional JSONL log of every product result
@@ -97,11 +99,11 @@ const stats = { claimed: 0, classified: 0, skipped_unchanged: 0, failed: 0, inva
   runner_up_better: 0, cost: 0, embed_cost: 0, ms: 0, in_tokens: 0, out_tokens: 0, feed_ready: 0, capped: false };
 let modelVersionMeta: string | undefined, embVersionMeta: string | undefined;
 
-async function processProduct(item: any, q: { id: number }) {
+async function processProduct(item: any, q: { id: number | null }) {
   const images: { url: string; rank: number }[] = item.images;
   if (!images.length) throw new Error("no pre-selected image");
   const hash = sha([TAXONOMY_VERSION, MODEL, item.brand, item.name, ...images.map((i) => i.url), RES ?? ""].join("|"));
-  if (item.existing_hash === hash) { stats.skipped_unchanged++; await rpc("queue_finish", { p_id: q.id, p_ok: true, p_error: null }); return; }
+  if (!FORCE && item.existing_hash === hash) { stats.skipped_unchanged++; if (q.id) await rpc("queue_finish", { p_id: q.id, p_ok: true, p_error: null }); return; }
 
   const attempts: Attempt[] = [await classifyImage(item, images[0].url)];
   if (!attempts[0].valid) stats.invalid_json_first_try++;
@@ -115,7 +117,8 @@ async function processProduct(item: any, q: { id: number }) {
   const best = valid.reduce((a, b) => ((b.attrs!.feed_suitability ?? 0) > (a.attrs!.feed_suitability ?? 0) ? b : a));
   if (best !== attempts[0] && attempts.length > 1) stats.runner_up_better++;
 
-  const emb = await embed(best.img);
+  // Only the primary model drives the stored embedding / feed image; comparison runs must not overwrite them.
+  const emb = UPDATE_PRODUCT ? await embed(best.img) : null;
   const a = best.attrs!;
   const ready = !a.has_model && !a.needs_cutout && a.feed_suitability >= FEED_READY_MIN_SUITABILITY;
   const reason = ready ? null : a.has_model ? "has_model" : a.needs_cutout ? "needs_cutout" : "low_suitability";
@@ -123,19 +126,19 @@ async function processProduct(item: any, q: { id: number }) {
   const ms = attempts.reduce((s, x) => s + x.ms, 0);
 
   await rpc("classification_store", { p: {
-    product_id: item.id, queue_id: q.id, update_product: UPDATE_PRODUCT,
+    product_id: item.id, queue_id: q.id ?? undefined, update_product: UPDATE_PRODUCT,
     classification: {
       taxonomy_version: TAXONOMY_VERSION, model: MODEL, model_version: modelVersionMeta, attributes: a, confidence: a.confidence, valid: true,
       usage: { ...best.usage, responseModelVersion: best.modelVersion, mediaResolution: RES ?? "default",
         attempts: attempts.map((x) => ({ image: x.url, valid: x.valid, feed_suitability: x.attrs?.feed_suitability ?? null, cost_usd: x.cost, in: x.usage.promptTokenCount, out: x.usage.candidatesTokenCount })) },
       cost_usd: cost, latency_ms: ms, source_image_url: best.url, input_hash: hash,
     },
-    embedding: { model: MODELS.embedding, model_version: embVersionMeta, dims: EMBED_DIMS, embedding: `[${emb.vec.join(",")}]`,
-      source_image_url: best.url, usage: emb.usage, cost_usd: emb.cost },
+    embedding: emb ? { model: MODELS.embedding, model_version: embVersionMeta, dims: EMBED_DIMS, embedding: `[${emb.vec.join(",")}]`,
+      source_image_url: best.url, usage: emb.usage, cost_usd: emb.cost } : null,
     feed: { feed_slot: a.feed_slot, feed_ready: ready, image_reason: reason, feed_image_url: best.url },
   } });
 
-  stats.classified++; stats.cost += cost; stats.embed_cost += emb.cost; stats.ms += ms;
+  stats.classified++; stats.cost += cost; stats.embed_cost += emb?.cost ?? 0; stats.ms += ms;
   for (const x of attempts) { stats.in_tokens += x.usage.promptTokenCount ?? 0; stats.out_tokens += (x.usage.candidatesTokenCount ?? 0) + (x.usage.thoughtsTokenCount ?? 0); }
   if (ready) stats.feed_ready++;
   if (LOG) appendFileSync(LOG, JSON.stringify({ id: item.id, model: MODEL, brand: item.brand, name: item.name, image: best.url, attempts: attempts.length,
@@ -157,12 +160,14 @@ async function processProduct(item: any, q: { id: number }) {
     const quotas = JSON.parse(opt("quotas") ?? '{"tops":45,"bottoms":40,"dresses":20,"outerwear":35,"shoes":35,"accessories":25}');
     ids = await rpc<number[]>("pick_classification_sample", { p_quotas: quotas });
   }
-  if (ids) console.log(`enqueued ${await rpc("queue_enqueue", { p_ids: ids, p_tax: TAXONOMY_VERSION })} of ${ids.length} products`);
+  if (ids && !DIRECT) console.log(`enqueued ${await rpc("queue_enqueue", { p_ids: ids, p_tax: TAXONOMY_VERSION })} of ${ids.length} products`);
 
   const t0 = Date.now();
   while (stats.claimed < LIMIT) {
     if (stats.cost + stats.embed_cost >= CAP) { stats.capped = true; console.log(`COST CAP $${CAP} reached, stopping`); break; }
-    const claimed = await rpc<{ id: number; product_id: number }[]>("claim_classification_batch", { p_n: Math.min(CONCURRENCY, LIMIT - stats.claimed), p_tax: TAXONOMY_VERSION });
+    const claimed = DIRECT
+      ? ids!.slice(stats.claimed, stats.claimed + CONCURRENCY).map((product_id) => ({ id: null as number | null, product_id }))
+      : await rpc<{ id: number | null; product_id: number }[]>("claim_classification_batch", { p_n: Math.min(CONCURRENCY, LIMIT - stats.claimed), p_tax: TAXONOMY_VERSION });
     if (!claimed.length) break;
     stats.claimed += claimed.length;
     const inputs = await rpc<any[]>("classify_inputs", { p_ids: claimed.map((c) => c.product_id), p_tax: TAXONOMY_VERSION, p_model: MODEL });
@@ -172,7 +177,7 @@ async function processProduct(item: any, q: { id: number }) {
       catch (e) {
         stats.failed++;
         console.error(`product ${q.product_id} failed: ${String(e).slice(0, 200)}`);
-        await rpc("queue_finish", { p_id: q.id, p_ok: false, p_error: String(e).slice(0, 500) });
+        if (q.id) await rpc("queue_finish", { p_id: q.id, p_ok: false, p_error: String(e).slice(0, 500) });
       }
     }));
     console.log(`claimed ${stats.claimed} classified ${stats.classified} failed ${stats.failed} cost $${(stats.cost + stats.embed_cost).toFixed(4)} (${((Date.now() - t0) / 1000) | 0}s)`);
