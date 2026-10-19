@@ -51,7 +51,7 @@ async function run(slug: string) {
         const k = `${n.gender ?? "none"}/${n.category}`;
         dist[k] = (dist[k] ?? 0) + 1;
         keptInFeed[feed]++;
-        rows.push(toRow(n, raw));
+        rows.push(toRow(n, raw, slug));
       }
       if (!dry) {
         for (let i = 0; i < rows.length; i += 100) stats.new_offers += (await sink.ingest(sourceId, runId, rows.slice(i, i + 100))).new_offers;

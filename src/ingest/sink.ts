@@ -42,12 +42,17 @@ export const sink = {
 const hash = (v: unknown) => createHash("sha1").update(JSON.stringify(v)).digest("hex");
 
 /** Map normalized product + raw payload to the row shape ingest_batch expects. */
-export function toRow(p: NormalizedProduct, raw: RawItem) {
+export function toRow(p: NormalizedProduct, raw: RawItem, sourceSlug: string) {
   return {
     external_id: p.externalId, url: p.url, brand: p.brand, name: p.name, gender: p.gender, category: p.category,
     subcategory: p.subcategory, colour: p.colour,
     // Same brand + name + colour = same canonical product, whichever shop sells it.
-    canonical_key: hash([normKey(p.brand), normKey(p.name), normKey(p.colour ?? ""), p.gender ?? ""].join("|")),
+    // Without a known colour we cannot be sure two items are the same, so they stay separate.
+    canonical_key: hash(
+      p.colour
+        ? [normKey(p.brand), normKey(p.name), normKey(p.colour), p.gender ?? ""].join("|")
+        : ["unmerged", sourceSlug, p.externalId].join("|"),
+    ),
     price_cents: p.priceCents, compare_at_cents: p.compareAtCents, currency: p.currency,
     availability: p.availability, content_hash: hash(raw.payload), raw: raw.payload,
     images: p.images,
