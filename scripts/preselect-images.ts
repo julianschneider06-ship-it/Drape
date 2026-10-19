@@ -3,8 +3,8 @@
 import { rpc } from "../src/ingest/gateway";
 import { combine, pixelStats, type ImageIn, type ImageScore } from "../src/images/score";
 
-const MAX_PER_PRODUCT = 8; // images analysed per product (shop order = importance)
-const CONCURRENCY = 8;
+const MAX_PER_PRODUCT = 6; // images analysed per product (shop order = importance)
+const CONCURRENCY = 24;
 const li = process.argv.indexOf("--limit-products");
 const limit = li >= 0 ? Number(process.argv[li + 1]) : Infinity;
 
@@ -17,7 +17,7 @@ async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
   let after = 0, products = 0, images = 0;
   const t0 = Date.now();
   while (products < limit) {
-    const batch = await rpc<{ product_id: number; images: ImageIn[] }[]>("images_todo", { p_after: after, p_products: 25 });
+    const batch = await rpc<{ product_id: number; images: ImageIn[] }[]>("images_todo", { p_after: after, p_products: 40 });
     if (!batch.length) break;
     const results: ImageScore[] = [];
     const jobs = batch.flatMap((p) => p.images.slice(0, MAX_PER_PRODUCT).map((img) => ({ pid: p.product_id, img })));

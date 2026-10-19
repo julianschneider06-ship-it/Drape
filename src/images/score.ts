@@ -1,6 +1,8 @@
 // Free image pre-selection signals (no AI): filename/alt hints, position, aspect ratio and a pixel check.
 import sharp from "sharp";
 
+const clamp = (x: number) => Math.max(0, Math.min(1, x));
+
 export interface ImageIn { id: number; url: string; pos: number; alt: string | null; width: number | null; height: number | null }
 export interface ImageScore { id: number; bg_whiteness: number | null; object_fill: number | null; view_hint: string; score: number; feed_rank?: number }
 
@@ -18,7 +20,11 @@ export function viewHint(url: string, alt: string | null): string {
   return "unknown";
 }
 
-/** Pixel check on a ~200px thumbnail via the shop CDN width parameter. */
+/**
+ * Pixel check on a ~200px thumbnail via the shop CDN width parameter.
+ * bg = how plain AND bright the border is (white studio = 1, light grey backdrop ~0.6, busy scene = low).
+ * fill = share of the frame covered by the bounding box of everything that differs from the border colour.
+ */
 export async function pixelStats(url: string): Promise<{ bg: number; fill: number } | null> {
   const thumb = url + (url.includes("?") ? "&" : "?") + "width=200";
   const res = await fetch(thumb, { signal: AbortSignal.timeout(20_000) });
@@ -26,25 +32,24 @@ export async function pixelStats(url: string): Promise<{ bg: number; fill: numbe
   const { data, info } = await sharp(Buffer.from(await res.arrayBuffer()))
     .flatten({ background: "#ffffff" }).resize(200, 200, { fit: "inside" }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   const { width: w, height: h } = info;
-  const white = (i: number) => {
-    const r = data[i], g = data[i + 1], b = data[i + 2];
-    return Math.min(r, g, b) >= 236 && Math.max(r, g, b) - Math.min(r, g, b) <= 14;
-  };
-  // Border ring = outer 4% of the frame.
-  const ring = Math.max(2, Math.round(Math.min(w, h) * 0.04));
-  let borderTotal = 0, borderWhite = 0;
+  const ring = Math.max(2, Math.round(Math.min(w, h) * 0.04)); // outer 4% of the frame
+  const border: number[][] = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (x < ring || y < ring || x >= w - ring || y >= h - ring) { const i = (y * w + x) * 3; border.push([data[i], data[i + 1], data[i + 2]]); }
+  }
+  const med = [0, 1, 2].map((c) => border.map((p) => p[c]).sort((a, b) => a - b)[border.length >> 1]);
+  const dist = (r: number, g: number, b: number) => Math.max(Math.abs(r - med[0]), Math.abs(g - med[1]), Math.abs(b - med[2]));
+  const plain = border.filter((p) => dist(p[0], p[1], p[2]) <= 12).length / border.length;
+  const brightness = clamp((Math.min(...med) - 190) / 60); // 250+ = 1, 220 = 0.5, 190 or darker = 0
   let minX = w, minY = h, maxX = -1, maxY = -1;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = (y * w + x) * 3;
-    const isWhite = white(i);
-    if (x < ring || y < ring || x >= w - ring || y >= h - ring) { borderTotal++; if (isWhite) borderWhite++; }
-    if (!isWhite) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+    if (dist(data[i], data[i + 1], data[i + 2]) > 24) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
   }
   const fill = maxX < 0 ? 0 : ((maxX - minX + 1) * (maxY - minY + 1)) / (w * h);
-  return { bg: borderWhite / borderTotal, fill };
+  return { bg: plain * brightness, fill };
 }
 
-const clamp = (x: number) => Math.max(0, Math.min(1, x));
 
 export function combine(img: ImageIn, px: { bg: number; fill: number } | null): ImageScore {
   const name = `${decodeURIComponent(img.url.split("?")[0].split("/").pop() ?? "")} ${img.alt ?? ""}`;
