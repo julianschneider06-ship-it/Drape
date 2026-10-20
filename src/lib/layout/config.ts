@@ -5,7 +5,10 @@
 export const MAX_CANVAS_W = 416;            // px: centred with this max width on larger screens
 export const HEADER_PX = 60, FOOTER_PX = 20; // space reserved above/below the canvas
 export const MARGIN_ZONE = 0.18;            // free column (fraction of W) on one side, reserved for accessories later (nothing is placed there)
-export const FRAME_PAD = 0.02;              // vertical padding of the usable frame (fraction of H)
+export const FRAME_PAD = 0.012;              // vertical padding of the usable frame (fraction of H)
+
+export const EDGE_PAD = 0.025;             // min gap between the composition and the canvas edge on the open side (fraction of W)
+export const PIECE_SCALE = 1.13;             // all pieces x this factor (1.1 = 10% larger); the fit step still shrinks a composition that cannot fit the frame
 
 // --- Sizes by garment class: a piece is fitted inside (maxW * W) x (maxH * H), keeping its content aspect ratio. ---
 export type GarmentClass = "top" | "outer" | "longcoat" | "trousers" | "shorts" | "skirt" | "longskirt" | "shoes" | "full";

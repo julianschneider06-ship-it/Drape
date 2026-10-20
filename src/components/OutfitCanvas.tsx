@@ -3,16 +3,15 @@ import { useMemo } from "react";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/format";
 import { garmentClass } from "@/lib/layout/config";
-import { computeLayout, hash32, HEART_PX, pickTemplate, type PieceIn, type SlotName } from "@/lib/layout/engine";
+import { computeLayout, hash32, pickTemplate, type PieceIn, type SlotName } from "@/lib/layout/engine";
 import FeedImage from "./FeedImage";
-import Heart from "./Heart";
 
 export const pieceClass = (slot: SlotName, c: FeedCard) => garmentClass(slot, c.name);
 
-/** One outfit composed on a canvas: pieces at template positions, tap = sheet, small heart at each piece's corner. */
-export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", liked, priority, onOpen, onLike }: {
+/** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
+export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", priority, onOpen }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; priority: boolean;
-  liked: (id: number) => boolean; onOpen: (c: FeedCard, slot: SlotName) => void; onLike: (c: FeedCard, slot: SlotName) => void;
+  onOpen: (c: FeedCard, slot: SlotName) => void;
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
@@ -44,14 +43,6 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
             <button type="button" onClick={() => onOpen(orig(c), p.slot)} aria-label={`${c.brand} ${c.name}`} className={`absolute inset-0 ${debug ? "outline outline-1 outline-red-400" : ""}`}>
               <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} />
             </button>
-          </div>
-        );
-      })}
-      {layout.pieces.map((p) => {
-        const c = cards[p.slot]!, on = liked(c.id);
-        return (
-          <div key={"h" + p.slot} className="absolute z-40 flex items-center justify-center" style={{ left: pct(p.heart.x - HEART_PX / 2, W), top: pct(p.heart.y - HEART_PX / 2, H), width: HEART_PX, height: HEART_PX }}>
-            <Heart on={on} size={18} onClick={(e) => { e.stopPropagation(); onLike(orig(c), p.slot); }} label={on ? "Remove like" : "Like"} />
           </div>
         );
       })}

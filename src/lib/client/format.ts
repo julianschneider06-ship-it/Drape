@@ -53,7 +53,10 @@ export type CutMode = "auto" | "off";
  * What the feed actually draws for a product: the transparent cutout when it exists (its own file is already cropped to the
  * content, so bbox = whole image), otherwise the original photo with its content box + multiply blend.
  */
+/** Cutouts are served through our own domain (long immutable cache, see next.config.ts). */
+export const ownCutoutUrl = (u: string) => u.replace(/^https:\/\/[^/]+\/storage\/v1\/object\/public\/cutouts\//, "/cutouts/");
+
 export function viewCard(c: FeedCard, mode: CutMode): FeedCard & { cut: boolean } {
-  if (mode === "auto" && c.cutout && c.cutout_aspect) return { ...c, image: c.cutout, bbox: [0, 0, 1, 1], aspect: c.cutout_aspect, bg: null, cut: true };
+  if (mode === "auto" && c.cutout && c.cutout_aspect) return { ...c, image: ownCutoutUrl(c.cutout), bbox: [0, 0, 1, 1], aspect: c.cutout_aspect, bg: null, cut: true };
   return { ...c, cut: false };
 }

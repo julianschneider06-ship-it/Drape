@@ -1,16 +1,14 @@
 // Pure layout engine: (outfit pieces, template, seed, canvas size) -> rectangles in px. No React, no DOM.
 import {
-  DEFAULT_ASPECT, FRAME_PAD, HEADER_PX, FOOTER_PX, JITTER, MARGIN_ZONE, MAX_CANVAS_W, OVERLAP, SIZE, TEMPLATES,
+  DEFAULT_ASPECT, FRAME_PAD, HEADER_PX, FOOTER_PX, JITTER, MARGIN_ZONE, MAX_CANVAS_W, OVERLAP, EDGE_PAD, PIECE_SCALE, SIZE, TEMPLATES,
   type GarmentClass, type Place, type Template,
 } from "./config";
 
 export type SlotName = "top" | "bottom" | "shoes" | "full";
 export interface PieceIn { slot: SlotName; cls: GarmentClass; aspect: number | null } // aspect = content width / height
 export interface Rect { x: number; y: number; w: number; h: number }
-export interface Placed { slot: SlotName; rect: Rect; rot: number; z: number; heart: { x: number; y: number } }
-export interface Layout { template: string; margin: "left" | "right"; pieces: Placed[]; frame: Rect; marginRect: Rect; canvas: { w: number; h: number } }
-
-export const HEART_PX = 30;
+export interface Placed { slot: SlotName; rect: Rect; rot: number; z: number }
+export interface Layout { fit: number; template: string; margin: "left" | "right"; pieces: Placed[]; frame: Rect; marginRect: Rect; canvas: { w: number; h: number } }
 
 export function hash32(s: string): number {
   let h = 2166136261;
@@ -45,7 +43,7 @@ export function computeLayout(opts: { kind: "three" | "full"; pieces: Partial<Re
   // 1) sizes by garment class
   const size = (p: PieceIn) => {
     const s = SIZE[p.cls], a = p.aspect && p.aspect > 0.05 ? p.aspect : DEFAULT_ASPECT[p.cls];
-    const w = Math.min(s.maxW * W, s.maxH * H * a);
+    const w = Math.min(s.maxW * W * PIECE_SCALE, s.maxH * H * PIECE_SCALE * a);
     return { w, h: w / a };
   };
   const rect: Partial<Record<SlotName, Rect>> = {};
@@ -85,37 +83,17 @@ export function computeLayout(opts: { kind: "three" | "full"; pieces: Partial<Re
     const x1 = Math.max(...entries.map(([, r]) => r.x + r.w)), y1 = Math.max(...entries.map(([, r]) => r.y + r.h));
     return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
   };
+  const pad = EDGE_PAD * W;
   let u = union();
-  const s = Math.min(1, (frame.w * 0.98) / u.w, (frame.h * 0.98) / u.h);
+  const s = Math.min(1, ((frame.w - 2 * pad) * 0.995) / u.w, (frame.h * 0.99) / u.h);
   if (s < 1) for (const [, r] of entries) { const c = { x: r.x + r.w / 2, y: r.y + r.h / 2 }; r.w *= s; r.h *= s; r.x = u.cx + (c.x - u.cx) * s - r.w / 2; r.y = u.cy + (c.y - u.cy) * s - r.h / 2; }
   u = union();
   let dx = frame.x + frame.w / 2 - u.cx + sym(JITTER.clusterX) * W, dy = frame.y + frame.h / 2 - u.cy + sym(JITTER.clusterY) * H;
-  // never leave the canvas
-  dx = Math.max(-u.x0 + 2, Math.min(W - 2 - u.x1, dx)); dy = Math.max(-u.y0 + 2, Math.min(H - 2 - u.y1, dy));
+  // never leave the canvas, never enter the margin zone (reserved for accessories)
+    dx = Math.max(frame.x + pad - u.x0, Math.min(frame.x + frame.w - pad - u.x1, dx)); dy = Math.max(-u.y0 + 2, Math.min(H - 2 - u.y1, dy));
   for (const [, r] of entries) { r.x += dx; r.y += dy; }
 
-  // 4) hearts: one per piece at the corner with the least overlap with other pieces / hearts
-  const placed: Placed[] = entries.map(([slot, r]) => ({ slot, rect: r, rot: slot === "shoes" ? sym(JITTER.shoeRotDeg) : 0, z: t.z[slot], heart: { x: 0, y: 0 } }));
-  const hearts: { x: number; y: number }[] = [];
-  const half = HEART_PX / 2, clampX = (x: number) => Math.max(half, Math.min(W - half, x)), clampY = (y: number) => Math.max(half, Math.min(H - half, y));
-  for (const p of [...placed].sort((a, b) => b.rect.w * b.rect.h - a.rect.w * a.rect.h)) {
-    const r = p.rect;
-    const corners = [[r.x + r.w, r.y + r.h], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x, r.y]];
-    let best = { score: Infinity, x: 0, y: 0 };
-    corners.forEach(([cx, cy], i) => {
-      const x = clampX(cx), y = clampY(cy);
-      let score = i * 2;
-      for (const o of placed) {
-        if (o === p) continue;
-        const ox = Math.max(0, Math.min(x + half, o.rect.x + o.rect.w) - Math.max(x - half, o.rect.x));
-        const oy = Math.max(0, Math.min(y + half, o.rect.y + o.rect.h) - Math.max(y - half, o.rect.y));
-        score += (ox * oy) / 20;
-      }
-      for (const h of hearts) if (Math.hypot(h.x - x, h.y - y) < HEART_PX + 4) score += 1000;
-      if (score < best.score) best = { score, x, y };
-    });
-    p.heart = { x: best.x, y: best.y }; hearts.push(best);
-  }
+  const placed: Placed[] = entries.map(([slot, r]) => ({ slot, rect: r, rot: slot === "shoes" ? sym(JITTER.shoeRotDeg) : 0, z: t.z[slot] }));
   placed.sort((a, b) => a.z - b.z);
-  return { template: t.id, margin: t.margin, pieces: placed, frame, marginRect, canvas };
+  return { fit: s, template: t.id, margin: t.margin, pieces: placed, frame, marginRect, canvas };
 }

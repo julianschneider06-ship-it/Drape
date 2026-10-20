@@ -183,8 +183,7 @@ export default function Feed() {
       <div ref={scroller} className="no-scrollbar h-dvh snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
         {items.map((o, i) => (
           <section key={o.id} data-i={i} className="flex h-dvh snap-start snap-always flex-col items-center justify-center pb-5 pt-[3.75rem]">
-            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} priority={i < 2} liked={(id) => liked.has(id)}
-              onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => toggleLike(c, o, i, slot)} />}
+            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} />}
           </section>
         ))}
         {!items.length && (
