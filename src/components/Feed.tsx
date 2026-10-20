@@ -5,32 +5,18 @@ import type { FeedCard, FeedOutfit, FeedResponse } from "@/lib/types";
 import { getDeviceId } from "@/lib/client/device";
 import { feedSrc } from "@/lib/client/format";
 import { track } from "@/lib/client/track";
-import FeedImage from "./FeedImage";
-import Heart from "./Heart";
+import OutfitCanvas, { pieceClass } from "./OutfitCanvas";
+import { canvasSize } from "@/lib/layout/engine";
 import ProductSheet from "./ProductSheet";
+import type { SlotName } from "@/lib/layout/engine";
 
 type Gender = "women" | "men";
-type SlotName = "top" | "bottom" | "shoes" | "full";
 interface SheetState { card: FeedCard; outfit: FeedOutfit; index: number; slot: SlotName }
 
 const store = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
 };
-
-// One slot: a product image on white (backdrop blended in), tap = open sheet, heart in the corner.
-function Slot({ card, tall, liked, onOpen, onLike, priority }: { card: FeedCard; tall?: boolean; liked: boolean; onOpen: () => void; onLike: () => void; priority: boolean }) {
-  return (
-    <div className={`relative w-full ${tall ? "h-[calc((100dvh-9.5rem)*2/3)]" : "h-[calc((100dvh-9.5rem)/3)]"}`}>
-      <button type="button" onClick={onOpen} aria-label={`${card.brand} ${card.name}`} className="absolute inset-0">
-        <FeedImage card={card} tall={tall} priority={priority} />
-      </button>
-      <div className="absolute bottom-1 right-1">
-        <Heart on={liked} onClick={(e) => { e.stopPropagation(); onLike(); }} label={liked ? "Remove like" : "Like"} />
-      </div>
-    </div>
-  );
-}
 
 export default function Feed() {
   const [gender, setGender] = useState<Gender | null>(null);
@@ -40,6 +26,8 @@ export default function Feed() {
   const [liked, setLiked] = useState<Set<number>>(new Set());
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [current, setCurrent] = useState(0);
+  const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
+  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean }>({ debug: false });
 
   const device = useRef("");
   const scroller = useRef<HTMLDivElement>(null);
@@ -52,6 +40,23 @@ export default function Feed() {
   const prefetched = useRef(new Set<string>());
   const exhausted = useRef(false);
   itemsRef.current = items;
+
+  // debug options: ?layout=A,FB forces templates (3-piece, full-body), ?debug=1 shows boxes + margin zone
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1" });
+  }, []);
+
+  // canvas size follows the scroller (phones, rotation, desktop)
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const measure = () => setCanvas((p) => { const n = canvasSize(el.clientWidth, el.clientHeight); return p && p.w === n.w && p.h === n.h ? p : n; });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // first load: device id, remembered gender, likes
   useEffect(() => {
@@ -131,9 +136,9 @@ export default function Feed() {
     for (let k = 1; k <= 3; k++) {
       const o = items[current + k];
       if (!o) continue;
-      for (const c of [o.top, o.bottom, o.shoes]) {
+      for (const [c, slot] of [[o.top, o.kind === "full" ? "full" : "top"], [o.bottom, "bottom"], [o.shoes, "shoes"]] as const) {
         if (!c) continue;
-        const u = feedSrc(c, c === o.top && o.kind === "full");
+        const u = feedSrc(c, pieceClass(slot, c));
         if (!prefetched.current.has(u)) { prefetched.current.add(u); const img = new Image(); img.referrerPolicy = "no-referrer"; img.src = u; }
       }
     }
@@ -178,17 +183,8 @@ export default function Feed() {
       <div ref={scroller} className="no-scrollbar h-dvh snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
         {items.map((o, i) => (
           <section key={o.id} data-i={i} className="flex h-dvh snap-start snap-always flex-col items-center justify-center pb-5 pt-[3.75rem]">
-            <div className="flex w-[min(84vw,22rem)] flex-col">
-              {o.kind === "full" ? (
-                <Slot card={o.top} tall liked={liked.has(o.top.id)} priority={i < 2} onOpen={() => open(o.top, o, i, "full")} onLike={() => toggleLike(o.top, o, i, "full")} />
-              ) : (
-                <>
-                  <Slot card={o.top} liked={liked.has(o.top.id)} priority={i < 2} onOpen={() => open(o.top, o, i, "top")} onLike={() => toggleLike(o.top, o, i, "top")} />
-                  {o.bottom && <Slot card={o.bottom} liked={liked.has(o.bottom.id)} priority={i < 2} onOpen={() => open(o.bottom!, o, i, "bottom")} onLike={() => toggleLike(o.bottom!, o, i, "bottom")} />}
-                </>
-              )}
-              <Slot card={o.shoes} liked={liked.has(o.shoes.id)} priority={i < 2} onOpen={() => open(o.shoes, o, i, "shoes")} onLike={() => toggleLike(o.shoes, o, i, "shoes")} />
-            </div>
+            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} priority={i < 2} liked={(id) => liked.has(id)}
+              onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => toggleLike(c, o, i, slot)} />}
           </section>
         ))}
         {!items.length && (

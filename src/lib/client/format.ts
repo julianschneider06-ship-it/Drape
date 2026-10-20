@@ -1,4 +1,5 @@
 import type { FeedCard } from "../types";
+import { MAX_CANVAS_W, SIZE, SRC, type GarmentClass } from "../layout/config";
 
 /** Shopify CDN resizes on the fly with ?width=; other hosts are returned untouched. */
 export function imgUrl(url: string, width: number): string {
@@ -27,9 +28,6 @@ export function blendStyle(c: Pick<FeedCard, "bg">): React.CSSProperties {
   return { mixBlendMode: "multiply", filter };
 }
 
-/** Typical slot size in px, used only to pick a sensible image width to request. */
-const SLOT_W = 320, SLOT_H = 240;
-
 /** Geometry of the crop-to-content layout (all numbers in image-height units). */
 export function cropGeometry(c: Pick<FeedCard, "bbox" | "aspect">) {
   if (!c.bbox || !c.aspect) return null;
@@ -39,11 +37,10 @@ export function cropGeometry(c: Pick<FeedCard, "bbox" | "aspect">) {
   return { A, cw, ch, cx: ((x0 + x1) / 2) * A, cy: (y0 + y1) / 2 };
 }
 
-/** Image URL sized for the crop (zoomed images need more source pixels than a plain contain). */
-export function feedSrc(c: FeedCard, tall = false, minW = 480): string {
-  const g = cropGeometry(c);
-  if (!g) return imgUrl(c.image, 700);
-  const k = Math.min((0.92 * SLOT_W) / g.cw, (0.92 * SLOT_H * (tall ? 2 : 1)) / g.ch); // px per image height
-  const w = Math.min(1100, Math.max(minW, Math.round((g.A * k * 1.6) / 100) * 100));
-  return imgUrl(c.image, w);
+/** Image URL sized for the crop: zoomed-in crops need more source pixels than the plain image. */
+export function feedSrc(c: FeedCard, cls: GarmentClass): string {
+  if (!c.bbox) return imgUrl(c.image, SRC.fallback);
+  const frac = Math.max(0.2, c.bbox[2] - c.bbox[0]);
+  const w = Math.round((SIZE[cls].maxW * MAX_CANVAS_W * SRC.dpr) / frac / 100) * 100;
+  return imgUrl(c.image, Math.min(SRC.max, Math.max(SRC.min, w)));
 }
