@@ -52,7 +52,12 @@ async function prepare(url: string): Promise<string> {
 interface Todo { id: number; slot: string; url: string; checked_url: string }
 
 async function check(t: Todo) {
-  const b64 = await prepare(t.checked_url);
+  let b64: string;
+  try { b64 = await prepare(t.checked_url); } catch (e) {
+    // image gone from the shop / storage (404 etc.): a failed image like any other, so the next candidate is tried
+    if (/image (4\d\d)/.test(String(e))) return { id: t.id, src: t.url, checked_url: t.checked_url, model: MODEL, model_version: null, item_count: 0, is_single: false, defects: [] as string[], confidence: 1, verdict: "fail", reason: "image_missing", usage: { rev: IMAGE_CHECK_REV }, cost: 0 };
+    throw e;
+  }
   let cost = 0, usage: Record<string, unknown> = {}, out: { item_count: number; is_single_product: boolean; defects: string[]; confidence: number } | null = null;
   for (let tries = 0; tries < 2 && !out; tries++) {
     const gen = await gemini({
