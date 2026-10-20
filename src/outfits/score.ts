@@ -3,7 +3,7 @@ import { STYLE_KEYS } from "../classify/styles";
 
 export type Slot = "top" | "bottom" | "shoes" | "full_body";
 export interface RawPiece {
-  id: number; store: string; slot: Slot; gender: string | null; sub: string | null;
+  id: number; name?: string | null; store: string; slot: Slot; gender: string | null; sub: string | null;
   styles: Record<string, number>; colors: string[]; pattern: string; material?: string | null; silhouette: string; fit: string;
   formality: number; boldness: number; statement: number; outer: boolean; season: string[];
 }
@@ -11,6 +11,7 @@ export interface Piece {
   id: number; store: string; slot: Slot; sub: string; genders: ("women" | "men")[];
   vec: Float32Array; dom: string; main: string; accents: Set<string>; mask: number; volume: number; patterned: boolean;
   formality: number; statement: number; looseOk: boolean; outer: boolean;
+  half: boolean; // vest / gilet / waistcoat: a layering piece that looks incomplete as the only top
   warm: boolean; cold: boolean; // warm-weather only (shorts, sandals) / cold-weather only (coats, wool, boots)
 }
 
@@ -19,12 +20,12 @@ const SEASON_BIT: Record<string, number> = { spring: 1, summer: 2, autumn: 4, wi
 const FIT_VOL: Record<string, number> = { slim: -1, regular: 0, loose: 0.6, oversized: 1 };
 const SIL_VOL: Record<string, number> = { oversized: 0.5, boxy: 0.3, relaxed: 0.3, flared: 0.3, slim: -0.3, tapered: -0.2, a_line: 0.2 };
 // Items that are not outfit pieces for the feed (underwear, swim, sleepwear, house slippers).
-const EXCLUDED = /\b(bra|bralette|bikini|swimsuit|swim|brief|briefs|boxer|boxers|underwear|lingerie|thong|slippers?|socks?|pajamas?|pyjamas?|robe|nightgown|nightdress)\b/i;
+const EXCLUDED = /\b(bra|bralette|bikini|swimsuit|swim|swimwear|trunks?|brief|briefs|boxer|boxers|underwear|lingerie|thong|slippers?|socks?|pajamas?|pyjamas?|sleepwear|nightwear|robe|nightgown|nightdress|loungewear set)\b/i;
 
 export const ALL_GENDERS: ("women" | "men")[] = ["women", "men"];
 
 export function toPiece(r: RawPiece): Piece | null {
-  if (EXCLUDED.test(r.sub ?? "")) return null;
+  if (EXCLUDED.test(`${r.sub ?? ""} ${r.name ?? ""}`)) return null;
   const vec = new Float32Array(STYLE_KEYS.length);
   let norm = 0, best = 0, dom = STYLE_KEYS[0];
   STYLE_KEYS.forEach((k, i) => { const w = r.styles?.[k] ?? 0; vec[i] = w; norm += w * w; if (w > best) { best = w; dom = k; } });
@@ -41,6 +42,7 @@ export function toPiece(r: RawPiece): Piece | null {
     patterned: !["solid", undefined, null].includes(r.pattern as string),
     formality: r.formality ?? 0.3, statement: r.statement ?? 0.3,
     looseOk: Math.max(sw.streetwear ?? 0, sw.skater ?? 0, sw.athleisure ?? 0, sw.techwear ?? 0) >= 0.5, outer: !!r.outer,
+    half: /\b(vest|gilet|waistcoat|body ?warmer)\b/i.test(`${r.sub ?? ""} ${r.name ?? ""}`),
     warm: /\b(shorts?|skort|sandals?|flip|slides?|tank|romper|playsuit)\b/i.test(r.sub ?? ""),
     cold: !!r.outer && /\b(coat|parka|puffer|down|fleece|anorak|shearling|overcoat|trench)\b/i.test(`${r.sub ?? ""} ${r.material ?? ""}`) ||
       ["fleece", "down_padded"].includes(r.material ?? "") || /\b(boots?|chelsea|loafer boots)\b/i.test(r.sub ?? "") && r.slot === "shoes",
@@ -90,7 +92,7 @@ export function scoreOutfit(p: Piece[]): Scored | null {
     else if (v < -1.8) balance = 0.9;
   }
   const patterned = p.filter((x) => x.patterned).length;
-  const pen = (patterned >= 2 ? 0.45 : 1) * colourPen * (statements === 1 ? 1.04 : 0.97);
+  const pen = (patterned >= 2 ? 0.45 : 1) * colourPen * (p.some((x) => x.half) ? 0.8 : 1) * (statements === 1 ? 1.04 : 0.97);
 
   const score = (0.34 * style + 0.22 * colour + 0.16 * formal + 0.10 * seasonScore + 0.18 * balance) * pen;
   return { score, style, colour, formal, season: seasonScore, balance, pen };

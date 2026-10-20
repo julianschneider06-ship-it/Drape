@@ -9,7 +9,7 @@ const args = process.argv.slice(2);
 const flag = (n: string) => args.includes(`--${n}`);
 const opt = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
 const DRY = flag("dry");
-const MIN_SCORE = Number(opt("min", "0.8"));
+const MIN_SCORE = Number(opt("min", "0.84"));
 const CAP = { top: 4, bottom: 7, shoes: 6, full_body: 5 } as const; // max outfits per product (variety)
 const K_PAIR = 10; // best bottoms per top (and tops per bottom) before choosing shoes
 const SHOES_PER_PAIR = 3;
