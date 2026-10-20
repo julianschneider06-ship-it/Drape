@@ -9,9 +9,13 @@ model, testset, out = sys.argv[1], json.load(open(sys.argv[2])), sys.argv[3]
 os.makedirs(out, exist_ok=True)
 def dl(it):
     u = it["url"] + ("&" if "?" in it["url"] else "?") + "width=1000"
-    r = requests.get(u, timeout=30); r.raise_for_status(); return r.content
+    try:
+        r = requests.get(u, timeout=30); r.raise_for_status(); return r.content
+    except Exception:
+        return None
 items = [(slot, it) for slot, l in testset.items() for it in l]
 with cf.ThreadPoolExecutor(16) as ex: datas = list(ex.map(lambda x: dl(x[1]), items))
+items = [i for i, d in zip(items, datas) if d]; datas = [d for d in datas if d]
 t = time.time(); sess = C.load_session(model, threads=int(os.environ.get("THREADS", "2"))); print("load", round(time.time() - t, 1), "s", flush=True)
 rows = []
 for (slot, it), data in zip(items, datas):

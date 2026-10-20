@@ -42,7 +42,7 @@ def _components(binary: np.ndarray):
     return n, lab, stats
 
 
-def clean_alpha(a: np.ndarray):
+def clean_alpha(a: np.ndarray, rgb: np.ndarray):
     """Drop stray fragments and tiny holes, tighten the edge so no backdrop halo remains."""
     h, w = a.shape
     b = a > 0.5
@@ -59,13 +59,16 @@ def clean_alpha(a: np.ndarray):
     inv = (~fg).astype(np.uint8)
     n2, lab2, st2, _ = cv2.connectedComponentsWithStats(inv, connectivity=4)
     hole_area = 0
+    bd = backdrop_dist(rgb)
     for i in range(1, n2):
         x, y, ww, hh, ar = st2[i]
         touches = x == 0 or y == 0 or x + ww == w or y + hh == h
         if not touches:
-            hole_area += ar
+            sel = lab2 == i
             if ar < 0.0015 * h * w:
-                fg[lab2 == i] = True
+                fg[sel] = True
+            elif (bd[sel] > 40).mean() > 0.3:       # enclosed region that is NOT backdrop-coloured: the model dropped product pixels
+                hole_area += ar                     # (real gaps between straps / laces show the backdrop and are fine)
     # soft edge from the model, limited to the cleaned region, slightly eroded to drop the backdrop halo
     soft = np.clip((a - 0.12) / 0.76, 0, 1)
     grown = cv2.dilate(fg.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
@@ -77,14 +80,18 @@ def clean_alpha(a: np.ndarray):
     return soft.astype(np.float32), frags, float(hole_ratio)
 
 
-def backdrop_evidence(rgb: np.ndarray):
-    """Pixels clearly different from the backdrop colour (median of the outer ring) -> where product pixels surely are."""
+def backdrop_dist(rgb: np.ndarray) -> np.ndarray:
+    """Per-pixel colour distance to the backdrop colour (median of the outer ring)."""
     h, w, _ = rgb.shape
     r = max(2, int(min(h, w) * 0.02))
     ring = np.concatenate([rgb[:r].reshape(-1, 3), rgb[-r:].reshape(-1, 3), rgb[:, :r].reshape(-1, 3), rgb[:, -r:].reshape(-1, 3)])
     med = np.median(ring, axis=0)
-    d = np.abs(rgb.astype(np.int16) - med.astype(np.int16)).max(axis=2)
-    return d > 60
+    return np.abs(rgb.astype(np.int16) - med.astype(np.int16)).max(axis=2)
+
+
+def backdrop_evidence(rgb: np.ndarray):
+    """Pixels strongly different from the backdrop (shadows and soft gradients stay below) -> where product pixels surely are."""
+    return backdrop_dist(rgb) > 90
 
 
 def sanity(slot: str, rgb: np.ndarray, a_raw: np.ndarray, a: np.ndarray, frags: int, hole_ratio: float, skip_recall: bool = False):
@@ -152,7 +159,7 @@ def process(session, slot: str, data: bytes):
             native_alpha = cv2.resize(native_alpha, img.size, interpolation=cv2.INTER_AREA)
     rgb = np.asarray(img)
     a_raw = native_alpha if native_alpha is not None else segment(session, img)
-    a, frags, hole_ratio = clean_alpha(a_raw)
+    a, frags, hole_ratio = clean_alpha(a_raw, rgb)
     q, reason, m = sanity(slot, rgb, a_raw, a, frags, hole_ratio, skip_recall=native_alpha is not None)
     m["native_alpha"] = native_alpha is not None
     out = dict(webp=None, aspect=None, quality=q, reason=reason, metrics=m)

@@ -38,9 +38,22 @@ export function cropGeometry(c: Pick<FeedCard, "bbox" | "aspect">) {
 }
 
 /** Image URL sized for the crop: zoomed-in crops need more source pixels than the plain image. */
-export function feedSrc(c: FeedCard, cls: GarmentClass): string {
+export function feedSrc(c: FeedCard & { cut?: boolean }, cls: GarmentClass): string {
+  if (c.cut) return c.image;                  // cutouts are stored at display size (max 900 px)
   if (!c.bbox) return imgUrl(c.image, SRC.fallback);
   const frac = Math.max(0.2, c.bbox[2] - c.bbox[0]);
   const w = Math.round((SIZE[cls].maxW * MAX_CANVAS_W * SRC.dpr) / frac / 100) * 100;
   return imgUrl(c.image, Math.min(SRC.max, Math.max(SRC.min, w)));
+}
+
+/** "auto" = cutout when available (default), "off" = always the original photo (debug: ?cut=off). */
+export type CutMode = "auto" | "off";
+
+/**
+ * What the feed actually draws for a product: the transparent cutout when it exists (its own file is already cropped to the
+ * content, so bbox = whole image), otherwise the original photo with its content box + multiply blend.
+ */
+export function viewCard(c: FeedCard, mode: CutMode): FeedCard & { cut: boolean } {
+  if (mode === "auto" && c.cutout && c.cutout_aspect) return { ...c, image: c.cutout, bbox: [0, 0, 1, 1], aspect: c.cutout_aspect, bg: null, cut: true };
+  return { ...c, cut: false };
 }

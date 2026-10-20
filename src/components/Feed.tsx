@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FeedCard, FeedOutfit, FeedResponse } from "@/lib/types";
 import { getDeviceId } from "@/lib/client/device";
-import { feedSrc } from "@/lib/client/format";
+import { feedSrc, viewCard, type CutMode } from "@/lib/client/format";
 import { track } from "@/lib/client/track";
 import OutfitCanvas, { pieceClass } from "./OutfitCanvas";
 import { canvasSize } from "@/lib/layout/engine";
@@ -27,7 +27,7 @@ export default function Feed() {
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [current, setCurrent] = useState(0);
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
-  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean }>({ debug: false });
+  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode }>({ debug: false, cut: "auto" });
 
   const device = useRef("");
   const scroller = useRef<HTMLDivElement>(null);
@@ -44,7 +44,7 @@ export default function Feed() {
   // debug options: ?layout=A,FB forces templates (3-piece, full-body), ?debug=1 shows boxes + margin zone
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1" });
+    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto" });
   }, []);
 
   // canvas size follows the scroller (phones, rotation, desktop)
@@ -138,12 +138,12 @@ export default function Feed() {
       if (!o) continue;
       for (const [c, slot] of [[o.top, o.kind === "full" ? "full" : "top"], [o.bottom, "bottom"], [o.shoes, "shoes"]] as const) {
         if (!c) continue;
-        const u = feedSrc(c, pieceClass(slot, c));
+        const u = feedSrc(viewCard(c, dbg.cut), pieceClass(slot, c));
         if (!prefetched.current.has(u)) { prefetched.current.add(u); const img = new Image(); img.referrerPolicy = "no-referrer"; img.src = u; }
       }
     }
     if (items.length && current >= items.length - 4) loadMore();
-  }, [current, items, loadMore]);
+  }, [current, items, loadMore, dbg.cut]);
 
   const toggleLike = useCallback((card: FeedCard, outfit: FeedOutfit | null, index: number, slot: SlotName | "sheet") => {
     const want = !liked.has(card.id);
@@ -183,7 +183,7 @@ export default function Feed() {
       <div ref={scroller} className="no-scrollbar h-dvh snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
         {items.map((o, i) => (
           <section key={o.id} data-i={i} className="flex h-dvh snap-start snap-always flex-col items-center justify-center pb-5 pt-[3.75rem]">
-            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} priority={i < 2} liked={(id) => liked.has(id)}
+            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} priority={i < 2} liked={(id) => liked.has(id)}
               onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => toggleLike(c, o, i, slot)} />}
           </section>
         ))}
@@ -193,6 +193,11 @@ export default function Feed() {
           </section>
         )}
       </div>
+
+      {dbg.debug && (
+        <button onClick={() => setDbg((d) => ({ ...d, cut: d.cut === "auto" ? "off" : "auto" }))}
+          className="fixed bottom-3 left-3 z-50 rounded bg-black px-2 py-1 text-xs text-white">cutouts: {dbg.cut === "auto" ? "on" : "off (originals)"}</button>
+      )}
 
       {sheet && (
         <ProductSheet card={sheet.card} liked={liked.has(sheet.card.id)} onClose={() => setSheet(null)}

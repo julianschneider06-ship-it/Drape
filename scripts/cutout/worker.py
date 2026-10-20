@@ -84,35 +84,21 @@ def main():
     pool = cf.ThreadPoolExecutor(12)
     t0, done, ok, failed, after = time.time(), 0, 0, 0, 0
     reasons = {}
+    errors = 0
     while done < a.limit:
-        todo = rpc("cutout_todo", p_slot=a.slot, p_after=after, p_limit=min(a.batch, a.limit - done), p_model=a.model,
-                   p_version=a.version, p_shard=a.shard, p_shards=a.shards, p_retry_failed=a.retry_failed)
-        if not todo:
+        try:
+            step = run_batch(a, sess, pool, after)
+        except Exception as e:  # transient gateway/network problem: wait and retry the same batch (state lives in the database)
+            errors += 1
+            print(f"[{a.slot} {a.shard}] batch error {type(e).__name__}: {str(e)[:120]} (#{errors})", flush=True)
+            if errors > 8:
+                raise
+            time.sleep(15)
+            continue
+        errors = 0
+        if step is None:
             break
-        after = todo[-1]["id"]
-        futs = [pool.submit(download, t["url"]) for t in todo]
-        results, uploads = [], []
-        for t, f in zip(todo, futs):
-            item = dict(id=t["id"], model=a.model, version=a.version, src=t["url"], url=None, quality=None, aspect=None, reason=None, status="failed")
-            try:
-                r = C.process(sess, a.slot, f.result())
-                item.update(quality=r["quality"], aspect=r["aspect"], reason=r["reason"])
-                if r["webp"] is not None:
-                    path = f"v{a.version}/{t['id']}.webp"
-                    item.update(status="ok", url=PUBLIC + path + f"?m={a.model[:6]}")
-                    uploads.append((path, r["webp"], item))
-            except Exception as e:  # download or decode problem: flagged, never blocks the batch
-                item["reason"] = "error:" + type(e).__name__
-            results.append(item)
-        if uploads:
-            urls = gateway({"action": "sign_upload", "paths": [u[0] for u in uploads]})["urls"]
-            futs2 = [(it, pool.submit(upload, p, urls[p], d)) for p, d, it in uploads]
-            for it, f in futs2:
-                try:
-                    f.result()
-                except Exception:
-                    it.update(status="failed", url=None, reason="upload_error")
-        rpc("cutout_apply", p_items=results)
+        after, results = step
         for it in results:
             done += 1
             if it["status"] == "ok":
@@ -123,6 +109,41 @@ def main():
         el = time.time() - t0
         print(f"[{a.slot} {a.shard}/{a.shards}] {done} done, ok {ok}, failed {failed} {reasons}  {el / done:.2f}s/img", flush=True)
     print(f"[{a.slot} {a.shard}/{a.shards}] finished: ok {ok}, failed {failed} {reasons}  {time.time() - t0:.0f}s", flush=True)
+
+
+def run_batch(a, sess, pool, after):
+    """One batch: work list -> download -> segment + guard -> upload -> store. Returns (new cursor, results) or None when empty."""
+    todo = rpc("cutout_todo", p_slot=a.slot, p_after=after, p_limit=a.batch, p_model=a.model,
+               p_version=a.version, p_shard=a.shard, p_shards=a.shards, p_retry_failed=a.retry_failed)
+    if not todo:
+        return None
+    after = todo[-1]["id"]
+    futs = [pool.submit(download, t["url"]) for t in todo]
+    results, uploads = [], []
+    for t, f in zip(todo, futs):
+        item = dict(id=t["id"], model=a.model, version=a.version, src=t["url"], url=None, quality=None, aspect=None, reason=None, status="failed")
+        try:
+            r = C.process(sess, a.slot, f.result())
+            item.update(quality=r["quality"], aspect=r["aspect"], reason=r["reason"])
+            if r["webp"] is not None:
+                path = f"v{a.version}/{t['id']}.webp"
+                item.update(status="ok", url=PUBLIC + path)
+                uploads.append((path, r["webp"], item))
+        except Exception as e:  # download or decode problem: flagged, never blocks the batch
+            item["reason"] = "error:" + type(e).__name__
+        results.append(item)
+    if uploads:
+        urls = {}
+        for k in range(0, len(uploads), 10):  # small chunks: the gateway signs sequentially
+            urls.update(gateway({"action": "sign_upload", "paths": [u[0] for u in uploads[k:k + 10]]})["urls"])
+        futs2 = [(it, pool.submit(upload, p, urls[p], d)) for p, d, it in uploads]
+        for it, f in futs2:
+            try:
+                f.result()
+            except Exception:
+                it.update(status="failed", url=None, reason="upload_error")
+    rpc("cutout_apply", p_items=results)
+    return after, results
 
 
 if __name__ == "__main__":
