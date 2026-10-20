@@ -5,6 +5,8 @@ export const MODELS = {
   classifier: process.env.DRAPE_MODEL_CLASSIFIER ?? "gemini-3.1-flash-lite",
   // Multimodal embedding model (default 3072 dims; supports outputDimensionality).
   embedding: process.env.DRAPE_MODEL_EMBEDDING ?? "gemini-embedding-2",
+  // Image check (multi-item / defects): the cheap default model, configurable.
+  imageCheck: process.env.DRAPE_MODEL_IMAGE_CHECK ?? "gemini-3.1-flash-lite",
 } as const;
 
 export const GEMINI_API_BASE =

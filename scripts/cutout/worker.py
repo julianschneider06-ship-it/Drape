@@ -9,7 +9,7 @@
 - Batched: one RPC for 40 products, parallel downloads/uploads, one RPC to store the results.
 - Never in the request path; the web app only reads the finished columns. No paid calls (local ONNX model).
 """
-import argparse, concurrent.futures as cf, os, sys, time
+import argparse, concurrent.futures as cf, hashlib, os, sys, time
 import requests
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -126,7 +126,8 @@ def run_batch(a, sess, pool, after):
             r = C.process(sess, a.slot, f.result())
             item.update(quality=r["quality"], aspect=r["aspect"], reason=r["reason"])
             if r["webp"] is not None:
-                path = f"v{a.version}/{t['id']}.webp"
+                # versioned + hashed name: a different source image (candidate switch) gets a new URL, so a long immutable cache is safe
+                path = f"v{a.version}/{t['id']}-{hashlib.sha1(t['url'].encode()).hexdigest()[:8]}.webp"
                 item.update(status="ok", url=PUBLIC + path)
                 uploads.append((path, r["webp"], item))
         except Exception as e:  # download or decode problem: flagged, never blocks the batch

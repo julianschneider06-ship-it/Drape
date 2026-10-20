@@ -94,9 +94,9 @@ Deno.serve(async (req) => {
       return error ? json({ error: error.message }, 500) : json({ data });
     }
     case "sign_upload": {
-      // Signed upload URLs for the public "cutouts" bucket only (paths like v1/123.webp), so workers never see the service key.
+      // Signed upload URLs for the public "cutouts" bucket only (paths like v1/123.webp or v1/123-1a2b3c4d.webp), so workers never see the service key.
       const paths: string[] = Array.isArray(a.paths) ? a.paths.slice(0, 100) : [];
-      if (!paths.length || !paths.every((p) => /^v\d+\/\d+\.(webp|png)$/.test(p))) return json({ error: "bad paths" }, 400);
+      if (!paths.length || !paths.every((p) => /^v\d+\/\d+(-[0-9a-f]{8})?\.(webp|png)$/.test(p))) return json({ error: "bad paths" }, 400);
       const out: Record<string, string> = {};
       for (const p of paths) {
         const { data, error } = await db.storage.from("cutouts").createSignedUploadUrl(p, { upsert: true });

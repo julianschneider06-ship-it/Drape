@@ -9,7 +9,10 @@
     "ingest": "tsx scripts/ingest.ts",
     "preselect": "tsx scripts/preselect-images.ts",
     "classify": "tsx scripts/classify.ts",
-    "ingest:all": "tsx scripts/ingest.ts && tsx scripts/preselect-images.ts"
+    "ingest:all": "bash scripts/pipeline.sh",
+    "cutout": "scripts/cutout/run_all.sh",
+    "image-check": "tsx scripts/image-check.ts",
+    "outfits": "tsx scripts/build-outfits.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0",
