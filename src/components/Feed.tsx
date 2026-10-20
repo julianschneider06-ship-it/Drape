@@ -69,8 +69,8 @@ export default function Feed() {
     loadingRef.current = true; setLoading(true); setError(false);
     const g = genderRef.current;
     try {
-      const q = new URLSearchParams({ gender: g, device: device.current, limit: "6" });
-      if (cursorRef.current !== null) q.set("cursor", String(cursorRef.current));
+      const q = new URLSearchParams({ gender: g });
+      if (cursorRef.current !== null) q.set("cursor", String(cursorRef.current)); else q.set("device", device.current); // pages with a cursor are shared + CDN-cached
       const res = await fetch(`/api/feed?${q}`);
       if (!res.ok) throw new Error(String(res.status));
       const data = (await res.json()) as FeedResponse;

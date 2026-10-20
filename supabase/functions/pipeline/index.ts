@@ -9,14 +9,20 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
+const tokenCache = new Map<string, { info: { label: string; allowed: string[] | null }; at: number }>();
+
 // Token rights are data: pipeline_tokens.allowed_fns (null = everything, else a list of rpc names plus "sample").
 async function tokenInfo(req: Request): Promise<{ label: string; allowed: string[] | null } | null> {
   const got = (req.headers.get("authorization") ?? "").replace(/^Bearer /, "");
   if (got.length < 32) return null;
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(got));
   const hash = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const hit = tokenCache.get(hash);
+  if (hit && hit.at > Date.now() - 60_000) return hit.info;   // saves a database round trip per call
   const { data } = await db.from("pipeline_tokens").select("label,allowed_fns").eq("token_hash", hash).maybeSingle();
-  return data ? { label: data.label, allowed: data.allowed_fns ?? null } : null;
+  const info = data ? { label: data.label as string, allowed: (data.allowed_fns ?? null) as string[] | null } : null;
+  if (info) tokenCache.set(hash, { info, at: Date.now() });
+  return info;
 }
 
 // Callable database functions are data too (table pipeline_rpc_allowlist), cached for a minute.
