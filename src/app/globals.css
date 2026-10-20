@@ -16,3 +16,8 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Feed: hide scrollbars, no pull-to-refresh bounce inside the snap scroller */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+img { -webkit-user-drag: none; }
