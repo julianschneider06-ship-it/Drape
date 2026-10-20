@@ -9,23 +9,36 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-// Returns the token's label, or null. Tokens labelled "vercel-*" are read-only (web app).
-async function tokenLabel(req: Request): Promise<string | null> {
+// Token rights are data: pipeline_tokens.allowed_fns (null = everything, else a list of rpc names plus "sample").
+async function tokenInfo(req: Request): Promise<{ label: string; allowed: string[] | null } | null> {
   const got = (req.headers.get("authorization") ?? "").replace(/^Bearer /, "");
   if (got.length < 32) return null;
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(got));
   const hash = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  const { data } = await db.from("pipeline_tokens").select("label").eq("token_hash", hash).maybeSingle();
-  return data?.label ?? null;
+  const { data } = await db.from("pipeline_tokens").select("label,allowed_fns").eq("token_hash", hash).maybeSingle();
+  return data ? { label: data.label, allowed: data.allowed_fns ?? null } : null;
+}
+
+// Callable database functions are data too (table pipeline_rpc_allowlist), cached for a minute.
+let fnCache = { fns: new Set<string>(), at: 0 };
+async function rpcKnown(fn: string): Promise<boolean> {
+  if (fnCache.fns.has(fn)) return true;
+  if (Date.now() - fnCache.at > 5000) {
+    const { data } = await db.from("pipeline_rpc_allowlist").select("fn");
+    fnCache = { fns: new Set((data ?? []).map((r: { fn: string }) => r.fn)), at: Date.now() };
+  }
+  return fnCache.fns.has(fn);
 }
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
-  const label = await tokenLabel(req);
-  if (!label) return json({ error: "unauthorized" }, 401);
+  const info = await tokenInfo(req);
+  if (!info) return json({ error: "unauthorized" }, 401);
   const { action, ...a } = await req.json();
-  const readOnlyOk = action === "sample" || (action === "rpc" && a.fn === "review_list");
-  if (label.startsWith("vercel") && !readOnlyOk) return json({ error: "forbidden for this token" }, 403);
+  if (info.allowed) {
+    const ok = (action === "sample" && info.allowed.includes("sample")) || (action === "rpc" && info.allowed.includes(a.fn));
+    if (!ok) return json({ error: "forbidden for this token" }, 403);
+  }
 
   switch (action) {
     case "source_upsert": {
@@ -70,11 +83,7 @@ Deno.serve(async (req) => {
       return json({ classification_id: c.data.id, embedding_id: e.data.id });
     }
     case "rpc": {
-      // Only allow-listed database functions. None of them can reach a paid service.
-      const ALLOWED = ["backfill_product_images", "images_todo", "images_apply", "queue_enqueue", "claim_classification_batch",
-        "queue_finish", "classify_inputs", "classification_store", "pick_classification_sample", "review_list",
-        "store_retry_policy", "refresh_feed_bg"];
-      if (!ALLOWED.includes(a.fn)) return json({ error: "function not allowed" }, 403);
+      if (typeof a.fn !== "string" || !(await rpcKnown(a.fn))) return json({ error: "function not allowed" }, 403);
       const { data, error } = await db.rpc(a.fn, a.args ?? {});
       return error ? json({ error: error.message }, 500) : json({ data });
     }
