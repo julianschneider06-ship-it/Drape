@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
   if (!info) return json({ error: "unauthorized" }, 401);
   const { action, ...a } = await req.json();
   if (info.allowed) {
-    const ok = (action === "sample" && info.allowed.includes("sample")) || (action === "rpc" && info.allowed.includes(a.fn));
+    const ok = (action === "sample" && info.allowed.includes("sample")) || (action === "sign_upload" && info.allowed.includes("sign_upload")) || (action === "rpc" && info.allowed.includes(a.fn));
     if (!ok) return json({ error: "forbidden for this token" }, 403);
   }
 
@@ -92,6 +92,18 @@ Deno.serve(async (req) => {
       if (typeof a.fn !== "string" || !(await rpcKnown(a.fn))) return json({ error: "function not allowed" }, 403);
       const { data, error } = await db.rpc(a.fn, a.args ?? {});
       return error ? json({ error: error.message }, 500) : json({ data });
+    }
+    case "sign_upload": {
+      // Signed upload URLs for the public "cutouts" bucket only (paths like v1/123.webp), so workers never see the service key.
+      const paths: string[] = Array.isArray(a.paths) ? a.paths.slice(0, 100) : [];
+      if (!paths.length || !paths.every((p) => /^v\d+\/\d+\.(webp|png)$/.test(p))) return json({ error: "bad paths" }, 400);
+      const out: Record<string, string> = {};
+      for (const p of paths) {
+        const { data, error } = await db.storage.from("cutouts").createSignedUploadUrl(p, { upsert: true });
+        if (error) return json({ error: error.message }, 500);
+        out[p] = data.signedUrl;
+      }
+      return json({ urls: out });
     }
     case "sample": {
       // Read-only, cursor-paginated product list for /sample.
