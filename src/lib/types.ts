@@ -5,5 +5,5 @@ export interface FeedCard {
 }
 export interface FeedAccessory { card: FeedCard; type: string; placement: "head" | "inline" | "side"; zone: string | null; size: string | null; front_flat: boolean | null; belt_shape: string | null; slot_no?: number }
 export interface FeedAlt { rank: number; card: FeedCard; meta?: { type: string | null; size: string | null; front_flat: boolean | null; belt_shape: string | null } | null }
-export interface FeedOutfit { id: number; kind: "three" | "full"; score: number; order: number; top: FeedCard; bottom: FeedCard | null; shoes: FeedCard; accessories?: FeedAccessory[]; alts?: Record<string, FeedAlt[]> }
+export interface FeedOutfit { id: number; kind: "three" | "full"; score: number; order: number; top: FeedCard; bottom: FeedCard | null; shoes: FeedCard; accessories?: FeedAccessory[]; alts?: Record<string, FeedAlt[]>; dyn?: { style: string; store: string; season: string; fit: number; bucket: string; pattern?: string; ids: number[] } }
 export interface FeedResponse { items: FeedOutfit[]; next_cursor: number; size: number }

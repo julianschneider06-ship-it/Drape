@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const ids = Array.isArray(e.product_ids) ? e.product_ids.map((x) => int(x)).filter((x): x is number => x !== null).slice(0, 6) : null;
     const ts = typeof e.client_ts === "string" && !isNaN(Date.parse(e.client_ts)) ? e.client_ts : null;
     return [{
-      event_type: e.event_type, product_id: int(e.product_id), product_ids: ids, outfit_id: int(e.outfit_id),
+      event_type: e.event_type, product_id: int(e.product_id), product_ids: ids, outfit_id: int(e.outfit_id, 2 ** 53),   // pool ids are small; dynamic (composed) outfits use a 52-bit hash of their piece ids
       slot: typeof e.slot === "string" && SLOTS.has(e.slot) ? e.slot : null, feed_index: int(e.feed_index, 100000),
       gender: e.gender === "women" || e.gender === "men" ? e.gender : null, dwell_ms: int(e.dwell_ms, 3_600_000), ctx: cleanCtx(e.ctx), client_ts: ts,
     }];

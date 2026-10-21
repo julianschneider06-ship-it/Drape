@@ -52,6 +52,26 @@ export function candidatesFor(all: Piece[], g: "women" | "men", rnd: Rnd, minSco
   return [...map.values()];
 }
 
+/** No repeats of a product / style / store in a row (the ordering rules of the pool, also used by the dynamic composer for a session). */
+export class StreakGuard {
+  recentProducts: number[][] = []; recentStyles: string[] = []; recentStores: string[] = [];
+  constructor(private o = { products: 12, styles: 3, stores: 2 }) {}
+  /** level 0 = strict (products, style streak, store), level >= 1 = products only */
+  ok(ids: number[], style: string, store: string, level = 0): boolean {
+    const seen = new Set(this.recentProducts.flat());
+    if (ids.some((id) => seen.has(id))) return false;
+    if (level >= 1) return true;
+    if (this.recentStyles.slice(-2).every((s) => s === style) && this.recentStyles.length >= 2) return false;
+    if (this.recentStores.slice(-1)[0] === store) return false;
+    return true;
+  }
+  push(ids: number[], style: string, store: string) {
+    this.recentProducts.push(ids); if (this.recentProducts.length > this.o.products) this.recentProducts.shift();
+    this.recentStyles.push(style); if (this.recentStyles.length > this.o.styles) this.recentStyles.shift();
+    this.recentStores.push(store); if (this.recentStores.length > this.o.stores) this.recentStores.shift();
+  }
+}
+
 /** Pick by score with per-product caps. */
 export function select(cands: Cand[]): Cand[] {
   const used = new Map<number, number>();
@@ -69,18 +89,11 @@ export function order(sel: Cand[], rnd: Rnd): Cand[] {
   const keyed = sel.map((c) => ({ c, k: Math.pow(rnd(), 1 / Math.pow(c.score, 6)) })).sort((a, b) => b.k - a.k).map((x) => x.c);
   const usedIdx = new Array(keyed.length).fill(false);
   const out: Cand[] = [];
-  const recentProducts: number[][] = [], recentStyles: string[] = [], recentStores: string[] = [];
+  const guard = new StreakGuard();
   let first = 0;
   while (out.length < keyed.length) {
     while (usedIdx[first]) first++;
-    const ok = (c: Cand, level: number) => {
-      const ids = new Set(recentProducts.flat());
-      if (c.ids.some((id) => ids.has(id))) return false;
-      if (level >= 1) return true;
-      if (recentStyles.slice(-2).every((s) => s === c.style) && recentStyles.length >= 2) return false;
-      if (recentStores.slice(-1)[0] === c.pieces[0].store) return false;
-      return true;
-    };
+    const ok = (c: Cand, level: number) => guard.ok(c.ids, c.style, c.pieces[0].store, level);
     let pick = -1;
     for (const level of [0, 1, 2]) {
       for (let j = first, seen = 0; j < keyed.length && seen < 80; j++) {
@@ -93,9 +106,7 @@ export function order(sel: Cand[], rnd: Rnd): Cand[] {
     usedIdx[pick] = true;
     const c = keyed[pick];
     out.push(c);
-    recentProducts.push(c.ids); if (recentProducts.length > 12) recentProducts.shift();
-    recentStyles.push(c.style); if (recentStyles.length > 3) recentStyles.shift();
-    recentStores.push(c.pieces[0].store); if (recentStores.length > 2) recentStores.shift();
+    guard.push(c.ids, c.style, c.pieces[0].store);
   }
   return out;
 }

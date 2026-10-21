@@ -18,7 +18,7 @@ export interface CatPiece extends Piece {
   fill: number | null; presentation: string | null; colors: string[]; silhouette: string; fit: string; material: string | null; boldness: number;
   short: boolean;   // shorts / short skirt (bottom length class: decides which shoes look right, same rule as the alternatives job)
 }
-export interface CatAcc extends Acc { brand: string; name: string; aspect: number; idx: number }
+export interface CatAcc extends Acc { brand: string; name: string; aspect: number; idx: number; size: string | null }
 
 const SLOT_ID: Record<Slot, number> = { top: 0, bottom: 1, shoes: 2, full_body: 3 };
 const SHORT = /\b(shorts?|skort|mini|bermuda)\b/i;
@@ -65,7 +65,7 @@ export function buildCatalogue(snap: Snapshot): Catalogue {
   const groupSize = new Map<string, number>();
   for (const g of ["women", "men"]) for (const s of slots) groupSize.set(`${g}:${s}`, index.get(`${g}:${s}`)?.length ?? 0);
   const accs: CatAcc[] = [], accById = new Map<number, CatAcc>();
-  snap.accs.forEach((r, i) => { const a = toAcc(r); const ca: CatAcc = { ...a, brand: r.brand, name: r.name, aspect: r.aspect, idx: i }; accs.push(ca); accById.set(ca.id, ca);
+  snap.accs.forEach((r, i) => { const a = toAcc(r); const ca: CatAcc = { ...a, brand: r.brand, name: r.name, aspect: r.aspect, idx: i, size: r.size ?? null }; accs.push(ca); accById.set(ca.id, ca);
     for (const g of a.genders) groupSize.set(`${g}:acc:${a.type}`, (groupSize.get(`${g}:acc:${a.type}`) ?? 0) + 1); });
   return { version: snap.version, pieces, byId, accs, accById, vecs, formality, boldness, statement, mask, slotId, genderMask, index, groupSize, loadedAt: Date.now() };
 }

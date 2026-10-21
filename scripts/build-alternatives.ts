@@ -8,6 +8,7 @@ import { rpc } from "../src/ingest/gateway";
 import { scoreOutfit, toPiece, type Piece, type RawPiece, type Slot } from "../src/outfits/score";
 import { BAG, HEAD, NECK, ACC, outfitCtx, reject, scoreAcc, toAcc, type Acc, type OutfitCtx, type RawAcc } from "../src/outfits/accessories";
 import { RULES } from "../src/lib/layout/config";
+import { pickPair, type Cnd } from "../src/outfits/alt-shared";
 
 const VERSION = "alt3";   // alt3: ranks 1 and 2 are the swap-loop pair (visibly different from each other)
 // alt2:   // alt2: a bottom is replaced by a bottom of the same length class (shorts / short skirt stay short, long stays long)
@@ -29,22 +30,6 @@ const SHORT = /\b(shorts?|skort|mini|bermuda)\b/i;
 const shortish = (name: string | undefined) => SHORT.test(name ?? "");
 const folded = (slot: string, info: Info | undefined) => slot === "shoes" || slot === "full_body" ? false : !!info && ((info.presentation != null && !RULES.stackedPresentations.includes(info.presentation)) || (slot === "top" && (info.fill ?? 0) >= RULES.foldedFillMin));
 
-interface Cnd { product_id: number; brand: string; score: number; main: string; vec: Float32Array }
-const dotv = (a: Float32Array, b: Float32Array) => { let x = 0; for (let i = 0; i < a.length; i++) x += a[i] * b[i]; return x; };
-/** The swap loop shows the original + 2 alternatives: the best one, and the best other one that is visibly different from it
- *  (other brand, other main colour, not a near-duplicate in style); conditions are relaxed step by step if nothing qualifies. */
-function pickPair<T extends Cnd>(sorted: T[]): T[] {
-  if (sorted.length < 2) return sorted.slice(0, 2);
-  const a = sorted[0]; const pool = sorted.slice(1, 14);
-  const tests: ((b: T) => boolean)[] = [
-    (b) => b.brand !== a.brand && b.main !== a.main && dotv(a.vec, b.vec) < 0.96,
-    (b) => b.main !== a.main && dotv(a.vec, b.vec) < 0.96,
-    (b) => b.brand !== a.brand && dotv(a.vec, b.vec) < 0.96,
-    (b) => dotv(a.vec, b.vec) < 0.96, () => true,
-  ];
-  for (const t of tests) { const b = pool.find(t); if (b) return [a, b]; }
-  return [a];
-}
 /** Best first, at most MAX_ALTS, no two alternatives from the same brand in a row where possible. */
 function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[] {
   const out: T[] = []; const rest = [...sorted];

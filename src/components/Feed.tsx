@@ -34,11 +34,13 @@ export default function Feed() {
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
   const [reactions, setReactions] = useState<Record<number, Reaction>>({});
   const layoutInfo = useRef(new Map<number, { layout: string; mode: string }>());
-  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean; preload: boolean }>({ debug: false, cut: "auto", acc: true, preload: true });
+  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean; preload: boolean; feed: "default" | "dynamic" }>({ debug: false, cut: "auto", acc: true, preload: true, feed: "default" });
 
   const device = useRef("");
   const scroller = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<FeedOutfit[]>([]);
+  const dynRef = useRef(false);
+  const dynState = useRef({ page: 0, startersDone: false, servedStarters: 0, startersSent: false });
   const [swaps, setSwaps] = useState<SwapState>({});          // in-session swap state (reset on reload)
   const [swapEvts, setSwapEvts] = useState<Record<number, SwapEvt>>({});
   const swapBusy = useRef(new Set<string>());
@@ -59,7 +61,8 @@ export default function Feed() {
   // debug options: ?layout=A,FB forces templates (3-piece, full-body), ?debug=1 shows boxes + margin zone
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto", acc: q.get("acc") !== "off", preload: q.get("preload") !== "off" });   // ?preload=off: test switch for the alternatives preloading
+    dynRef.current = q.get("feed") === "dynamic";
+    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto", acc: q.get("acc") !== "off", preload: q.get("preload") !== "off", feed: q.get("feed") === "dynamic" ? "dynamic" : "default" });   // ?feed=dynamic: prototype of the dynamic composer   // ?preload=off: test switch for the alternatives preloading
   }, []);
 
   // canvas size follows the scroller (phones, rotation, desktop)
@@ -93,12 +96,32 @@ export default function Feed() {
     loadingRef.current = true; setLoading(true); setError(false);
     const g = genderRef.current;
     try {
+      let data: FeedResponse;
+      if (dynRef.current) {
+        // dynamic prototype: the fixed starter set first (CDN-cached pages), then pages composed for this device
+        let items: FeedOutfit[] = [];
+        if (!dynState.current.startersDone) {
+          const r = await fetch(`/api/dynamic?gender=${g}&starter=${dynState.current.page}`, { signal: AbortSignal.timeout(15000) });
+          if (!r.ok) throw new Error(String(r.status));
+          items = ((await r.json()) as { items: FeedOutfit[] }).items;
+          if (items.length) { dynState.current.page++; dynState.current.servedStarters += items.length; } else dynState.current.startersDone = true;
+        }
+        if (!items.length) {
+          const recent = itemsRef.current.slice(-12).filter((o) => o.dyn).map((o) => ({ ids: o.dyn!.ids, style: o.dyn!.style, store: o.dyn!.store }));
+          const r = await fetch("/api/dynamic", { method: "POST", signal: AbortSignal.timeout(20000), body: JSON.stringify({ device_id: device.current, gender: g, recent, startersServed: dynState.current.startersSent ? 0 : dynState.current.servedStarters }) });
+          if (!r.ok) throw new Error(String(r.status));
+          dynState.current.startersSent = true;
+          items = ((await r.json()) as { items: FeedOutfit[] }).items;
+        }
+        data = { items, next_cursor: 1, size: 1 };
+      } else {
       const q = new URLSearchParams({ gender: g });
       if (cursorRef.current !== null) q.set("cursor", String(cursorRef.current)); else q.set("device", device.current); // pages with a cursor are shared + CDN-cached
       let res = await fetch(`/api/feed?${q}`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
       if (!res || !res.ok) res = await fetch(`/api/feed?${q}`, { signal: AbortSignal.timeout(10000) }); // one automatic retry
       if (!res.ok) throw new Error(String(res.status));
-      const data = (await res.json()) as FeedResponse;
+      data = (await res.json()) as FeedResponse;
+      }
       if (g !== genderRef.current) return; // gender changed while loading
       cursorRef.current = data.next_cursor;
       store.set(`drape.cursor.${g}`, String(data.next_cursor));
@@ -115,7 +138,7 @@ export default function Feed() {
     store.set("drape.gender", gender);
     const saved = store.get(`drape.cursor.${gender}`);
     cursorRef.current = saved !== null && /^\d+$/.test(saved) ? Number(saved) : null;
-    exhausted.current = false; enterAt.current.clear(); interacted.current.clear();
+    exhausted.current = false; enterAt.current.clear(); interacted.current.clear(); dynState.current = { page: 0, startersDone: false, servedStarters: 0, startersSent: false };
     setItems([]); setCurrent(0);
     scroller.current?.scrollTo({ top: 0 });
     loadingRef.current = false;
