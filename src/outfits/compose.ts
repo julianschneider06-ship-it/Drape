@@ -10,18 +10,19 @@ import { allowed, BanState } from "./ban";
 import type { CatAcc, Catalogue, CatPiece } from "./catalogue";
 import { COMPOSE, type Bucket } from "./compose-config";
 import { pairScore, StreakGuard, type Rnd } from "./pool-shared";
+import { POLISH, reorderPage, runTooLong, shareOf, scoreContrast, subAllowed, subGroup, tonePenalty } from "./compose-polish";
 import { outfitStyle, scoreOutfit, type Piece } from "./score";
 import { outfitSeason, seasonRole, type SeasonResult, type SeasonPiece } from "./season";
 import { connBonus, tasteMatch, type Taste } from "./taste";
 
-export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number; banOverall?: number }
+export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number; banOverall?: number; legacy?: boolean }
 export interface ComposedAcc { id: number; type: string; placement: string; zone: string; score: number }
 export interface ComposedOutfit {
   kind: "three" | "full"; ids: number[]; acc: ComposedAcc[]; score: number; style: string; season: SeasonResult; bucket: Bucket; pattern?: string; hash: number;
   layoutOk: boolean; attempts: number;
 }
-export interface Session { guard: StreakGuard; uses: Map<number, number>; acc: Usage; served: number }
-export const newSession = (): Session => ({ guard: new StreakGuard(COMPOSE.session), uses: new Map(), acc: { uses: new Map(), recentIds: [], recentStores: [] }, served: 0 });
+export interface Session { guard: StreakGuard; uses: Map<number, number>; acc: Usage; served: number; subs: { top: string[]; bottom: string[] } }
+export const newSession = (): Session => ({ guard: new StreakGuard(COMPOSE.session), uses: new Map(), acc: { uses: new Map(), recentIds: [], recentStores: [] }, served: 0, subs: { top: [], bottom: [] } });
 export interface ComposeStats { ms: number; attempts: number; rejects: Record<string, number>; buckets: Record<string, number> }
 
 /** deterministic outfit id from the pieces: 52-bit hash of the sorted slot:id list, always >= 2^51 so it never collides with pool ids (small integers) */
@@ -35,11 +36,19 @@ export function outfitHash(ids: { slot: string; id: number }[]): number {
 const SPORTY = ["sporty", "athleisure", "streetwear", "skater", "retro_sport", "gorpcore"].map((k) => STYLE_KEYS.indexOf(k as never));
 const sportyness = (p: Piece) => SPORTY.reduce((a, i) => a + p.vec[i], 0);
 /** deliberate style breaks (named patterns): predicates for the anchor slot and the partner slot */
-export const CONTRAST_PATTERNS: { name: string; anchor: "shoes" | "bottom" | "top"; partner: "bottom" | "shoes"; a: (p: CatPiece) => boolean; b: (p: CatPiece) => boolean }[] = [
+export const CONTRAST_PATTERNS_V1: { name: string; anchor: "shoes" | "bottom" | "top"; partner: "bottom" | "shoes"; a: (p: CatPiece) => boolean; b: (p: CatPiece) => boolean }[] = [
   { name: "smart shoes + relaxed bottom", anchor: "shoes", partner: "bottom", a: (p) => p.formality >= 0.65, b: (p) => p.formality <= 0.4 && (p.looseOk || p.volume >= 0.5) },
   { name: "tailored bottom + sporty shoes", anchor: "bottom", partner: "shoes", a: (p) => p.formality >= 0.6, b: (p) => sportyness(p) >= 0.6 },
   { name: "formal top + relaxed bottom", anchor: "top", partner: "bottom", a: (p) => p.formality >= 0.6, b: (p) => p.formality <= 0.35 && (p.looseOk || p.volume >= 0.4) },
   { name: "sporty top + tailored bottom", anchor: "top", partner: "bottom", a: (p) => sportyness(p) >= 0.6, b: (p) => p.formality >= 0.6 },
+];
+
+/** style breaks v2: stronger, visibly different pairs (formality gap >= 0.3 between the two pattern pieces, scored with scoreContrast) */
+export const CONTRAST_PATTERNS: typeof CONTRAST_PATTERNS_V1 = [
+  { name: "smart shoes + relaxed bottom", anchor: "shoes", partner: "bottom", a: (p) => p.formality >= 0.7, b: (p) => p.formality <= 0.3 && (p.looseOk || p.volume >= 0.5) },
+  { name: "tailored bottom + sporty shoes", anchor: "bottom", partner: "shoes", a: (p) => p.formality >= 0.65, b: (p) => sportyness(p) >= 0.7 },
+  { name: "formal top + relaxed bottom", anchor: "top", partner: "bottom", a: (p) => p.formality >= 0.65, b: (p) => p.formality <= 0.3 && (p.looseOk || p.volume >= 0.4) },
+  { name: "sporty top + tailored bottom", anchor: "top", partner: "bottom", a: (p) => sportyness(p) >= 0.7, b: (p) => p.formality >= 0.65 },
 ];
 
 const BOOTS = /\b(boots?|chelsea|hiker)\b/i;
@@ -72,7 +81,8 @@ export function layoutCheck(cat: Catalogue, kind: "three" | "full", ps: CatPiece
 export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6, session: Session = newSession(), rnd: Rnd = Math.random): { outfits: ComposedOutfit[]; ban: BanState; session: Session; stats: ComposeStats } {
   const t0 = performance.now();
   const g = profile.gender, taste = profile.taste && profile.taste.n >= 5 ? profile.taste : null, guest = !taste;
-  const minScore = profile.minScore ?? COMPOSE.minScore;
+  const legacy = !!profile.legacy, minScore = profile.minScore ?? COMPOSE.minScore, patterns = legacy ? CONTRAST_PATTERNS_V1 : CONTRAST_PATTERNS;
+  let noWhy = "no-candidate", wide = 1;   // reason of the last failed build (anchor / partner / min-score) and the candidate sample multiplier of this attempt
   const mix = profile.mix ?? (guest ? COMPOSE.guestMix : COMPOSE.mix);
   const contrastShare = profile.contrastShare ?? mix.contrast;
   const buckets: [Bucket, number][] = [["match", mix.match], ["near", mix.near], ["new", mix.new], ["contrast", contrastShare]];
@@ -90,7 +100,12 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
   const bandOf = (p: CatPiece): Bucket => { const c = bandCut[p.slot]; if (!c) return "new"; const v = tm(p); return v >= c[0] ? "match" : v >= c[1] ? "near" : "new"; };
   const cand = (slot: string, season: number): CatPiece[] => {
     const l = cat.index.get(`${g}:${slot}:${season}`) ?? cat.index.get(`${g}:${slot}`) ?? new Int32Array(0);
-    return allowed(Array.from(l, (i) => cat.pieces[i]), eff, COMPOSE.ban.minPool);
+    const list = allowed(Array.from(l, (i) => cat.pieces[i]), eff, COMPOSE.ban.minPool);
+    if (legacy || (slot !== "top" && slot !== "bottom")) return list;
+    // variety cap: no more than N of the same top group / bottom group within the last W outfits (gives way before the list gets too short)
+    const recent = session.subs[slot].slice(-POLISH.subCap.window), counts = new Map<string, number>(); for (const k of recent) counts.set(k, (counts.get(k) ?? 0) + 1);
+    const kept = list.filter((p) => { const k = subGroup(p); return (counts.get(k) ?? 0) < subAllowed(cat, g, slot, k); });
+    return kept.length >= POLISH.subCapMinPool ? kept : list;
   };
   const fresh = (p: CatPiece) => 1 / (1 + COMPOSE.freshnessPerUse * (session.uses.get(p.id) ?? 0));
   const tasteW = (p: CatPiece) => 1 - COMPOSE.tasteWeight + COMPOSE.tasteWeight * (guest ? 0.5 : tm(p));
@@ -113,26 +128,29 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
     return [...head, ...sample(sorted.slice(k >> 1), k - (k >> 1), rnd)];
   };
   const buildOne = (bucket: Bucket): { ps: CatPiece[]; kind: "three" | "full"; score: number; pattern?: string } | null => {
-    const minS = bucket === "contrast" ? COMPOSE.contrastMinScore : minScore;
+    const minS = bucket === "contrast" ? (legacy ? COMPOSE.contrastMinScore : POLISH.contrastMinScore) : minScore;
+    const sc2 = bucket === "contrast" && !legacy ? scoreContrast : scoreOutfit;   // style breaks have their own scoring
+    const tone = (ps: CatPiece[]) => (legacy || bucket === "contrast" ? 1 : tonePenalty(ps));
     const sSeason = ((): number => { const r = rnd(); const cur = COMPOSE.seasonWeightCurrent; if (r < cur) return curSeason; const o = [0, 1, 2, 3].filter((x) => x !== curSeason); return o[Math.floor((r - cur) / ((1 - cur) / 3)) % 3]; })();
     const bandW = (p: CatPiece) => (guest || bucket === "contrast" ? 1 : bandOf(p) === bucket ? 1 : COMPOSE.bandWeightOutside);
     let anchorSlot: "top" | "bottom" | "shoes" | "full_body", pat: (typeof CONTRAST_PATTERNS)[number] | undefined;
     let anchor: CatPiece | null;
     if (bucket === "contrast") {
-      pat = CONTRAST_PATTERNS[Math.floor(rnd() * CONTRAST_PATTERNS.length)]; anchorSlot = pat.anchor;
+      pat = patterns[Math.floor(rnd() * patterns.length)]; anchorSlot = pat.anchor;
       anchor = pick(cand(anchorSlot, sSeason).filter(pat.a), (p) => fresh(p) * (0.5 + tasteW(p)), rnd);
     } else {
       const w = { top: COMPOSE.anchorSlot.top, bottom: COMPOSE.anchorSlot.bottom, shoes: COMPOSE.anchorSlot.shoes, full_body: fullShare } as const;
       anchorSlot = pick(["top", "bottom", "shoes", "full_body"] as const, (s) => w[s], rnd)!;
       anchor = pick(cand(anchorSlot, sSeason), (p) => fresh(p) * bandW(p), rnd);
     }
-    if (!anchor) return null;
+    if (!anchor) { noWhy = "no-candidate:anchor"; return null; }
     if (anchorSlot === "full_body") {
       const shoes = cand("shoes", sSeason); const sc: [CatPiece, number][] = [];
-      for (const s of sampleFor(shoes, COMPOSE.shoeSample)) { const r = scoreOutfit([anchor, s]); if (r && r.score >= minS) sc.push([s, r.score]); }
+      for (const s of sampleFor(shoes, Math.round(COMPOSE.shoeSample * wide))) { const r = scoreOutfit([anchor, s]); if (r && r.score >= minS) sc.push([s, r.score]); }
       sc.sort((a, b) => b[1] - a[1]); const top = sc.slice(0, COMPOSE.topN);
       const ch = pick(top, ([s, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(s) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, s)) * fresh(s), rnd);
-      return ch ? { ps: [anchor, ch[0]], kind: "full", score: ch[1] } : null;
+      if (!ch) { noWhy = "no-candidate:min-score"; return null; }
+      return { ps: [anchor, ch[0]], kind: "full", score: ch[1] };
     }
     // second slot by pair proxy (top/bottom or shoes/bottom), third slot by the full outfit score
     const second = anchorSlot === "top" ? "bottom" : anchorSlot === "bottom" ? "top" : "bottom";
@@ -140,39 +158,50 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
     let secL = cand(second, sSeason);
     if (pat && pat.partner === second) secL = secL.filter(pat.b);
     const sec: [CatPiece, number][] = [];
-    for (const y of sampleFor(secL, COMPOSE.partnerSample)) { const s = pairScore(anchor, y, rnd); if (s > 0) sec.push([y, s]); }
+    for (const y of sampleFor(secL, Math.round(COMPOSE.partnerSample * wide))) { const s = bucket === "contrast" && !legacy ? (scoreContrast([anchor, y])?.score ?? -1) : pairScore(anchor, y, rnd) * tone([anchor, y]); if (s > 0) sec.push([y, s]); }
     sec.sort((a, b) => b[1] - a[1]);
-    const secPick = pick(sec.slice(0, COMPOSE.pairK), ([y, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(y) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, y)) * fresh(y), rnd);
-    if (!secPick) return null;
-    const y = secPick[0];
-    let thirdL = cand(third, sSeason);
-    if (pat && pat.partner === third) thirdL = thirdL.filter(pat.b);
-    const trio = (z: CatPiece) => { const o = [anchor!, y, z]; const by = (s: string) => o.find((p) => p.slot === s)!; return [by("top"), by("bottom"), by("shoes")]; };
-    const fin: [CatPiece, number][] = [];
-    for (const z of sampleFor(thirdL, COMPOSE.shoeSample)) {
-      const ps = trio(z); if (!lengthShoeOk(ps[1], ps[2])) { rej("candidate:length-shoes"); continue; }
-      const r = scoreOutfit(ps); if (r && r.score >= minS) fin.push([z, r.score]);
+    // partner choice with backtracking (new rules): if the chosen partner has no completion that reaches the minimum score, the next best partners are tried (up to 3) before the attempt fails
+    let secs = sec.slice(0, COMPOSE.pairK);
+    for (let tryNo = 0; tryNo < (legacy ? 1 : POLISH.partnerTries); tryNo++) {
+      const secPick = pick(secs, ([y, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(y) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, y)) * fresh(y), rnd);
+      if (!secPick) { if (tryNo === 0) noWhy = "no-candidate:partner"; break; }
+      secs = secs.filter((x) => x !== secPick);
+      const y = secPick[0];
+      let thirdL = cand(third, sSeason);
+      if (pat && pat.partner === third) thirdL = thirdL.filter(pat.b);
+      const trio = (z: CatPiece) => { const o = [anchor!, y, z]; const by = (s: string) => o.find((p) => p.slot === s)!; return [by("top"), by("bottom"), by("shoes")]; };
+      const fin: [CatPiece, number][] = [];
+      for (const z of sampleFor(thirdL, Math.round(COMPOSE.shoeSample * wide))) {
+        const ps = trio(z); if (!lengthShoeOk(ps[1], ps[2])) { rej("candidate:length-shoes"); continue; }
+        const r = sc2(ps); const sv = r ? r.score * tone(ps) : 0; if (r && sv >= minS) fin.push([z, sv]);
+      }
+      fin.sort((a, b) => b[1] - a[1]);
+      const fp = pick(fin.slice(0, COMPOSE.topN), ([z, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(z) * (1 + COMPOSE.connectionWeight * connBonus(taste, third === "shoes" ? y.slot === "bottom" ? y : anchor! : anchor!, z)) * fresh(z), rnd);
+      if (fp) return { ps: trio(fp[0]), kind: "three", score: fp[1], pattern: pat?.name };
+      noWhy = "no-candidate:min-score";
     }
-    fin.sort((a, b) => b[1] - a[1]);
-    const fp = pick(fin.slice(0, COMPOSE.topN), ([z, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(z) * (1 + COMPOSE.connectionWeight * connBonus(taste, third === "shoes" ? y.slot === "bottom" ? y : anchor! : anchor!, z)) * fresh(z), rnd);
-    if (!fp) return null;
-    return { ps: trio(fp[0]), kind: "three", score: fp[1], pattern: pat?.name };
+    return null;
   };
 
-  const outfits: ComposedOutfit[] = [];
+  const outfits: ComposedOutfit[] = [], pageStyles: string[] = [], pageStores: string[] = [];
   const ban = new BanState([...banIn.ids]);
   for (let k = 0; k < n; k++) {
-    let done: ComposedOutfit | null = null;
+    let done: ComposedOutfit | null = null, softTries = 0;
     const wanted = pick(buckets.filter(([, v]) => v > 0), ([, v]) => v, rnd)![0];   // the bucket is drawn once per outfit; a contrast outfit retries its pattern a few times before giving up
     for (let attempt = 0; attempt < COMPOSE.attempts + 4 && !done; attempt++) {
       stats.attempts++;
-      const level = attempt < COMPOSE.attempts ? 0 : 1;      // after the strict attempts only the "no repeated product" rule stays
+      const level = legacy ? (attempt < COMPOSE.attempts ? 0 : 1) : 1;      // legacy: after the strict attempts only the "no repeated product" rule stays; new: style / store runs are handled by reordering the page, only repeated products reject
+      wide = legacy ? 1 : POLISH.wide[Math.min(attempt, POLISH.wide.length - 1)];
       const bucket: Bucket = wanted === "contrast" && attempt >= 7 ? "new" : wanted;
       const b = buildOne(bucket);
-      if (!b) { rej("no-candidate"); continue; }
+      if (!b) { rej(noWhy); continue; }
       const ids = b.ps.map((p) => p.id);
       const style = outfitStyle(b.ps);
-      if (!session.guard.ok(ids, style, b.ps[0].store, level)) { rej("streak"); continue; }
+      { const w = session.guard.why(ids, style, b.ps[0].store, level); if (w) { rej(`streak:${w}`); continue; } }
+      if (!legacy && softTries < POLISH.softRedraws) {   // soft streak rule: a style / store run that would get too long is re-drawn a couple of times (not a failure); after that the outfit is accepted and the page is reordered
+        const tailS = [...session.guard.recentStyles, ...pageStyles], tailT = [...session.guard.recentStores, ...pageStores];
+        if (runTooLong(tailS, style, shareOf(cat, g, "style", style)) || runTooLong(tailT, b.ps[0].store, shareOf(cat, g, "store", b.ps[0].store))) { softTries++; rej("soft:streak"); continue; }
+      }
       // accessories: the existing selection rules
       let acc: ComposedAcc[] = [];
       if (accPool.length) {
@@ -186,17 +215,24 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
       const slotIds = b.ps.map((p) => ({ slot: p.slot, id: p.id })), accIds = acc.map((a) => ({ slot: `acc:${a.type}`, id: a.id }));
       done = { kind: b.kind, ids, acc, score: +b.score.toFixed(4), style, season, bucket, pattern: b.pattern, hash: outfitHash([...slotIds, ...accIds]), layoutOk: true, attempts: attempt + 1 };
       // commit to the session + bans (at composition time)
-      session.guard.push(ids, style, b.ps[0].store);
+      if (legacy) session.guard.push(ids, style, b.ps[0].store); else session.guard.pushProducts(ids);   // new: style / store order is recorded after the page is reordered
       for (const p of b.ps) session.uses.set(p.id, (session.uses.get(p.id) ?? 0) + 1);
+      for (const p of b.ps) if (p.slot === "top" || p.slot === "bottom") { const a = session.subs[p.slot]; a.push(subGroup(p)); if (a.length > POLISH.subCap.window) a.shift(); }
       session.acc.recentIds.push(acc.map((a) => a.id)); session.acc.recentStores.push(acc.map((a) => cat.accById.get(a.id)!.store));
       if (session.acc.recentIds.length > 14) { session.acc.recentIds.shift(); session.acc.recentStores.shift(); }
       for (const a of acc) session.acc.uses.set(a.id, (session.acc.uses.get(a.id) ?? 0) + 1);
       const served = [...ids, ...acc.map((a) => a.id)]; ban.push(served, profile.banOverall);
       for (const id of served) { eff.banned.add(id); eff.age.set(id, 0); }
-      session.served++;
+      session.served++; pageStyles.push(style); pageStores.push(b.ps[0].store);
       stats.buckets[bucket] = (stats.buckets[bucket] ?? 0) + 1;
     }
     if (done) outfits.push(done);
+  }
+  if (!legacy && outfits.length) {      // soft streak rule: reorder the page so that no style / store run gets too long, then record the served order
+    const store = (o: ComposedOutfit) => cat.byId.get(o.ids[0])!.store;
+    const ordered = reorderPage(outfits.map((o) => ({ o, style: o.style, store: store(o) })), session.guard.recentStyles, session.guard.recentStores, cat, g).map((x) => x.o);
+    outfits.splice(0, outfits.length, ...ordered);
+    for (const o of outfits) session.guard.pushOrder(o.style, store(o));
   }
   stats.ms = performance.now() - t0;
   return { outfits, ban, session, stats };

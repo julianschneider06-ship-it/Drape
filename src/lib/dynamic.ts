@@ -5,6 +5,7 @@ import { BanState } from "@/outfits/ban";
 import { getCatalogue, type Catalogue } from "@/outfits/catalogue";
 import { compose, newSession, type ComposedOutfit, type Session } from "@/outfits/compose";
 import { alternativesFor } from "@/outfits/compose-alts";
+import { subGroup } from "@/outfits/compose-polish";
 import { makeRnd } from "@/outfits/pool-shared";
 import { gatewayRpc } from "@/lib/gateway";
 import type { FeedAccessory, FeedAlt, FeedCard, FeedOutfit } from "@/lib/types";
@@ -63,6 +64,7 @@ export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items:
   const session: Session = newSession();
   for (const r of inp.recent ?? []) session.guard.push(r.ids, r.style, r.store);
   for (const r of inp.recent ?? []) for (const id of r.ids) session.uses.set(id, (session.uses.get(id) ?? 0) + 1);
+  for (const r of inp.recent ?? []) for (const id of r.ids) { const p = cat.byId.get(id); if (p && (p.slot === "top" || p.slot === "bottom")) session.subs[p.slot].push(subGroup(p)); }
   const tc = performance.now();
   const seed = Math.floor(Math.random() * 2 ** 31);
   const { outfits, ban: ban2 } = compose(cat, { gender: inp.gender, taste: null, ...(inp.contrast ? { mix: { match: 0, near: 0, new: 1 - inp.contrast, contrast: inp.contrast } } : {}) }, ban, 6, session, makeRnd(seed));

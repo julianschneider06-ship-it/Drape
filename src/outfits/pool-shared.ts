@@ -65,10 +65,21 @@ export class StreakGuard {
     if (this.recentStores.slice(-1)[0] === store) return false;
     return true;
   }
-  push(ids: number[], style: string, store: string) {
-    this.recentProducts.push(ids); if (this.recentProducts.length > this.o.products) this.recentProducts.shift();
-    this.recentStyles.push(style); if (this.recentStyles.length > this.o.styles) this.recentStyles.shift();
-    this.recentStores.push(store); if (this.recentStores.length > this.o.stores) this.recentStores.shift();
+  /** which rule rejects this outfit (null = ok); same rules as ok() */
+  why(ids: number[], style: string, store: string, level = 0): "product" | "style" | "store" | null {
+    const seen = new Set(this.recentProducts.flat());
+    if (ids.some((id) => seen.has(id))) return "product";
+    if (level >= 1) return null;
+    if (this.recentStyles.slice(-2).every((s) => s === style) && this.recentStyles.length >= 2) return "style";
+    if (this.recentStores.slice(-1)[0] === store) return "store";
+    return null;
+  }
+  push(ids: number[], style: string, store: string) { this.pushProducts(ids); this.pushOrder(style, store); }
+  pushProducts(ids: number[]) { this.recentProducts.push(ids); if (this.recentProducts.length > this.o.products) this.recentProducts.shift(); }
+  /** style / store order of the outfits as they are SERVED (after the page was reordered) */
+  pushOrder(style: string, store: string) {
+    this.recentStyles.push(style); if (this.recentStyles.length > Math.max(this.o.styles, 6)) this.recentStyles.shift();
+    this.recentStores.push(store); if (this.recentStores.length > Math.max(this.o.stores, 6)) this.recentStores.shift();
   }
 }
 
