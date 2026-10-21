@@ -9,7 +9,7 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-const tokenCache = new Map<string, { info: { label: string; allowed: string[] | null }; at: number }>();
+const tokenCache = new Map<string, { info: { label: string; allowed: string[] | null }; at: number; exp: number | null }>();
 
 // Token rights are data: pipeline_tokens.allowed_fns (null = everything, else a list of rpc names plus "sample").
 async function tokenInfo(req: Request): Promise<{ label: string; allowed: string[] | null } | null> {
@@ -18,10 +18,11 @@ async function tokenInfo(req: Request): Promise<{ label: string; allowed: string
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(got));
   const hash = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
   const hit = tokenCache.get(hash);
-  if (hit && hit.at > Date.now() - 60_000) return hit.info;   // saves a database round trip per call
-  const { data } = await db.from("pipeline_tokens").select("label,allowed_fns").eq("token_hash", hash).maybeSingle();
-  const info = data ? { label: data.label as string, allowed: (data.allowed_fns ?? null) as string[] | null } : null;
-  if (info) tokenCache.set(hash, { info, at: Date.now() });
+  if (hit && hit.at > Date.now() - 60_000) return hit.exp && hit.exp <= Date.now() ? null : hit.info;   // saves a database round trip per call
+  const { data } = await db.from("pipeline_tokens").select("label,allowed_fns,expires_at").eq("token_hash", hash).maybeSingle();
+  const exp = data?.expires_at ? new Date(data.expires_at as string).getTime() : null;   // expired tokens are rejected
+  const info = data && !(exp && exp <= Date.now()) ? { label: data.label as string, allowed: (data.allowed_fns ?? null) as string[] | null } : null;
+  if (info) tokenCache.set(hash, { info, at: Date.now(), exp });
   return info;
 }
 

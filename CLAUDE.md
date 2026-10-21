@@ -62,4 +62,5 @@ The user tells you step by step what to work on right now. Do not start later st
 - After every step check that the Vercel build is green before reporting anything as done.
 - New libraries may be added without asking if they serve progress.
 - Create database tables and migrations yourself (Supabase tools or SQL migrations in the repo).
+- **Session tokens always expire after 24h; never delete rows, never mint tokens without expiry.** Hash only in `pipeline_tokens`, plaintext only in memory.
 - End every reply with one sentence saying what comes next.
