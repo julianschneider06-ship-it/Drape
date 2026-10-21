@@ -20,7 +20,7 @@ const flag = (n: string) => args.includes(`--${n}`);
 
 const KEY = process.env.GEMINI_API_KEY!;
 const MODEL = opt("model") ?? MODELS.classifier;
-const CAP = Number(opt("cap") ?? 0.8);
+const CAP = Number(opt("cap") ?? process.env.DRAPE_CLASSIFY_CAP_USD ?? 0.8);   // per-run cap; the round total lives in DRAPE_ROUND_CAP_USD (docs/architecture.md)
 const CONCURRENCY = Number(opt("concurrency") ?? 16);
 const LIMIT = Number(opt("limit") ?? Infinity);
 const RES = opt("res") ?? process.env.DRAPE_MEDIA_RES ?? "low"; // image resolution: low = ~38% cheaper, same slot/category/feed-ready on 50/50 products

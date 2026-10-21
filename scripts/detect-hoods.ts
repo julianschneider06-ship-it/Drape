@@ -11,7 +11,7 @@ const args = process.argv.slice(2);
 const opt = (n: string) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : undefined; };
 const KEY = process.env.GEMINI_API_KEY;
 const MODEL = opt("model") ?? MODELS.imageCheck;
-const CAP = Number(opt("cap") ?? 0.5), CONC = Number(opt("concurrency") ?? 8), LIMIT = Number(opt("limit") ?? Infinity);
+const CAP = Number(opt("cap") ?? process.env.DRAPE_HOOD_CAP_USD ?? 0.5), CONC = Number(opt("concurrency") ?? 8), LIMIT = Number(opt("limit") ?? Infinity);
 const price = PRICES[MODEL];
 if (!KEY) throw new Error("GEMINI_API_KEY is not set");
 if (!price) throw new Error(`No price known for model ${MODEL}`);

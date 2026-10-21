@@ -90,7 +90,7 @@ async function check(t: Todo) {
 
 // Backfill of `presentation` for products that already passed the check (once per product and image, own cost cap).
 async function presentationBackfill() {
-  const PCAP = Number(opt("cap") ?? 3);
+  const PCAP = Number(opt("cap") ?? process.env.DRAPE_PRESENTATION_CAP_USD ?? 3);
   let spent = Number(await rpc<string>("presentation_cost"));
   let after = 0, done = 0, errors = 0; const t0 = Date.now(); const counts: Record<string, number> = {};
   console.log(`presentation backfill: model ${MODEL}, cap $${PCAP}, already spent $${spent.toFixed(4)}`);
