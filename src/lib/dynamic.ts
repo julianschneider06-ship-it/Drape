@@ -80,7 +80,7 @@ export async function starterPage(g: "women" | "men", page: number): Promise<Fee
   const cat = await getCat(); const rows = (await starterRows(g)).slice(page * 6, page * 6 + 6);
   if (!rows.length) return [];
   const { composedFromRow } = await import("@/outfits/starter");
-  const outs = rows.map((r) => composedFromRow(cat, r));
+  const outs = rows.filter((r) => r.piece_ids.every((id) => cat.byId.has(id))).map((r) => composedFromRow(cat, r));   // a starter piece that left the catalogue (out of stock) drops its outfit
   const ban = new BanState(); const eff = ban.effective(cat, g);
   return toFeedOutfits(cat, g, outs, outs.map((o) => alternativesFor(cat, g, o, eff)), page * 6);
 }

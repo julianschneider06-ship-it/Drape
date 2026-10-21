@@ -102,7 +102,7 @@ export const SOURCES: SourceConfig[] = [
   shopify("tecovas", "Tecovas", "https://tecovas.com", "USD", { brand: "Tecovas", exclude: ["accessories"], max: 140 }),
   shopify("colebuxton", "Cole Buxton", "https://colebuxton.com", "GBP", { brand: "Cole Buxton", exclude: ["accessories"], max: 100 }),
   shopify("ellesse", "Ellesse", "https://ellesse.com", "USD", { brand: "Ellesse", exclude: ["accessories"], max: 100 }),
-  shopify("margarethowell", "Margaret Howell", "https://margarethowell.co.uk", "GBP", { brand: "Margaret Howell", exclude: ["accessories"], max: 100 }),
+  flagged(shopify("margarethowell", "Margaret Howell", "https://margarethowell.co.uk", "GBP", { brand: "Margaret Howell", exclude: ["accessories"], max: 100 })),
   shopify("polarskate", "Polar Skate Co.", "https://polarskateco.com", "USD", { brand: "Polar Skate Co.", exclude: ["accessories"], max: 100 }),
   shopify("snowpeak", "Snow Peak", "https://snowpeak.com", "USD", { brand: "Snow Peak", exclude: ["accessories"], max: 90 }),
   shopify("gramicci", "Gramicci", "https://gramicci.com", "USD", { brand: "Gramicci", exclude: ["accessories"], max: 90 }),
