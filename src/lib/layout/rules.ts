@@ -10,7 +10,7 @@ const mulberry32 = (a: number) => () => { a = (a + 0x6d2b79f5) | 0; let t = Math
 export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partial<Record<SlotName, PieceIn>>; seed: number; canvas: { w: number; h: number } }): Layout {
   const { w: W, h: H } = opts.canvas;
   const P = opts.pieces, R = RULES;
-  const padX = R.edgePad * W, padY = R.edgePad * H;
+  const padX = R.edgePad * W, padY = R.edgePadY * H;
   const frameRight = W - MARGIN_ZONE * W;                      // the right margin zone stays free
   const axis = R.axisX * W, centre = R.centreX * W;
   const aspect = (p: PieceIn) => (p.aspect && p.aspect > 0.05 ? p.aspect : DEFAULT_ASPECT[p.cls]);
@@ -34,6 +34,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
   const top = P.top, bottom = P.bottom;
   const isTopLike = (p: PieceIn) => p.cls === "top" || p.cls === "outer" || p.cls === "longcoat";
   const spread = (p: PieceIn) => R.stackedPresentations.includes(p.presentation ?? "spread_front") && !(isTopLike(p) && (p.fill ?? 0) >= R.foldedFillMin);
+  const isShort = (p: PieceIn) => p.cls === "shorts" || p.cls === "skirt" || aspect(p) >= R.shortAspectMin;
   const folded = !full && !!top && !!bottom && (!spread(top) || !spread(bottom));
 
   if (full) {
@@ -43,14 +44,20 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     if (w >= capW(full) - 0.5) binding.push("class-cap-width"); else binding.push("class-cap-height");
     if (w > axisMaxW) { w = axisMaxW; binding.push("axis-width"); }
     let h = w / a;
-    const T = h + sh * (1 - ov);
+    // short one-piece (mini dress, wide set): same shoe balance as for short bottoms
+    let ovPx = ov * sh;
+    if (isShort(full)) {
+      if (sh > R.shortShoeMaxH * h) { sh = R.shortShoeMaxH * h; sw = sh * sa; binding.push("short-shoe-cap"); }
+      ovPx = Math.min(ov * sh, R.shortMaxCover * h);
+    }
+    const T = h + sh - ovPx;
     const f = Math.min(1, availH / T);
     if (f < 1) binding.push("height-fit");
     fitF = f;
-    w *= f; h *= f; sw *= f; sh *= f;
-    const y0 = padY + (availH - (h + sh * (1 - ov))) / 2;
+    w *= f; h *= f; sw *= f; sh *= f; ovPx *= f;
+    const y0 = padY + (availH - (h + sh - ovPx)) / 2;
     rects.full = { x: axis - w / 2, y: y0, w, h };
-    rects.shoes = { x: centre - sw / 2, y: y0 + h - ov * sh, w: sw, h: sh };
+    rects.shoes = { x: centre - sw / 2, y: y0 + h - ovPx, w: sw, h: sh };
   } else if (!folded) {
     const t = top!, b = bottom!, at = aspect(t), ab = aspect(b);
     // seam match: hem_top * w_top = waist_bottom * w_bottom  ->  w_top / w_bottom = waist / hem (equal widths when a measurement is missing)
@@ -74,16 +81,23 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     const k = k0;
     let wt = r * k, wb = k, ht = wt / at, hb = wb / ab;
     const gap = R.seamGap * H;
-    const T = ht + gap + hb + sh * (1 - ov);
+    // short bottoms (shorts, knee-length skirts, anything wider than tall): shoes at most shortShoeMaxH x the bottom's height and
+    // covering at most shortMaxCover of it, so they never swallow the garment
+    let ovPx = ov * sh;
+    if (isShort(b)) {
+      if (sh > R.shortShoeMaxH * hb) { sh = R.shortShoeMaxH * hb; sw = sh * sa; binding.push("short-shoe-cap"); }
+      ovPx = Math.min(ov * sh, R.shortMaxCover * hb);
+    }
+    const T = ht + gap + hb + sh - ovPx;
     const f = Math.min(1, availH / T);
     if (f < 1) binding.push("height-fit");
     fitF = f;
-    wt *= f; wb *= f; ht *= f; hb *= f; sw *= f; sh *= f;
+    wt *= f; wb *= f; ht *= f; hb *= f; sw *= f; sh *= f; ovPx *= f;
     const gapPx = gap;
-    const y0 = padY + (availH - (ht + gapPx + hb + sh * (1 - ov))) / 2;
+    const y0 = padY + (availH - (ht + gapPx + hb + sh - ovPx)) / 2;
     rects.top = { x: axis - wt / 2, y: y0, w: wt, h: ht };
     rects.bottom = { x: axis - wb / 2, y: y0 + ht + gapPx, w: wb, h: hb };
-    rects.shoes = { x: centre - sw / 2, y: rects.bottom.y + hb - ov * sh, w: sw, h: sh };
+    rects.shoes = { x: centre - sw / 2, y: rects.bottom.y + hb - ovPx, w: sw, h: sh };
     if (t.hem) dbg.hemLine = { y: rects.top.y + ht, x0: axis - (t.hem * wt) / 2, x1: axis + (t.hem * wt) / 2 };
     if (b.waist) dbg.waistLine = { y: rects.bottom.y, x0: axis - (b.waist * wb) / 2, x1: axis + (b.waist * wb) / 2 };
   } else {
@@ -91,17 +105,23 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     const t = top!, b = bottom!, at = aspect(t), ab = aspect(b);
     const gapX = R.foldedGap * W;
     const usableW = frameRight - 2 * padX;
-    const halfW = (usableW - gapX) / 2;
     const upperH = R.foldedTopHalfH * H - padY;
-    // equal heights; each piece must fit its half in width and the upper area in height
-    const hMax = Math.min(halfW / at, halfW / ab, upperH);
-    binding.push(hMax === upperH ? "upper-height" : "half-width");
-    const h = hMax, wt = h * at, wb = h * ab;
+    // EQUAL VISUAL AREA A: width = sqrt(A * aspect), height = sqrt(A / aspect). sqrt(A) is the largest value for which
+    // each piece stays under foldedMaxW, both fit side by side left of the margin zone, and the taller one fits the upper part
+    const lim = {
+      "piece-max-width": Math.min((R.foldedMaxW * W) / Math.sqrt(at), (R.foldedMaxW * W) / Math.sqrt(ab)),
+      "pair-width": (usableW - gapX) / (Math.sqrt(at) + Math.sqrt(ab)),
+      "upper-height": upperH / Math.max(1 / Math.sqrt(at), 1 / Math.sqrt(ab)),
+    };
+    const [fk, q] = Object.entries(lim).sort((x, y) => x[1] - y[1])[0];
+    binding.push(fk);
+    const wt = q * Math.sqrt(at), ht = q / Math.sqrt(at), wb = q * Math.sqrt(ab), hb = q / Math.sqrt(ab);
     const cy = padY + upperH / 2;
-    rects.top = { x: padX, y: cy - h / 2, w: wt, h };
-    rects.bottom = { x: frameRight - padX - wb, y: cy - h / 2, w: wb, h };
-    // shoes: normal size, centred on the centre axis, lower half (no overlap needed)
-    if (sh > h * R.foldedShoeMaxH) { sh = h * R.foldedShoeMaxH; sw = sh * sa; binding.push("folded-shoe-cap"); }
+    rects.top = { x: padX, y: cy - ht / 2, w: wt, h: ht };
+    rects.bottom = { x: frameRight - padX - wb, y: cy - hb / 2, w: wb, h: hb };
+    // shoes: centred on the centre axis, lower half (no overlap needed), at most foldedShoeMaxH x the pair's height
+    const pairH = Math.max(ht, hb);
+    if (sh > pairH * R.foldedShoeMaxH) { sh = pairH * R.foldedShoeMaxH; sw = sh * sa; binding.push("folded-shoe-cap"); }
     rects.shoes = { x: centre - sw / 2, y: R.foldedShoesCy * H - sh / 2, w: sw, h: sh };
   }
 

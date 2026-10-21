@@ -3,8 +3,8 @@
 // Canvas = the area below the header: width = min(screen, MAX_CANVAS_W), height = screen height minus header/footer.
 
 export const MAX_CANVAS_W = 416;            // px: centred with this max width on larger screens
-export const HEADER_PX = 60;                // space reserved above the canvas (fixed header)
-export const BUTTON_BAR_PX = 64;            // space reserved below the canvas for the two outfit buttons (44 px targets + padding); the phone's bottom safe area comes on top
+export const HEADER_PX = 52;                // space reserved above the canvas (fixed header)
+export const BUTTON_BAR_PX = 60;            // space reserved below the canvas for the two 48 px circle buttons (+6 px above and below); the phone's bottom safe area comes on top
 export const MARGIN_ZONE = 0.18;            // free column (fraction of W) on one side, reserved for accessories later (nothing is placed there)
 export const FRAME_PAD = 0.012;              // vertical padding of the usable frame (fraction of H)
 
@@ -118,15 +118,19 @@ export const RULES = {
   random: false,              // true = bring back jitter (cluster shift + shoe rotation) on top of the rules; mirroring stays in the old templates
   axisX: 0.38,                // vertical axis of the top/bottom pair (fraction of canvas width): the pair lives in the left half
   centreX: 0.5,               // axis of the shoes (canvas centre)
-  seamGap: 0.025,             // white gap between top and bottom (fraction of canvas height)
+  seamGap: 0.01,              // white gap between top and bottom (fraction of canvas height)
   ratioClamp: [0.6, 1.7] as [number, number], // allowed w_top / w_bottom when matching hem and waist
   heightRatioRange: [0.4, 2.0] as [number, number], // soft rule: top height / bottom height stays inside this range (limits odd size jumps, e.g. a huge shirt over tiny shorts); seam match gives way
-  edgePad: 0.025,             // min distance to the canvas edges (fraction of width / height)
-  shoeOverlap: 0.20,          // shoes overlap the trouser hem by this share of the shoe height (15-25% allowed)
-  foldedTopHalfH: 0.5,        // folded case: top and bottom sit side by side in the upper part (fraction of canvas height)
+  edgePad: 0.025,             // min distance to the left/right canvas edges (fraction of width)
+  edgePadY: 0.015,            // min distance to the top/bottom canvas edges (fraction of height)
+  shoeOverlap: 0.50,          // the trouser/dress hem line runs through the middle of the shoes (45-55% of the shoe height overlap)
+  foldedTopHalfH: 0.5,        // folded case: the pair sits in the upper part, at most this share of the canvas height
   foldedGap: 0.03,            // folded case: gap between them (fraction of canvas width)
-  foldedHeightTol: 0.05,      // folded case: bbox heights equal within this tolerance (we use exactly equal)
-  foldedShoeMaxH: 1.0,        // folded case: shoe height at most this x the height of the folded pair (keeps shoes from dwarfing small folded garments)
+  foldedMaxW: 0.45,           // folded case: each piece at most this share of the canvas width; both pieces have EQUAL VISUAL AREA (aspect ratios kept)
+  foldedShoeMaxH: 0.5,        // folded case: shoe height at most this x the (taller) height of the folded pair
+  shortAspectMin: 0.95,       // a bottom at least this wide (w/h) counts as a short item, like shorts and knee-length skirts
+  shortShoeMaxH: 0.5,         // short bottoms: shoe height at most this x the bottom's height
+  shortMaxCover: 0.25,        // short bottoms: shoes cover at most this share of the bottom's height
   foldedShoesCy: 0.76,        // folded case: vertical centre of the shoes (fraction of canvas height), lower half
   foldedFillMin: 0.90,        // geometry override for TOPS: a compact rectangular mask (area/bbox >= this) is a folded shirt even if the model said spread_front
   stackedPresentations: ["spread_front"], // anything else (folded, other) goes to the side-by-side layout; null/unknown = stacked
