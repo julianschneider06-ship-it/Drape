@@ -15,8 +15,11 @@ export async function readBan(device: string): Promise<BanState> { return BanSta
 export async function writeBan(device: string, ban: BanState) { await gatewayRpc("ban_put", { p_device: device, p_b64: ban.toBase64() }, { retry: false }); }
 
 interface CardRow { id: number; card?: FeedCard; acc?: { type: string | null; size: string | null; front_flat: boolean | null; belt_shape: string | null } }
-export async function cardsFor(ids: number[]): Promise<Map<number, CardRow>> {
-  const out = new Map<number, CardRow>(); const uniq = [...new Set(ids)];
+export async function cardsFor(ids: number[], cat?: Catalogue): Promise<Map<number, CardRow>> {
+  const out = new Map<number, CardRow>(); let uniq = [...new Set(ids)];
+  if (cat) {   // cards from the in-memory catalogue (no round trip); only ids without a catalogue card go to the database
+    uniq = uniq.filter((id) => { const p = cat.byId.get(id), a = cat.accById.get(id); const c = (p?.card ?? a?.card) as FeedCard | undefined; if (!c) return true; out.set(id, { id, card: c, ...(a ? { acc: { type: a.type, size: a.size, front_flat: a.frontFlat, belt_shape: a.beltShape } } : {}) }); return false; });
+  }
   for (let i = 0; i < uniq.length; i += 150) for (const r of await gatewayRpc<CardRow[]>("cards_by_ids", { p_ids: uniq.slice(i, i + 150) })) out.set(r.id, r);
   return out;
 }
@@ -31,7 +34,7 @@ export async function starterRows(g: string): Promise<StarterRow[]> {
 /** composed outfits (+ their 2 alternatives per piece) -> the same shape the feed UI already renders */
 export async function toFeedOutfits(cat: Catalogue, g: "women" | "men", outs: ComposedOutfit[], alts: Record<string, number[]>[], orderBase: number): Promise<FeedOutfit[]> {
   const ids = [...outs.flatMap((o) => [...o.ids, ...o.acc.map((a) => a.id)]), ...alts.flatMap((a) => Object.values(a).flat())];
-  const cards = await cardsFor(ids);
+  const cards = await cardsFor(ids, cat);
   const card = (id: number) => cards.get(id)?.card;
   const res: FeedOutfit[] = [];
   outs.forEach((o, i) => {
