@@ -96,13 +96,19 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
       const meanX = others.length ? others.reduce((a, q) => a + q.rect.x + q.rect.w / 2, 0) / others.length : W / 2;
       const order: ("left" | "right")[] = p.rect.x + p.rect.w / 2 < meanX ? ["left", "right"] : ["right", "left"];
       const cy = p.rect.y + p.rect.h / 2, y = Math.min(H - pad - lh, Math.max(pad, cy - lh / 2));
-      for (const side of order) {
-        const x = side === "right" ? p.rect.x + p.rect.w + gap : p.rect.x - gap - lw;
-        const r = { x, y, w: lw, h: lh };
-        if (x < pad || x + lw > W - pad) continue;
-        if (others.some((q) => r.x < q.rect.x + q.rect.w + 2 && r.x + r.w + 2 > q.rect.x && r.y < q.rect.y + q.rect.h + 2 && r.y + r.h + 2 > q.rect.y)) continue;
-        out[p.slot] = { side, dy: y - p.rect.y };
-        break;
+      // tiers: normal margin first; if neither side has room (wide or stacked pieces), slide the label along the piece and then allow it closer to the canvas edge
+      // (never over another piece). A sale product always gets its label unless there is truly no free spot.
+      const ys = [y, ...[0.2, 0.4, 0.6, 0.8].flatMap((f) => [p.rect.y + f * p.rect.h - lh / 2, p.rect.y + p.rect.h * (1 - f) - lh / 2])].map((v) => Math.min(H - 2 - lh, Math.max(2, v)));
+      let placed = false;
+      for (const edge of [pad, 2]) {
+        for (const yy of ys) for (const side of order) {
+          const x = side === "right" ? p.rect.x + p.rect.w + gap : p.rect.x - gap - lw;
+          const r = { x, y: yy, w: lw, h: lh };
+          if (x < edge || x + lw > W - edge) continue;
+          if (others.some((q) => r.x < q.rect.x + q.rect.w + 2 && r.x + r.w + 2 > q.rect.x && r.y < q.rect.y + q.rect.h + 2 && r.y + r.h + 2 > q.rect.y)) continue;
+          out[p.slot] = { side, dy: yy - p.rect.y }; placed = true; break;
+        }
+        if (placed) break;
       }
     }
     return out;
