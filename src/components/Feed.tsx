@@ -12,6 +12,8 @@ import OutfitButtons, { type Reaction } from "./OutfitButtons";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { SaleInkDefs } from "@/lib/client/sale";
 import { compactTags } from "@/outfits/tags";
+import type { Signal } from "@/outfits/taste-codec";
+import { TASTE } from "@/lib/personalization/config";
 import { applySwaps, loopSize, slotKeyOf, type SwapEvt, type SwapState } from "@/lib/client/swap";
 import type { SlotName } from "@/lib/layout/engine";
 
@@ -24,6 +26,10 @@ const store = {
   set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
 };
 
+const PERSONALIZE_FROM = TASTE.personalizeFrom, OUTBOX_MAX = TASTE.outboxMax;
+const shownIds = (o: FeedOutfit) => [o.top.id, ...(o.bottom ? [o.bottom.id] : []), o.shoes.id];
+const tg = (o: FeedOutfit) => (o.tags ? (({ se, oc, pk, si, fo, w, ct }) => ({ se, oc, pk, si, fo, w, ct }))(compactTags(o.tags)) : null);
+
 export default function Feed() {
   const [gender, setGender] = useState<Gender | null>(null);
   const [items, setItems] = useState<FeedOutfit[]>([]);
@@ -35,12 +41,15 @@ export default function Feed() {
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
   const [reactions, setReactions] = useState<Record<number, Reaction>>({});
   const layoutInfo = useRef(new Map<number, { layout: string; mode: string }>());
-  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean; preload: boolean; feed: "default" | "dynamic" }>({ debug: false, cut: "auto", acc: true, preload: true, feed: "default" });
+  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean; preload: boolean; feed: "default" | "dynamic" | "hybrid" }>({ debug: false, cut: "auto", acc: true, preload: true, feed: "default" });
 
   const device = useRef("");
   const scroller = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<FeedOutfit[]>([]);
   const dynRef = useRef(false);
+  const hybridRef = useRef(false);   // ?feed=hybrid: starter set, then the composer with this device's taste (held here, in localStorage)
+  const outbox = useRef<Signal[]>([]);
+  const swapsRef = useRef<SwapState>({});
   const dynState = useRef({ page: 0, startersDone: false, servedStarters: 0, startersSent: false });
   const [swaps, setSwaps] = useState<SwapState>({});          // in-session swap state (reset on reload)
   const [swapEvts, setSwapEvts] = useState<Record<number, SwapEvt>>({});
@@ -62,8 +71,9 @@ export default function Feed() {
   // debug options: ?layout=A,FB forces templates (3-piece, full-body), ?debug=1 shows boxes + margin zone
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    dynRef.current = q.get("feed") === "dynamic";
-    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto", acc: q.get("acc") !== "off", preload: q.get("preload") !== "off", feed: q.get("feed") === "dynamic" ? "dynamic" : "default" });   // ?feed=dynamic: prototype of the dynamic composer   // ?preload=off: test switch for the alternatives preloading
+    hybridRef.current = q.get("feed") === "hybrid";
+    dynRef.current = q.get("feed") === "dynamic" || hybridRef.current;   // ?feed=base (or no parameter) = the pool feed
+    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto", acc: q.get("acc") !== "off", preload: q.get("preload") !== "off", feed: q.get("feed") === "hybrid" ? "hybrid" : q.get("feed") === "dynamic" ? "dynamic" : "default" });   // ?feed=dynamic: prototype of the dynamic composer   // ?preload=off: test switch for the alternatives preloading
   }, []);
 
   // canvas size follows the scroller (phones, rotation, desktop)
@@ -92,6 +102,13 @@ export default function Feed() {
     }).catch(() => { /* likes are optional for browsing */ });
   }, []);
 
+  // hybrid: every signal also goes to the outbox; the next page request takes the outbox along and the server folds it into the taste
+  const signal = useCallback((x: Signal) => {
+    if (!hybridRef.current) return;
+    outbox.current = [...outbox.current, { ...x, at: Date.now() }].slice(-OUTBOX_MAX);
+    store.set(`drape.outbox.${genderRef.current}`, JSON.stringify(outbox.current));
+  }, []);
+
   const loadMore = useCallback(async () => {
     if (loadingRef.current || exhausted.current) return;
     loadingRef.current = true; setLoading(true); setError(false);
@@ -101,6 +118,8 @@ export default function Feed() {
       if (dynRef.current) {
         // dynamic prototype: the fixed starter set first (CDN-cached pages), then pages composed for this device
         let items: FeedOutfit[] = [];
+        const tasteN = Number(store.get(`drape.tasteN.${g}`) ?? 0) + outbox.current.length;   // hybrid: from about 20 signals on, skip the rest of the starter set
+        if (hybridRef.current && tasteN >= PERSONALIZE_FROM) dynState.current.startersDone = true;
         if (!dynState.current.startersDone && new URLSearchParams(location.search).get("starter") !== "off") {   // ?starter=off: straight to composed pages (tests)
           const r = await fetch(`/api/dynamic?gender=${g}&starter=${dynState.current.page}`, { signal: AbortSignal.timeout(15000) });
           if (!r.ok) throw new Error(String(r.status));
@@ -109,11 +128,18 @@ export default function Feed() {
         }
         if (!items.length) {
           const recent = itemsRef.current.slice(-12).filter((o) => o.dyn).map((o) => ({ ids: o.dyn!.ids, style: o.dyn!.style, store: o.dyn!.store }));
-          const r = await fetch("/api/dynamic", { method: "POST", signal: AbortSignal.timeout(20000), body: JSON.stringify({ device_id: device.current, gender: g, recent, contrast: Number(new URLSearchParams(location.search).get("contrast")) || undefined, ban: new URLSearchParams(location.search).get("ban") === "db" ? "db" : (store.get(`drape.ban.${g}`) ?? ""), startersServed: dynState.current.startersSent ? 0 : dynState.current.servedStarters }) });
+          const sent = hybridRef.current ? outbox.current.slice(0, OUTBOX_MAX) : [];
+          const hyb = hybridRef.current ? { mode: "hybrid", taste: store.get(`drape.taste.${g}`) ?? "", signals: sent } : {};
+          const r = await fetch("/api/dynamic", { method: "POST", signal: AbortSignal.timeout(20000), body: JSON.stringify({ ...hyb, device_id: device.current, gender: g, recent, contrast: Number(new URLSearchParams(location.search).get("contrast")) || undefined, ban: new URLSearchParams(location.search).get("ban") === "db" ? "db" : (store.get(`drape.ban.${g}`) ?? ""), startersServed: dynState.current.startersSent ? 0 : dynState.current.servedStarters }) });
           if (!r.ok) throw new Error(String(r.status));
           dynState.current.startersSent = true;
           const j = (await r.json()) as { items: FeedOutfit[]; ban?: string };
           items = j.items; if (j.ban !== undefined) store.set(`drape.ban.${g}`, j.ban);   // the ban list lives on the device (about 4 KB)
+          const tj = (j as { taste?: { taste: string; n: number } }).taste;
+          if (tj?.taste) {   // the taste lives on the device too (a few KB); the signals that went into it leave the outbox
+            store.set(`drape.taste.${g}`, tj.taste); store.set(`drape.tasteN.${g}`, String(tj.n));
+            outbox.current = outbox.current.slice(sent.length); store.set(`drape.outbox.${g}`, JSON.stringify(outbox.current));
+          }
         }
         data = { items, next_cursor: 1, size: 1 };
       } else {
@@ -140,6 +166,7 @@ export default function Feed() {
     store.set("drape.gender", gender);
     const saved = store.get(`drape.cursor.${gender}`);
     cursorRef.current = saved !== null && /^\d+$/.test(saved) ? Number(saved) : null;
+    try { const ob = JSON.parse(store.get(`drape.outbox.${gender}`) ?? "[]"); outbox.current = Array.isArray(ob) ? ob.slice(-OUTBOX_MAX) : []; } catch { outbox.current = []; }
     exhausted.current = false; enterAt.current.clear(); interacted.current.clear(); dynState.current = { page: 0, startersDone: false, servedStarters: 0, startersSent: false };
     setItems([]); setCurrent(0);
     scroller.current?.scrollTo({ top: 0 });
@@ -167,7 +194,11 @@ export default function Feed() {
           const dwell = Date.now() - (enterAt.current.get(i) ?? Date.now());
           enterAt.current.delete(i);
           track({ event_type: "dwell_ms", outfit_id: o.id, product_ids: ids, feed_index: i, gender: genderRef.current, dwell_ms: dwell });
-          if (dwell < 1000 && !interacted.current.has(i)) track({ event_type: "scroll_past", outfit_id: o.id, product_ids: ids, feed_index: i, gender: genderRef.current });
+          signal({ t: "dwell_ms", o: ids, d: dwell, tg: tg(o) });
+          // swapped pieces that are on screen when the user leaves the outfit count as kept (stronger after a like / tap / long look)
+          const sw = swapsRef.current[o.id];
+          if (sw) for (const key of Object.keys(sw)) { const c = key === "top" ? o.top : key === "bottom" ? o.bottom : key === "shoes" ? o.shoes : null; if (c) signal({ t: "keep", p: c.id, o: ids, b: interacted.current.has(i) && dwell >= 8000 ? 2 : 1 }); }
+          if (dwell < 1000 && !interacted.current.has(i)) { track({ event_type: "scroll_past", outfit_id: o.id, product_ids: ids, feed_index: i, gender: genderRef.current }); signal({ t: "scroll_past", o: ids, tg: tg(o) }); }
         }
       }
     }, { root, threshold: [0, 0.3, 0.6] });
@@ -194,9 +225,10 @@ export default function Feed() {
     const want = !liked.has(card.id);
     setLiked((prev) => { const n = new Set(prev); if (want) n.add(card.id); else n.delete(card.id); return n; });
     if (outfit) interacted.current.add(index);
+    signal({ t: want ? "like" : "unlike", p: card.id, o: outfit ? shownIds(outfit) : undefined, tg: outfit ? tg(outfit) : null });
     fetch("/api/likes", {
       method: "POST",
-      body: JSON.stringify({ device_id: device.current, product_id: card.id, liked: want, outfit_id: outfit?.id, feed_index: index, slot: slot === "sheet" ? "sheet" : slot, gender: genderRef.current, tags: outfit?.tags ? compactTags(outfit.tags) : undefined }),
+      body: JSON.stringify({ device_id: device.current, product_id: card.id, liked: want, outfit_id: outfit?.id, feed_index: index, slot: slot === "sheet" ? "sheet" : slot, gender: genderRef.current, tags: outfit?.tags ? compactTags(outfit.tags) : undefined, product_ids: outfit ? shownIds(outfit) : undefined }),
     }).then((r) => { if (!r.ok) throw new Error(); }).catch(() => {
       setLiked((prev) => { const n = new Set(prev); if (want) n.delete(card.id); else n.add(card.id); return n; }); // revert
     });
@@ -209,6 +241,7 @@ export default function Feed() {
     const next = prev === dir ? null : dir;
     setReactions((r) => { const n = { ...r }; if (next) n[o.id] = next; else delete n[o.id]; store.set("drape.reactions", JSON.stringify(Object.fromEntries(Object.entries(n).slice(-400)))); return n; });
     const info = layoutInfo.current.get(o.id);
+    signal({ t: next ? (next === "up" ? "outfit_up" : "outfit_down") : "outfit_clear", o: shownIds(itemsRef.current[index] ?? o), pv: prev && next !== prev ? prev : undefined, tg: tg(o) });
     track({
       event_type: next ? (next === "up" ? "outfit_up" : "outfit_down") : "outfit_clear", outfit_id: o.id, feed_index: index, gender: genderRef.current,
       product_ids: [o.top.id, ...(o.bottom ? [o.bottom.id] : []), o.shoes.id],
@@ -233,9 +266,10 @@ export default function Feed() {
     };
     const out = pieceAt(cur), incoming = pieceAt(nxt);
     const seq = ++swapSeq.current;
-    setSwaps((p) => ({ ...p, [o.id]: { ...(p[o.id] ?? {}), [key]: nxt } }));
+    setSwaps((p) => { const n = { ...p, [o.id]: { ...(p[o.id] ?? {}), [key]: nxt } }; swapsRef.current = n; return n; });
     setSwapEvts((p) => ({ ...p, [o.id]: { slot, dir: dir === "next" ? "prev" : "next", seq, kind: "swap", newId: incoming.id } }));   // swipe right: the content moves right
     interacted.current.add(index);
+    signal({ t: "swap", x: out.id, i: incoming.id, a: nxt, f: cur, o: shownIds(itemsRef.current[index] ?? o) });
     track({ event_type: "swap", outfit_id: o.id, feed_index: index, slot: trackSlot(slot), product_id: incoming.id, gender: genderRef.current, ctx: { out: out.id, dir, rank: nxt, alt: nxt, from: cur, ...(o.tags ? { tags: compactTags(o.tags) } : {}) } });
   };
 
@@ -277,6 +311,7 @@ export default function Feed() {
 
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
+    signal({ t: "tap_product", p: card.id, o: shownIds(outfit), tg: tg(outfit) });
     track({ event_type: "tap_product", product_id: card.id, outfit_id: outfit.id, feed_index: index, slot: trackSlot(slot), gender: genderRef.current, ...(outfit.tags ? { ctx: { tags: compactTags(outfit.tags) } } : {}) });
     setSheet({ card, outfit, index, slot });
   };
@@ -322,7 +357,7 @@ export default function Feed() {
       {sheet && (
         <ProductSheet card={sheet.card} liked={liked.has(sheet.card.id)} onClose={() => setSheet(null)}
           onLike={() => toggleLike(sheet.card, sheet.outfit, sheet.index, "sheet")}
-          onViewProduct={() => track({ event_type: "view_product_click", product_id: sheet.card.id, outfit_id: sheet.outfit.id, feed_index: sheet.index, slot: "sheet", gender: genderRef.current })} />
+          onViewProduct={() => (signal({ t: "view_product_click", p: sheet.card.id, o: shownIds(sheet.outfit) }), track({ event_type: "view_product_click", product_id: sheet.card.id, outfit_id: sheet.outfit.id, feed_index: sheet.index, slot: "sheet", gender: genderRef.current }))} />
       )}
     </main>
   );

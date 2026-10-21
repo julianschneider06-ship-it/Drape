@@ -8,12 +8,18 @@ import { COMPOSE } from "./compose-config";
 import type { ComposedOutfit } from "./compose";
 import { pickPair, type Cnd } from "./alt-shared";
 import { scoreOutfit, type Piece } from "./score";
+import { tasteMatch, type Taste } from "./taste";
+import { TASTE } from "../lib/personalization/config";
+
+/** taste re-rank of the swap alternatives: score x (1 + ALT_TASTE x (taste match - 0.5) x 2); 0.12 = a strong taste match can overtake a slightly better-scoring piece */
+export const ALT_TASTE = 0.12;
 
 const folded = (p: CatPiece) => p.slot === "shoes" || p.slot === "full_body" ? false : (p.presentation != null && !(RULES.stackedPresentations as readonly string[]).includes(p.presentation)) || (p.slot === "top" && (p.fill ?? 0) >= RULES.foldedFillMin);
 const BOOTS = /\b(boots?|chelsea|hiker)\b/i;
 
 /** two alternatives per piece (slot keys top | bottom | shoes | acc1..3), as product ids, best first */
-export function alternativesFor(cat: Catalogue, g: "women" | "men", o: ComposedOutfit, eff: { banned: Set<number>; age: Map<number, number> }): Record<string, number[]> {
+export function alternativesFor(cat: Catalogue, g: "women" | "men", o: ComposedOutfit, eff: { banned: Set<number>; age: Map<number, number> }, taste: Taste | null = null): Record<string, number[]> {
+  const tw = (p: CatPiece) => (taste && taste.n >= TASTE.personalizeFrom ? 1 + ALT_TASTE * (tasteMatch(taste, p) - 0.5) * 2 : 1);   // cheap: one cosine per candidate
   const out: Record<string, number[]> = {};
   const ps = o.ids.map((id) => cat.byId.get(id)!);
   const accs = o.acc.map((a) => cat.accById.get(a.id)!);
@@ -35,7 +41,7 @@ export function alternativesFor(cat: Catalogue, g: "women" | "men", o: ComposedO
         const s = scoreOutfit(next); if (!s || s.score < minS) continue;
         if (c.statement >= ACC.statementMin && accs.some((a) => a.statement >= ACC.statementMin)) continue;
         const ctx = ctxOf(next); if (accs.some((a) => reject(a, ctx))) continue;
-        sc.push({ product_id: c.id, brand: c.brand, score: s.score, main: c.main, vec: c.vec });
+        sc.push({ product_id: c.id, brand: c.brand, score: s.score * tw(c), main: c.main, vec: c.vec });
       }
       return sc.sort((a, b) => b.score - a.score);
     };

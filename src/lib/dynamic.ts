@@ -7,6 +7,9 @@ import { compose, newSession, type ComposedOutfit, type Session } from "@/outfit
 import { alternativesFor } from "@/outfits/compose-alts";
 import { subGroup } from "@/outfits/compose-polish";
 import { outfitTags } from "@/outfits/tags";
+import { applySignals, decodeTaste, encodeTaste, type Signal } from "@/outfits/taste-codec";
+import { newTaste } from "@/outfits/taste";
+import { mixFor, TASTE } from "@/lib/personalization/config";
 import { makeRnd } from "@/outfits/pool-shared";
 import { gatewayRpc } from "@/lib/gateway";
 import type { FeedAccessory, FeedAlt, FeedCard, FeedOutfit } from "@/lib/types";
@@ -56,8 +59,11 @@ export async function toFeedOutfits(cat: Catalogue, g: "women" | "men", outs: Co
   return res;
 }
 
-export interface PageInput { banB64?: string | null; device: string; gender: "women" | "men"; recent?: { ids: number[]; style: string; store: string }[]; startersServed?: number; persona?: string | null; contrast?: number }
-export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number } }> {
+export interface PageInput { banB64?: string | null; device: string; gender: "women" | "men"; recent?: { ids: number[]; style: string; store: string }[]; startersServed?: number; persona?: string | null; contrast?: number;
+  /** hybrid: the client-held taste (base64) and the signals since the last page; null / undefined = plain composer without taste */
+  taste?: string | null; signals?: Signal[]; hybrid?: boolean }
+export interface TasteOut { taste: string; n: number; personalized: boolean; applied: number; skipped: number; bytes: number; thin: string[]; mix: Record<string, number> }
+export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number; taste?: number }; taste?: TasteOut }> {
   const t0 = performance.now(); const cat = await getCat();
   const tb = performance.now(); const ban = inp.banB64 !== undefined && inp.banB64 !== null ? BanState.fromBase64(inp.banB64) : await readBan(inp.device);   // client-held ban list (no storage round trip) or the database copy
   if (inp.startersServed && inp.startersServed > 0) {            // first dynamic page after the starter set: the starter pieces are banned too
@@ -67,17 +73,27 @@ export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items:
   for (const r of inp.recent ?? []) session.guard.push(r.ids, r.style, r.store);
   for (const r of inp.recent ?? []) for (const id of r.ids) session.uses.set(id, (session.uses.get(id) ?? 0) + 1);
   for (const r of inp.recent ?? []) for (const id of r.ids) { const p = cat.byId.get(id); if (p && (p.slot === "top" || p.slot === "bottom")) session.subs[p.slot].push(subGroup(p)); }
+  // hybrid: decode the client-held taste, apply the signals collected since the last page with the shared pure update, compose with it
+  let taste = null as ReturnType<typeof decodeTaste>, tasteOut: TasteOut | undefined, tt = 0;
+  if (inp.hybrid) {
+    const t0t = performance.now();
+    taste = decodeTaste(inp.taste) ?? newTaste();
+    const r = applySignals(cat, taste, inp.signals ?? []);
+    tt = performance.now() - t0t;
+    tasteOut = { taste: "", n: taste.n, personalized: taste.n >= TASTE.personalizeFrom, applied: r.applied, skipped: r.skipped, bytes: 0, thin: [], mix: mixFor(taste.n) };
+  }
   const tc = performance.now();
   const seed = Math.floor(Math.random() * 2 ** 31);
-  const { outfits, ban: ban2 } = compose(cat, { gender: inp.gender, taste: null, ...(inp.contrast ? { mix: { match: 0, near: 0, new: 1 - inp.contrast, contrast: inp.contrast } } : {}) }, ban, 6, session, makeRnd(seed));
+  const { outfits, ban: ban2, stats } = compose(cat, { gender: inp.gender, taste, ...(inp.contrast ? { mix: { match: 0, near: 0, new: 1 - inp.contrast, contrast: inp.contrast } } : {}) }, ban, 6, session, makeRnd(seed));
   const eff = ban2.effective(cat, inp.gender);
-  const alts = outfits.map((o) => alternativesFor(cat, inp.gender, o, eff));
+  const alts = outfits.map((o) => alternativesFor(cat, inp.gender, o, eff, taste));
+  if (tasteOut && taste) { const t1 = performance.now(); tasteOut.taste = encodeTaste(taste); tasteOut.bytes = tasteOut.taste.length; tasteOut.thin = stats.thin ?? []; tt += performance.now() - t1; }
   const tk = performance.now();
   const items = await toFeedOutfits(cat, inp.gender, outfits, alts, 0);
   const te = performance.now();
   const tw = performance.now();
   if (inp.banB64 === undefined || inp.banB64 === null) await writeBan(inp.device, ban2);
-  return { ban: ban2.toBase64(), items, ms: { total: performance.now() - t0, ban: tc - tb, compose: tk - tc, cards: te - tk, write: performance.now() - tw } };
+  return { ban: ban2.toBase64(), items, ms: { total: performance.now() - t0, ban: tc - tb, compose: tk - tc, cards: te - tk, write: performance.now() - tw, taste: tt }, taste: tasteOut };
 }
 
 export async function starterPage(g: "women" | "men", page: number): Promise<FeedOutfit[]> {

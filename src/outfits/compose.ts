@@ -13,7 +13,10 @@ import { pairScore, StreakGuard, type Rnd } from "./pool-shared";
 import { POLISH, reorderPage, runTooLong, shareOf, scoreContrast, subAllowed, subGroup, tonePenalty } from "./compose-polish";
 import { outfitStyle, scoreOutfit, type Piece } from "./score";
 import { outfitSeason, seasonRole, type SeasonResult, type SeasonPiece } from "./season";
-import { connBonus, tasteMatch, type Taste } from "./taste";
+import { connBonus, tagMatch, tasteMatch, type Taste } from "./taste";
+import { mixFor, STEER, TASTE } from "../lib/personalization/config";
+import { outfitTags } from "./tags";
+import { STYLE_KEYS as SK } from "../classify/styles";
 
 export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number; banOverall?: number; legacy?: boolean }
 export interface ComposedAcc { id: number; type: string; placement: string; zone: string; score: number }
@@ -23,7 +26,7 @@ export interface ComposedOutfit {
 }
 export interface Session { guard: StreakGuard; uses: Map<number, number>; acc: Usage; served: number; subs: { top: string[]; bottom: string[] } }
 export const newSession = (): Session => ({ guard: new StreakGuard(COMPOSE.session), uses: new Map(), acc: { uses: new Map(), recentIds: [], recentStores: [] }, served: 0, subs: { top: [], bottom: [] } });
-export interface ComposeStats { ms: number; attempts: number; rejects: Record<string, number>; buckets: Record<string, number> }
+export interface ComposeStats { ms: number; attempts: number; rejects: Record<string, number>; buckets: Record<string, number>; thin?: string[]; personalized?: boolean }
 
 /** deterministic outfit id from the pieces: 52-bit hash of the sorted slot:id list, always >= 2^51 so it never collides with pool ids (small integers) */
 export function outfitHash(ids: { slot: string; id: number }[]): number {
@@ -82,15 +85,16 @@ export function layoutCheck(cat: Catalogue, kind: "three" | "full", ps: CatPiece
 
 export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6, session: Session = newSession(), rnd: Rnd = Math.random): { outfits: ComposedOutfit[]; ban: BanState; session: Session; stats: ComposeStats } {
   const t0 = performance.now();
-  const g = profile.gender, taste = profile.taste && profile.taste.n >= 5 ? profile.taste : null, guest = !taste;
+  const g = profile.gender, taste = profile.taste && profile.taste.n >= TASTE.personalizeFrom ? profile.taste : null, guest = !taste;
   const legacy = !!profile.legacy, minScore = profile.minScore ?? COMPOSE.minScore, patterns = legacy ? CONTRAST_PATTERNS_V1 : CONTRAST_PATTERNS;
   let noWhy = "no-candidate", wide = 1;   // reason of the last failed build (anchor / partner / min-score) and the candidate sample multiplier of this attempt
-  const mix = profile.mix ?? (guest ? COMPOSE.guestMix : COMPOSE.mix);
+  const mix = profile.mix ?? (guest ? COMPOSE.guestMix : mixFor(taste!.n));
   const contrastShare = profile.contrastShare ?? mix.contrast;
   const buckets: [Bucket, number][] = [["match", mix.match], ["near", mix.near], ["new", mix.new], ["contrast", contrastShare]];
   const eff = banIn.effective(cat, g, profile.banFraction);
   if (profile.likedIds && !COMPOSE.likesBanned) for (const id of profile.likedIds) eff.banned.delete(id);
-  const stats: ComposeStats = { ms: 0, attempts: 0, rejects: {}, buckets: {} };
+  const stats: ComposeStats = { ms: 0, attempts: 0, rejects: {}, buckets: {}, personalized: !!taste };
+  if (taste) stats.thin = thinStyles(cat, g, taste);   // thin supply: the bands below simply pick the nearest styles (cosine), reported here
   const rej = (k: string) => { stats.rejects[k] = (stats.rejects[k] ?? 0) + 1; };
   const now = profile.now ?? new Date(), curSeason = [2, 2, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3][now.getMonth()] ?? 1;
   const slots = ["top", "bottom", "shoes", "full_body"] as const;
@@ -111,6 +115,8 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
   };
   const fresh = (p: CatPiece) => 1 / (1 + COMPOSE.freshnessPerUse * (session.uses.get(p.id) ?? 0));
   const tasteW = (p: CatPiece) => 1 - COMPOSE.tasteWeight + COMPOSE.tasteWeight * (guest ? 0.5 : tm(p));
+  // tag preferences: final pick weight x (1 + tagWeight x tag match) - outfit tags without accessories (cheap; the accessories are chosen afterwards)
+  const tagF = (ps: CatPiece[], bucket: Bucket): number => { if (!taste) return 1; const t = outfitTags(cat, { pieces: ps, accs: [], bucket }); return 1 + STEER.tagWeight * tagMatch(taste, { se: t.season_primary, oc: t.occasion, pk: t.palette.kind, si: t.silhouette, fo: t.formality_level, w: t.weather, ct: t.contrast ? 1 : 0 }); };
   const fullShare = Math.min(0.5, ((cat.index.get(`${g}:full_body`)?.length ?? 0) / Math.max(1, (cat.index.get(`${g}:top`)?.length ?? 1))) * COMPOSE.anchorFullBoost);
 
   const accCands = (): CatAcc[] => {
@@ -150,7 +156,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
       const shoes = cand("shoes", sSeason); const sc: [CatPiece, number][] = [];
       for (const s of sampleFor(shoes, Math.round(COMPOSE.shoeSample * wide))) { const r = scoreOutfit([anchor, s]); if (r && r.score >= minS) sc.push([s, r.score]); }
       sc.sort((a, b) => b[1] - a[1]); const top = sc.slice(0, COMPOSE.topN);
-      const ch = pick(top, ([s, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(s) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, s)) * fresh(s), rnd);
+      const ch = pick(top, ([s, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(s) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, s)) * fresh(s) * tagF([anchor!, s], bucket), rnd);
       if (!ch) { noWhy = "no-candidate:min-score"; return null; }
       return { ps: [anchor, ch[0]], kind: "full", score: ch[1] };
     }
@@ -178,7 +184,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
         const r = sc2(ps); const sv = r ? r.score * tone(ps) : 0; if (r && sv >= minS) fin.push([z, sv]);
       }
       fin.sort((a, b) => b[1] - a[1]);
-      const fp = pick(fin.slice(0, COMPOSE.topN), ([z, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(z) * (1 + COMPOSE.connectionWeight * connBonus(taste, third === "shoes" ? y.slot === "bottom" ? y : anchor! : anchor!, z)) * fresh(z), rnd);
+      const fp = pick(fin.slice(0, COMPOSE.topN), ([z, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(z) * (1 + COMPOSE.connectionWeight * connBonus(taste, third === "shoes" ? y.slot === "bottom" ? y : anchor! : anchor!, z)) * fresh(z) * tagF(trio(z), bucket), rnd);
       if (fp) return { ps: trio(fp[0]), kind: "three", score: fp[1], pattern: pat?.name };
       noWhy = "no-candidate:min-score";
     }
@@ -238,4 +244,17 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
   }
   stats.ms = performance.now() - t0;
   return { outfits, ban, session, stats };
+}
+
+const domCache = new WeakMap<Catalogue, Map<string, number>>();
+/** styles the taste points to (top 2 per slot) that have fewer than TASTE.thinSupply pieces with that dominant style in the gender's slot */
+export function thinStyles(cat: Catalogue, g: "women" | "men", t: Taste): string[] {
+  let m = domCache.get(cat);
+  if (!m) { m = new Map(); for (const p of cat.pieces) for (const gg of p.genders) { const k = `${gg}:${p.slot === "full_body" ? "top" : p.slot}:${p.dom}`; m.set(k, (m.get(k) ?? 0) + 1); } domCache.set(cat, m); }
+  const out: string[] = [];
+  for (const slot of ["top", "bottom", "shoes"] as const) {
+    const v = t.styles[slot], idx = Array.from(v.keys()).sort((a, b) => v[b] - v[a]).slice(0, 2);
+    for (const i of idx) { if (v[i] <= 0) continue; const n = m.get(`${g}:${slot}:${SK[i]}`) ?? 0; if (n < TASTE.thinSupply) out.push(`${slot}:${SK[i]}(${n})`); }
+  }
+  return out;
 }
