@@ -8,6 +8,8 @@ import { track } from "@/lib/client/track";
 import OutfitCanvas, { pieceClass } from "./OutfitCanvas";
 import { canvasSize } from "@/lib/layout/engine";
 import ProductSheet from "./ProductSheet";
+import OutfitButtons, { type Reaction } from "./OutfitButtons";
+import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import type { SlotName } from "@/lib/layout/engine";
 
 type Gender = "women" | "men";
@@ -27,6 +29,8 @@ export default function Feed() {
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [current, setCurrent] = useState(0);
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
+  const [reactions, setReactions] = useState<Record<number, Reaction>>({});
+  const layoutInfo = useRef(new Map<number, { layout: string; mode: string }>());
   const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode }>({ debug: false, cut: "auto" });
 
   const device = useRef("");
@@ -41,6 +45,9 @@ export default function Feed() {
   const exhausted = useRef(false);
   itemsRef.current = items;
 
+  // remembered outfit reactions (this device)
+  useEffect(() => { try { const r = JSON.parse(store.get("drape.reactions") ?? "{}"); if (r && typeof r === "object") setReactions(r); } catch { /* ignore */ } }, []);
+
   // debug options: ?layout=A,FB forces templates (3-piece, full-body), ?debug=1 shows boxes + margin zone
   useEffect(() => {
     const q = new URLSearchParams(location.search);
@@ -51,11 +58,15 @@ export default function Feed() {
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const measure = () => setCanvas((p) => { const n = canvasSize(el.clientWidth, el.clientHeight); return p && p.w === n.w && p.h === n.h ? p : n; });
+    // the phone's bottom safe area (home indicator) is resolved by the browser; read it through a probe element
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;left:0;bottom:0;visibility:hidden;pointer-events:none;padding-bottom:env(safe-area-inset-bottom)";
+    document.body.appendChild(probe);
+    const measure = () => setCanvas((p) => { const safe = parseFloat(getComputedStyle(probe).paddingBottom) || 0; const n = canvasSize(el.clientWidth, el.clientHeight, safe); return p && p.w === n.w && p.h === n.h ? p : n; });
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => { ro.disconnect(); probe.remove(); };
   }, []);
 
   // first load: device id, remembered gender, likes
@@ -157,6 +168,20 @@ export default function Feed() {
     });
   }, [liked]);
 
+  // Outfit-level signal buttons (up = like this outfit, down = do not like it). Toggle: other button switches, same again clears.
+  // Only logged (append-only event log); nothing else changes and the feed does not move.
+  const pressOutfit = (o: FeedOutfit, index: number, dir: Reaction) => {
+    const prev = reactions[o.id];
+    const next = prev === dir ? null : dir;
+    setReactions((r) => { const n = { ...r }; if (next) n[o.id] = next; else delete n[o.id]; store.set("drape.reactions", JSON.stringify(Object.fromEntries(Object.entries(n).slice(-400)))); return n; });
+    const info = layoutInfo.current.get(o.id);
+    track({
+      event_type: next ? (next === "up" ? "outfit_up" : "outfit_down") : "outfit_clear", outfit_id: o.id, feed_index: index, gender: genderRef.current,
+      product_ids: [o.top.id, ...(o.bottom ? [o.bottom.id] : []), o.shoes.id],
+      ctx: { layout: info?.layout, mode: info?.mode, canvas: canvas ? [canvas.w, canvas.h] : undefined, v: "v3.1", ...(prev && next !== prev ? { prev } : {}) },
+    });
+  };
+
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
     track({ event_type: "tap_product", product_id: card.id, outfit_id: outfit.id, feed_index: index, slot, gender: genderRef.current });
@@ -182,8 +207,10 @@ export default function Feed() {
 
       <div ref={scroller} className="no-scrollbar h-dvh snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
         {items.map((o, i) => (
-          <section key={o.id} data-i={i} className="flex h-dvh snap-start snap-always flex-col items-center justify-center pb-5 pt-[3.75rem]">
-            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} />}
+          <section key={o.id} data-i={i} className="relative flex h-dvh snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + env(safe-area-inset-bottom))` }}>
+            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)}
+              onLayout={(layout, mode) => layoutInfo.current.set(o.id, { layout, mode })} />}
+            <OutfitButtons value={reactions[o.id] ?? null} onPress={(d) => pressOutfit(o, i, d)} />
           </section>
         ))}
         {!items.length && (

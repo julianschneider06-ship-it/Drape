@@ -2,28 +2,32 @@
 //  stacked: top above bottom, same vertical axis (left of the canvas centre), hem width = waist width, small gap; shoes on the canvas centre axis
 //           overlapping the trouser hem, on top. folded: top upper-left, bottom upper-right, equal height; shoes lower middle.
 //  full_body: the item on the left axis, shoes on the centre axis overlapping its hem.
-import { DEFAULT_ASPECT, JITTER, MARGIN_ZONE, PIECE_SCALE, RULES, SIZE } from "./config";
+import { DEFAULT_ASPECT, JITTER, MARGIN_ZONE, RULES, SIZE, SCALE_SHOES, SCALE_TOP_BOTTOM } from "./config";
 import type { Layout, LayoutDebug, Placed, PieceIn, Rect, SlotName } from "./engine";
 
 const mulberry32 = (a: number) => () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 
 export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partial<Record<SlotName, PieceIn>>; seed: number; canvas: { w: number; h: number } }): Layout {
   const { w: W, h: H } = opts.canvas;
-  const P = opts.pieces, R = RULES, S = PIECE_SCALE;
+  const P = opts.pieces, R = RULES;
   const padX = R.edgePad * W, padY = R.edgePad * H;
   const frameRight = W - MARGIN_ZONE * W;                      // the right margin zone stays free
   const axis = R.axisX * W, centre = R.centreX * W;
   const aspect = (p: PieceIn) => (p.aspect && p.aspect > 0.05 ? p.aspect : DEFAULT_ASPECT[p.cls]);
-  const capW = (p: PieceIn) => SIZE[p.cls].maxW * W * S, capH = (p: PieceIn) => SIZE[p.cls].maxH * H * S;
+  const sc = (p: PieceIn) => (p.slot === "shoes" ? SCALE_SHOES : SCALE_TOP_BOTTOM);
+  const capW = (p: PieceIn) => SIZE[p.cls].maxW * W * sc(p), capH = (p: PieceIn) => SIZE[p.cls].maxH * H * sc(p);
   const binding: string[] = [];
   const dbg: LayoutDebug = { mode: "stacked", axisX: axis, centreX: centre, binding };
   const rects: Partial<Record<SlotName, Rect>> = {};
   const availH = H - 2 * padY;
+  let fitF = 1;
 
   // shoes size (current shoe caps x enlargement)
   const shoe = P.shoes!, sa = aspect(shoe);
   let sw = Math.min(capW(shoe), capH(shoe) * sa), sh = sw / sa;
   const ov = R.shoeOverlap;
+  const shoeMaxW = 2 * Math.min(centre - padX, frameRight - padX - centre);   // shoes stay left of the margin zone and inside the canvas
+  if (sw > shoeMaxW) { sw = shoeMaxW; sh = sw / sa; binding.push("shoe-width"); }
   const axisMaxW = 2 * Math.min(axis - padX, frameRight - padX - axis);   // widest piece that keeps the axis and both edges
 
   const full = P.full;
@@ -42,6 +46,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     const T = h + sh * (1 - ov);
     const f = Math.min(1, availH / T);
     if (f < 1) binding.push("height-fit");
+    fitF = f;
     w *= f; h *= f; sw *= f; sh *= f;
     const y0 = padY + (availH - (h + sh * (1 - ov))) / 2;
     rects.full = { x: axis - w / 2, y: y0, w, h };
@@ -72,6 +77,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     const T = ht + gap + hb + sh * (1 - ov);
     const f = Math.min(1, availH / T);
     if (f < 1) binding.push("height-fit");
+    fitF = f;
     wt *= f; wb *= f; ht *= f; hb *= f; sw *= f; sh *= f;
     const gapPx = gap;
     const y0 = padY + (availH - (ht + gapPx + hb + sh * (1 - ov))) / 2;
@@ -95,8 +101,8 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     rects.top = { x: padX, y: cy - h / 2, w: wt, h };
     rects.bottom = { x: frameRight - padX - wb, y: cy - h / 2, w: wb, h };
     // shoes: normal size, centred on the centre axis, lower half (no overlap needed)
-    const f = 1;
-    rects.shoes = { x: centre - sw * f / 2, y: R.foldedShoesCy * H - sh / 2, w: sw, h: sh };
+    if (sh > h * R.foldedShoeMaxH) { sh = h * R.foldedShoeMaxH; sw = sh * sa; binding.push("folded-shoe-cap"); }
+    rects.shoes = { x: centre - sw / 2, y: R.foldedShoesCy * H - sh / 2, w: sw, h: sh };
   }
 
   // optional randomness (off by default): whole composition shift + shoe tilt
@@ -112,6 +118,6 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
   const placed: Placed[] = (Object.entries(rects) as [SlotName, Rect][]).map(([slot, rect]) => ({ slot, rect, rot: slot === "shoes" ? rotShoe : 0, z: z[slot] }));
   placed.sort((a, b) => a.z - b.z);
   const frame: Rect = { x: 0, y: padY, w: frameRight, h: availH };
-  return { fit: 1, template: dbg.mode === "folded" ? "R-folded" : dbg.mode === "full" ? "R-full" : "R-stacked", margin: "right", pieces: placed, frame,
+  return { fit: fitF, template: dbg.mode === "folded" ? "R-folded" : dbg.mode === "full" ? "R-full" : "R-stacked", margin: "right", pieces: placed, frame,
     marginRect: { x: frameRight, y: 0, w: W - frameRight, h: H }, canvas: opts.canvas, debug: dbg };
 }

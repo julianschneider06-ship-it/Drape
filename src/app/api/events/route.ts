@@ -4,9 +4,19 @@ import { clientIp, isUuid, limited } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
-const TYPES = new Set(["impression", "dwell_ms", "like", "unlike", "tap_product", "view_product_click", "scroll_past"]);
+const TYPES = new Set(["impression", "dwell_ms", "like", "unlike", "tap_product", "view_product_click", "scroll_past", "outfit_up", "outfit_down", "outfit_clear"]);
 const SLOTS = new Set(["top", "bottom", "shoes", "full", "sheet"]);
 const int = (v: unknown, max = 2_000_000_000) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? Math.round(v) : null);
+
+// Layout context of outfit-level events: only short whitelisted fields are kept.
+function cleanCtx(c: unknown) {
+  if (!c || typeof c !== "object") return null;
+  const o = c as Record<string, unknown>, out: Record<string, unknown> = {};
+  for (const k of ["layout", "mode", "v"]) if (typeof o[k] === "string" && (o[k] as string).length <= 24) out[k] = o[k];
+  if (o.prev === "up" || o.prev === "down") out.prev = o.prev;
+  if (Array.isArray(o.canvas) && o.canvas.length === 2) { const a = int(o.canvas[0], 5000), b = int(o.canvas[1], 5000); if (a !== null && b !== null) out.canvas = [a, b]; }
+  return Object.keys(out).length ? out : null;
+}
 
 // POST /api/events  { device_id, events: [...] }  (batched by the client; sendBeacon sends text/plain, so parse the raw body)
 // Append-only event log. Nothing here can trigger a paid service.
@@ -22,7 +32,7 @@ export async function POST(req: NextRequest) {
     return [{
       event_type: e.event_type, product_id: int(e.product_id), product_ids: ids, outfit_id: int(e.outfit_id),
       slot: typeof e.slot === "string" && SLOTS.has(e.slot) ? e.slot : null, feed_index: int(e.feed_index, 100000),
-      gender: e.gender === "women" || e.gender === "men" ? e.gender : null, dwell_ms: int(e.dwell_ms, 3_600_000), ctx: null, client_ts: ts,
+      gender: e.gender === "women" || e.gender === "men" ? e.gender : null, dwell_ms: int(e.dwell_ms, 3_600_000), ctx: cleanCtx(e.ctx), client_ts: ts,
     }];
   });
   if (!events.length) return NextResponse.json({ ok: true, stored: 0 });

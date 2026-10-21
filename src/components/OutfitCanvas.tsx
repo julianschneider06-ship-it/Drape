@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/format";
 import { garmentClass } from "@/lib/layout/config";
@@ -9,9 +9,9 @@ import FeedImage from "./FeedImage";
 export const pieceClass = (slot: SlotName, c: FeedCard) => garmentClass(slot, c.name);
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", priority, onOpen }: {
+export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", priority, onOpen, onLayout }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; priority: boolean;
-  onOpen: (c: FeedCard, slot: SlotName) => void;
+  onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string) => void;
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
@@ -27,6 +27,8 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
     // rule layout by default; ?layout=A,FB forces one of the old random templates (debug)
     return computeLayout({ kind: outfit.kind, pieces, seed, canvas, template: override?.length ? pickTemplate(outfit.kind, seed, override) : undefined });
   }, [cards, outfit, canvas, override]);
+
+  useEffect(() => { onLayout?.(layout.template, layout.debug?.mode ?? "template"); }, [layout, onLayout]);
 
   const orig = (c: FeedCard): FeedCard => (c.id === outfit.top.id ? outfit.top : c.id === outfit.shoes.id ? outfit.shoes : outfit.bottom ?? c);
   const { w: W, h: H } = canvas;

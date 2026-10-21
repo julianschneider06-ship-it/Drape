@@ -1,7 +1,7 @@
 // Pure layout engine: (outfit pieces, template, seed, canvas size) -> rectangles in px. No React, no DOM.
 import { computeRuleLayout } from "./rules";
 import {
-  DEFAULT_ASPECT, FRAME_PAD, HEADER_PX, FOOTER_PX, JITTER, MARGIN_ZONE, MAX_CANVAS_W, OVERLAP, EDGE_PAD, PIECE_SCALE, RULES, SIZE, TEMPLATES,
+  DEFAULT_ASPECT, FRAME_PAD, HEADER_PX, BUTTON_BAR_PX, JITTER, MARGIN_ZONE, MAX_CANVAS_W, OVERLAP, EDGE_PAD, pieceScale, RULES, SIZE, TEMPLATES,
   type GarmentClass, type Place, type Template,
 } from "./config";
 
@@ -33,8 +33,8 @@ function mulberry32(a: number) {
   return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
-/** Canvas size from the scroller size: centred, max width, minus header/footer. */
-export const canvasSize = (viewW: number, viewH: number) => ({ w: Math.round(Math.min(viewW, MAX_CANVAS_W)), h: Math.max(240, Math.round(viewH - HEADER_PX - FOOTER_PX)) });
+/** Canvas size from the scroller size: centred, max width, minus the header and the button bar (+ the phone's bottom safe area). */
+export const canvasSize = (viewW: number, viewH: number, safeBottom = 0) => ({ w: Math.round(Math.min(viewW, MAX_CANVAS_W)), h: Math.max(240, Math.round(viewH - HEADER_PX - BUTTON_BAR_PX - safeBottom)) });
 
 /** Deterministic template choice; `override` = list of ids from ?layout=A,FB (case-insensitive, "m" = mirrored). */
 export function pickTemplate(kind: "three" | "full", seed: number, override?: string[]): Template {
@@ -59,7 +59,8 @@ export function computeLayout(opts: { kind: "three" | "full"; pieces: Partial<Re
   // 1) sizes by garment class
   const size = (p: PieceIn) => {
     const s = SIZE[p.cls], a = p.aspect && p.aspect > 0.05 ? p.aspect : DEFAULT_ASPECT[p.cls];
-    const w = Math.min(s.maxW * W * PIECE_SCALE, s.maxH * H * PIECE_SCALE * a);
+    const sc = pieceScale(p.slot);
+    const w = Math.min(s.maxW * W * sc, s.maxH * H * sc * a);
     return { w, h: w / a };
   };
   const rect: Partial<Record<SlotName, Rect>> = {};

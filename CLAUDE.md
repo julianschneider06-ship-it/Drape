@@ -39,7 +39,8 @@ Scalability is very important to the user. Design for millions of products and u
 
 - **Stack:** Next.js (App Router, TypeScript, Tailwind), Supabase (Postgres, Auth), Vercel (hosting), GitHub (code). Later as a PWA for the iPhone home screen.
 - **Data model principle:** Products are the objects users like and save. Outfits are assembled from products and are **not** stored as their own saved unit.
-- **No dislike.** Personalization learns from onboarding (style directions), likes and implicit signals (scrolling past, dwell time, tapping a product).
+- **No dislike on products.** Products can only be liked and saved. The one negative signal is the outfit-level "do not like this outfit" button (three chevrons pointing down); it exists as a signal only. Personalization learns from onboarding (style directions), likes and implicit signals (scrolling past, dwell time, tapping a product).
+- **Outfit buttons.** Every outfit screen has two small buttons: triple chevrons up = I like this outfit, triple chevrons down = I do not like this outfit. They write `outfit_up` / `outfit_down` / `outfit_clear` events to the append-only event log and will be used in personalization (step 4); they do not change the feed yet.
 - **Product classification:** Style is a combination of attributes, never a single category.
 - **AI provider:** Google Gemini (Google AI Studio) for image classification and multimodal embeddings, behind a model adapter so providers can be swapped (Claude, Voyage, ...). Store the model name and version with every classification and embedding. The API key lives only as a secret (Supabase Edge Function secret or Vercel environment variable), never in the repo or browser.
 - **Mobile first.** Build every screen for a smartphone display first, then for larger screens.
