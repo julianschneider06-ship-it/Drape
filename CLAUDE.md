@@ -30,6 +30,7 @@ Scalability is very important to the user. Design for millions of products and u
 - **Shop crawling.** Public product feeds only; respect robots.txt and rate limits; skip hosts that answer 401/403/404/410/429/503 and never work around them.
 - **Gender.** products.gender is filled from the classification when empty (trigger); unisex means usable for both genders.
 - **Sale marker.** A red hand-drawn outline per shape plus one SALE label per product, switchable (SALE_MARKER_ENABLED).
+- **Taste.** Taste is per device and per slot, learned incrementally from the event log, held on the client by default; the event log is the source of truth.
 - Record architecture decisions that matter for scale in `docs/architecture.md`.
 
 ## Project setup (done so far)
