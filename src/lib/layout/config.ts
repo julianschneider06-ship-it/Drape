@@ -152,7 +152,7 @@ export const REAL_CM: Record<string, { small: number; medium: number; large: num
 export const ACCESSORIES = {
   enabled: true,
   headMaxShrink: 0.18,        // head zone (hat above the top): if it would shrink the main stack by more than this, the item goes to the side column
-  head:    { collarMul: 1.15, mulRange: [1.0, 1.3] as [number, number], fallbackWidthOfTop: 0.55, maxH: 0.17, overlap: 0.08 }, // head item width = collar width x collarMul (clamped); without a collar measurement at most fallbackWidthOfTop x the top's width
+  head:    { collarMul: 1.15, mulRange: [1.0, 1.3] as [number, number], fallbackWidthOfTop: 0.55, minW: 0.15, maxH: 0.17, overlap: 0.08 }, // head item width = collar width x collarMul (clamped); without a collar measurement at most fallbackWidthOfTop x the top's width
   necklace: { widthOfTop: 0.50, neckline: 0.04, maxHOfTop: 0.3 }, // overlay on the top, centred on its axis, starting this share of the top's height below its upper edge
   belt:    { widthOfSeam: 1.0, maxH: 0.045 },                  // drawn across the seam, as wide as the waist/seam, no extra height
   sleeve:  { gap: 0.015, at: 0.35, maxW: 0.17 },               // watch / bracelet right of the top at sleeve height (at = share of the top's height from its upper edge), gap in W

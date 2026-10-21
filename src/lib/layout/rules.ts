@@ -235,6 +235,7 @@ function headSize(a: AccIn, topW: number, collar: number | null | undefined, W: 
   const ar = a.aspect && a.aspect > 0.05 ? a.aspect : 1.4;
   const mul = Math.min(A.head.mulRange[1], Math.max(A.head.mulRange[0], A.head.collarMul));
   let w = collar ? collar * topW * mul : A.head.fallbackWidthOfTop * topW, h = w / ar;
+  if (w < A.head.minW * W) { w = A.head.minW * W; h = w / ar; }   // narrow necks (halter, straps) must not make the hat tiny
   if (h > A.head.maxH * H) { h = A.head.maxH * H; w = h * ar; }
   return { w: Math.min(w, 0.6 * W), h };
 }
