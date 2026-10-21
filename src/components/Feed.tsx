@@ -34,7 +34,7 @@ export default function Feed() {
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
   const [reactions, setReactions] = useState<Record<number, Reaction>>({});
   const layoutInfo = useRef(new Map<number, { layout: string; mode: string }>());
-  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean }>({ debug: false, cut: "auto", acc: true });
+  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean; preload: boolean }>({ debug: false, cut: "auto", acc: true, preload: true });
 
   const device = useRef("");
   const scroller = useRef<HTMLDivElement>(null);
@@ -59,7 +59,7 @@ export default function Feed() {
   // debug options: ?layout=A,FB forces templates (3-piece, full-body), ?debug=1 shows boxes + margin zone
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto", acc: q.get("acc") !== "off" });
+    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto", acc: q.get("acc") !== "off", preload: q.get("preload") !== "off" });   // ?preload=off: test switch for the alternatives preloading
   }, []);
 
   // canvas size follows the scroller (phones, rotation, desktop)
@@ -218,7 +218,7 @@ export default function Feed() {
   // cancelled when the user scrolls on; skipped with data saver on.
   useEffect(() => {
     const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-    if (conn?.saveData || !shown.length) return;
+    if (conn?.saveData || !dbg.preload || !shown.length) return;
     let cancelled = false; const inflight: HTMLImageElement[] = [];
     const idle = (fn: () => void) => ("requestIdleCallback" in window ? (window as unknown as { requestIdleCallback: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback(fn, { timeout: 1500 }) : setTimeout(fn, 60));
     const urlsOf = (o?: FeedOutfit) => {
@@ -244,7 +244,7 @@ export default function Feed() {
     };
     const t = setTimeout(run, 700);   // the outfit counts as "fully shown" after a short pause
     return () => { cancelled = true; clearTimeout(t); for (const i of inflight) if (!i.complete) i.src = ""; };
-  }, [current, shown.length, dbg.cut]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current, shown.length, dbg.cut, dbg.preload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
