@@ -45,7 +45,8 @@ export function SaleJoinFilter({ id, size, close }: { id: string; size: "s" | "m
   return (
     <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
       <filter id={id} x="-15%" y="-15%" width="130%" height="130%" colorInterpolationFilters="sRGB">
-        <feMorphology in="SourceAlpha" operator="dilate" radius={close} result="d0" />
+        <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 40 -12" result="bin" />
+        <feMorphology in="bin" operator="dilate" radius={close} result="d0" />
         <feMorphology in="d0" operator="erode" radius={close} result="closed" />
         <feMorphology in="closed" operator="dilate" radius={r.grow} result="grown" />
         <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="7" result="noise" />

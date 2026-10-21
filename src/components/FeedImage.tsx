@@ -18,7 +18,7 @@ export default function FeedImage({ card, src: srcIn, priority, fill = 0.92, min
   const srcNow = srcIn ?? imgUrl(card.image, minW);
   useEffect(() => {
     if (!sale) return; let off = false;
-    pairGap(srcNow).then((gap) => { if (off || gap == null) return; const w = ref.current?.getBoundingClientRect().width ?? 0; if (w > 0) setJoin(Math.ceil((gap * w) / 2 + 1.5)); });
+    pairGap(srcNow).then((gap) => { if (off || gap == null) return; const w = ref.current?.getBoundingClientRect().width ?? 0; if (w > 0) setJoin(Math.min(28, Math.ceil(gap * w * 0.8 + 2))); });
     return () => { off = true; };
   }, [sale, srcNow]);
   const look = blend ? blendStyle(card) : sale ? { filter: `url(#${join ? `drape-sale-join-${fid}` : `drape-sale-ink-${saleSize(wShare)}`})` } : undefined; // cutouts are transparent: no multiply (shoes stay opaque over trousers)
