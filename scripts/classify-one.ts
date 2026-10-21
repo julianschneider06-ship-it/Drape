@@ -1,6 +1,7 @@
 // Classify ONE product (image + title) and embed its image. Usage: npx tsx scripts/classify-one.ts <product_id>
 // Needs GEMINI_API_KEY and DRAPE_PIPELINE_TOKEN in the environment.
 import Ajv from "ajv";
+import { startStep } from "../src/lib/budget";
 import { GEMINI_API_BASE, MODELS } from "../src/config/models";
 import { CLASSIFICATION_SCHEMA, PROMPT, TAXONOMY_VERSION } from "../src/classify/taxonomy";
 
@@ -28,6 +29,7 @@ const pipe = async (body: unknown) => {
 
 (async () => {
   const id = Number(process.argv[2]);
+  startStep({ name: "classify-one", capEnv: "DRAPE_CLASSIFY_ONE_CAP_USD", capDefault: 0.05, unitUsd: 0.0015, items: 1 });
   const { product } = await pipe({ action: "product_get", id });
   const imgRes = await fetch(product.primary_image_url);
   const mime = imgRes.headers.get("content-type")?.split(";")[0] ?? "image/jpeg";

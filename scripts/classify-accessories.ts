@@ -5,6 +5,7 @@ import Ajv from "ajv";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { GEMINI_API_BASE, MODELS, PRICES } from "../src/config/models";
+import { startStep } from "../src/lib/budget";
 import { rpc } from "../src/ingest/gateway";
 import { ACC_SCHEMA, PROMPT, PROMPT_REV, TAXONOMY_VERSION } from "../src/classify/taxonomy-acc1";
 
@@ -12,7 +13,7 @@ const args = process.argv.slice(2);
 const opt = (n: string) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : undefined; };
 const KEY = process.env.GEMINI_API_KEY;
 const MODEL = opt("model") ?? MODELS.classifier;
-const CAP = Number(opt("cap") ?? 3);
+const CAP = Number(opt("cap") ?? process.env.DRAPE_ACCESSORY_CAP_USD ?? 1);
 const CONCURRENCY = Number(opt("concurrency") ?? 8);
 const LIMIT = Number(opt("limit") ?? Infinity);
 const DESC = args.includes("--desc"); // newest products first (the accessory stores added last); default oldest first
@@ -65,7 +66,8 @@ async function classify(t: Todo) {
 
 (async () => {
   const parked = await rpc<number>("acc_prefilter");
-  let spent = Number(await rpc<string>("acc_cost", { p_tax: TAXONOMY_VERSION }));
+  startStep({ name: "classify-accessories", capEnv: "DRAPE_ACCESSORY_CAP_USD", capDefault: 1, cliCap: opt("cap") != null ? Number(opt("cap")) : null, unitUsd: 0.0006, items: Number.isFinite(LIMIT) ? LIMIT : null });
+  let spent = 0;   // spend of THIS run (the cap is per run; the guard in src/lib/budget.ts enforces it on every call)
   const t0 = Date.now(); let after = DESC ? Number.MAX_SAFE_INTEGER : 0, done = 0, invalid = 0, errors = 0; const types: Record<string, number> = {};
   console.log(`accessory classification ${TAXONOMY_VERSION}: model ${MODEL}, cap $${CAP}, spent so far $${spent.toFixed(4)}, parked by prefilter ${parked}`);
   while (done < LIMIT && spent < CAP) {

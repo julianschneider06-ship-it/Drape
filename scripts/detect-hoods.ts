@@ -5,13 +5,14 @@
 import Ajv from "ajv";
 import sharp from "sharp";
 import { GEMINI_API_BASE, MODELS, PRICES } from "../src/config/models";
+import { startStep } from "../src/lib/budget";
 import { rpc } from "../src/ingest/gateway";
 
 const args = process.argv.slice(2);
 const opt = (n: string) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : undefined; };
 const KEY = process.env.GEMINI_API_KEY;
 const MODEL = opt("model") ?? MODELS.imageCheck;
-const CAP = Number(opt("cap") ?? process.env.DRAPE_HOOD_CAP_USD ?? 0.5), CONC = Number(opt("concurrency") ?? 8), LIMIT = Number(opt("limit") ?? Infinity);
+const CAP = Number(opt("cap") ?? process.env.DRAPE_HOOD_CAP_USD ?? 0.3), CONC = Number(opt("concurrency") ?? 8), LIMIT = Number(opt("limit") ?? Infinity);
 const price = PRICES[MODEL];
 if (!KEY) throw new Error("GEMINI_API_KEY is not set");
 if (!price) throw new Error(`No price known for model ${MODEL}`);
@@ -41,8 +42,9 @@ async function prepare(url: string) {
 interface Todo { id: number; name: string; slot: string; collar: number | null; url: string }
 
 async function main() {
-  let spent = Number(await rpc<string>("hood_cost"));
-  console.log(`hood detection: model ${MODEL}, cap $${CAP}, spent so far $${spent.toFixed(4)}`);
+  startStep({ name: "hood-check", capEnv: "DRAPE_HOOD_CAP_USD", capDefault: 0.3, cliCap: opt("cap") != null ? Number(opt("cap")) : null, unitUsd: 0.00011, items: Number.isFinite(LIMIT) ? LIMIT : null });
+  const total0 = Number(await rpc<string>("hood_cost")), spent = 0;   // the cap counts this run only
+  console.log(`hood detection: model ${MODEL}, cap $${CAP}, table total so far $${total0.toFixed(4)}`);
   const stats = { rule_hood: 0, rule_no: 0, model_hood: 0, model_no: 0, errors: 0 };
   let after = 0, done = 0, modelCost = 0;
   while (done < LIMIT) {

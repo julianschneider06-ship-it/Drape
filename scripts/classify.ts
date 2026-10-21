@@ -12,6 +12,7 @@ import {
 } from "../src/config/models";
 import { GEMINI_API_BASE, MODELS } from "../src/config/models";
 import { rpc } from "../src/ingest/gateway";
+import { startStep } from "../src/lib/budget";
 import { CLASSIFICATION_SCHEMA, PROMPT, PROMPT_REV, TAXONOMY_VERSION } from "../src/classify/taxonomy-v2";
 
 const args = process.argv.slice(2);
@@ -171,6 +172,7 @@ async function processProduct(item: any, q: { id: number | null }) {
   }
   if (ids && !DIRECT) console.log(`enqueued ${await rpc("queue_enqueue", { p_ids: ids, p_tax: TAXONOMY_VERSION })} of ${ids.length} products`);
 
+  startStep({ name: "classify", capEnv: "DRAPE_CLASSIFY_CAP_USD", capDefault: 0.8, cliCap: opt("cap") != null ? Number(opt("cap")) : null, unitUsd: 0.0012, items: ids ? ids.length : null });   // measured: about $0.0011-0.0013 per product incl. embedding
   const t0 = Date.now();
   while (stats.claimed < LIMIT) {
     if (stats.cost + stats.embed_cost >= CAP) { stats.capped = true; console.log(`COST CAP $${CAP} reached, stopping`); break; }

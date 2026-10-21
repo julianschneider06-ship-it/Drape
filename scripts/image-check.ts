@@ -7,6 +7,7 @@
 import Ajv from "ajv";
 import sharp from "sharp";
 import { GEMINI_API_BASE, MODELS, PRICES } from "../src/config/models";
+import { startStep } from "../src/lib/budget";
 import { rpc } from "../src/ingest/gateway";
 import { IMAGE_CHECK_REV, IMAGE_CHECK_SCHEMA, MIN_CONFIDENCE, PROMPT, SERIOUS_DEFECTS } from "../src/imagecheck/schema";
 
@@ -15,7 +16,7 @@ const opt = (n: string) => { const i = args.indexOf(`--${n}`); return i >= 0 ? a
 const many = (n: string) => args.flatMap((a, i) => (a === `--${n}` ? [args[i + 1]] : []));
 const KEY = process.env.GEMINI_API_KEY;
 const MODEL = opt("model") ?? MODELS.imageCheck;
-const CAP = Number(opt("cap") ?? process.env.DRAPE_IMAGE_CHECK_CAP_USD ?? 6);
+const CAP = Number(opt("cap") ?? process.env.DRAPE_IMAGE_CHECK_CAP_USD ?? 2);   // per run (this process), not the table total
 const CONCURRENCY = Number(opt("concurrency") ?? 8);
 const LIMIT = Number(opt("limit") ?? Infinity);
 const BATCH = 40;
@@ -90,10 +91,11 @@ async function check(t: Todo) {
 
 // Backfill of `presentation` for products that already passed the check (once per product and image, own cost cap).
 async function presentationBackfill() {
-  const PCAP = Number(opt("cap") ?? process.env.DRAPE_PRESENTATION_CAP_USD ?? 3);
-  let spent = Number(await rpc<string>("presentation_cost"));
+  const PCAP = Number(opt("cap") ?? process.env.DRAPE_PRESENTATION_CAP_USD ?? 1);   // per run
+  startStep({ name: "presentation-check", capEnv: "DRAPE_PRESENTATION_CAP_USD", capDefault: 1, cliCap: opt("cap") != null ? Number(opt("cap")) : null, unitUsd: 0.0003, items: Number.isFinite(LIMIT) ? LIMIT : null });
+  const total0 = Number(await rpc<string>("presentation_cost")); let spent = 0;
   let after = 0, done = 0, errors = 0; const t0 = Date.now(); const counts: Record<string, number> = {};
-  console.log(`presentation backfill: model ${MODEL}, cap $${PCAP}, already spent $${spent.toFixed(4)}`);
+  console.log(`presentation backfill: model ${MODEL}, cap $${PCAP}, table total so far $${total0.toFixed(4)}`);
   while (done < LIMIT && spent < PCAP) {
     const todo = await rpc<Todo[]>("presentation_todo", { p_after: after, p_limit: Math.min(BATCH, LIMIT - done) });
     if (!todo.length) break;
@@ -118,11 +120,12 @@ async function presentationBackfill() {
 
 (async () => {
   if (args.includes("--presentation")) return presentationBackfill();
-  let spent = Number(await rpc<string>("image_check_cost"));
+  startStep({ name: "image-check", capEnv: "DRAPE_IMAGE_CHECK_CAP_USD", capDefault: 2, cliCap: opt("cap") != null ? Number(opt("cap")) : null, unitUsd: 0.0003, items: Number.isFinite(LIMIT) ? LIMIT : null });
+  const total0 = Number(await rpc<string>("image_check_cost")); let spent = 0;   // spent = this run
   const t0 = Date.now();
   const tot = { checked: 0, pass: 0, fail: 0, switched: 0, excluded: 0, errors: 0 };
   const reasons: Record<string, number> = {};
-  console.log(`image check: model ${MODEL}, cap $${CAP}, already spent $${spent.toFixed(4)}`);
+  console.log(`image check: model ${MODEL}, cap $${CAP}, table total so far $${total0.toFixed(4)}`);
   outer: for (const slot of SLOTS) {
     let after = 0;
     while (tot.checked < LIMIT) {

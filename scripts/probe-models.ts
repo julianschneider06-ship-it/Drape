@@ -3,6 +3,7 @@
 import { GEMINI_API_BASE, MODELS } from "../src/config/models";
 import { ShopifyAdapter } from "../src/ingest/adapters/shopify";
 import { politeGetJson } from "../src/ingest/http";
+import { startStep } from "../src/lib/budget";
 
 const KEY = process.env.GEMINI_API_KEY!;
 const SCHEMA = { type: "object", additionalProperties: false, required: ["person"], properties: { person: { type: "boolean" } } };
@@ -22,6 +23,7 @@ async function person(url: string): Promise<boolean | null> {
 }
 
 (async () => {
+  startStep({ name: "probe-models", capEnv: "DRAPE_PROBE_CAP_USD", capDefault: 0.1, unitUsd: 0.0003, items: process.argv.slice(2).length * 40 });   // up to 8 products x 5 images per host
   for (const host of process.argv.slice(2)) {
     const base = `https://${host}`;
     try {
