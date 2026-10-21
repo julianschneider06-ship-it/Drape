@@ -4,6 +4,9 @@ import type { SourceConfig } from "./types";
 const shopify = (slug: string, name: string, baseUrl: string, currency: string, extra: Record<string, unknown> = {}): SourceConfig =>
   ({ slug, name, kind: "shopify", baseUrl, options: { currency, ...extra } });
 
+// Flagged shops (fewer than 30% of their products usable after the quality gates: model photos / not suited): kept in the list, but not ingested again.
+const flagged = (c: SourceConfig): SourceConfig => ({ ...c, active: false });
+
 export const SOURCES: SourceConfig[] = [
   shopify("taylorstitch", "Taylor Stitch", "https://taylorstitch.com", "USD", { defaultGender: "men" , max: 450 }),
   shopify("fashionnova", "Fashion Nova", "https://fashionnova.com", "USD", { defaultGender: "women", maxPages: 2 }),
@@ -76,24 +79,24 @@ export const SOURCES: SourceConfig[] = [
   { slug: "zalando-de", name: "Zalando DE", kind: "zalando", baseUrl: "https://en.zalando.de", active: false },
   // --- Style-supply round (thin styles: techwear, skater, grunge, punk, western, retro sport, scandi, preppy, quiet luxury, old money shoes ...).
   // Chosen from a probe (scripts/probe-clothes.ts): products.json reachable, plain-background packshots (>= 40% of sampled first images), real clothing / shoe ranges.
-  shopify("studionicholson", "Studio Nicholson", "https://studionicholson.com", "GBP", { brand: "Studio Nicholson", exclude: ["accessories"], max: 110 }),
+  flagged(shopify("studionicholson", "Studio Nicholson", "https://studionicholson.com", "GBP", { brand: "Studio Nicholson", exclude: ["accessories"], max: 110 })),
   shopify("hummel", "Hummel", "https://hummel.net", "EUR", { brand: "Hummel", exclude: ["accessories"], max: 110 }),
-  shopify("rowingblazers", "Rowing Blazers", "https://rowingblazers.com", "USD", { brand: "Rowing Blazers", exclude: ["accessories"], max: 110 }),
+  flagged(shopify("rowingblazers", "Rowing Blazers", "https://rowingblazers.com", "USD", { brand: "Rowing Blazers", exclude: ["accessories"], max: 110 })),
   shopify("reigningchamp", "Reigning Champ", "https://reigningchamp.com", "USD", { brand: "Reigning Champ", defaultGender: "men", exclude: ["accessories"], max: 100 }),
   shopify("folkclothing", "Folk", "https://folkclothing.com", "GBP", { brand: "Folk", exclude: ["accessories"], max: 110 }),
   shopify("obeyclothing", "Obey", "https://obeyclothing.com", "USD", { brand: "Obey", exclude: ["accessories"], max: 100 }),
-  shopify("houdinisportswear", "Houdini", "https://houdinisportswear.com", "SEK", { brand: "Houdini", exclude: ["accessories"], max: 110 }),
+  flagged(shopify("houdinisportswear", "Houdini", "https://houdinisportswear.com", "SEK", { brand: "Houdini", exclude: ["accessories"], max: 110 })),
   shopify("alphaindustries", "Alpha Industries", "https://alphaindustries.com", "USD", { brand: "Alpha Industries", exclude: ["accessories"], max: 100 }),
-  shopify("killstar", "Killstar", "https://killstar.com", "USD", { brand: "Killstar", defaultGender: "women", exclude: ["accessories"], max: 110 }),
+  flagged(shopify("killstar", "Killstar", "https://killstar.com", "USD", { brand: "Killstar", defaultGender: "women", exclude: ["accessories"], max: 110 })),
   shopify("norseprojects", "Norse Projects", "https://norseprojects.com", "EUR", { brand: "Norse Projects", defaultGender: "men", exclude: ["accessories"], max: 100 }),
-  shopify("disturbia", "Disturbia", "https://disturbia.co.uk", "GBP", { brand: "Disturbia", defaultGender: "women", exclude: ["accessories"], max: 110 }),
+  flagged(shopify("disturbia", "Disturbia", "https://disturbia.co.uk", "GBP", { brand: "Disturbia", defaultGender: "women", exclude: ["accessories"], max: 110 })),
   shopify("lucchese", "Lucchese", "https://lucchese.com", "USD", { brand: "Lucchese", exclude: ["accessories"], max: 140 }),
   shopify("soulland", "Soulland", "https://soulland.com", "EUR", { brand: "Soulland", exclude: ["accessories"], max: 100 }),
   shopify("jpress", "J.Press", "https://jpressonline.com", "USD", { brand: "J.Press", defaultGender: "men", exclude: ["accessories"], max: 100 }),
   shopify("buttergoods", "Butter Goods", "https://buttergoods.com", "USD", { brand: "Butter Goods", exclude: ["accessories"], max: 100 }),
   shopify("johnnieo", "johnnie-O", "https://johnnie-o.com", "USD", { brand: "johnnie-O", defaultGender: "men", exclude: ["accessories"], max: 90 }),
   shopify("huf", "HUF", "https://hufworldwide.com", "USD", { brand: "HUF", defaultGender: "men", exclude: ["accessories"], max: 100 }),
-  shopify("rockmount", "Rockmount Ranch Wear", "https://rockmount.com", "USD", { brand: "Rockmount", exclude: ["accessories"], max: 90 }),
+  flagged(shopify("rockmount", "Rockmount Ranch Wear", "https://rockmount.com", "USD", { brand: "Rockmount", exclude: ["accessories"], max: 90 })),
   shopify("dimemtl", "Dime", "https://dimemtl.com", "USD", { brand: "Dime", exclude: ["accessories"], max: 100 }),
   shopify("ymc", "YMC", "https://youmustcreate.com", "GBP", { brand: "YMC", exclude: ["accessories"], max: 100 }),
   shopify("tecovas", "Tecovas", "https://tecovas.com", "USD", { brand: "Tecovas", exclude: ["accessories"], max: 140 }),

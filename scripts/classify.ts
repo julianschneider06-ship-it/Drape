@@ -1,5 +1,5 @@
 // Classification job (taxonomy v2). Background batch, never run from a web request.
-// Usage: npx tsx scripts/classify.ts [--sample] [--ids 1,2,3] [--model <id>] [--cap 0.8] [--concurrency 6]
+// Usage: npx tsx scripts/classify.ts [--sample] [--ids 1,2,3] [--model <id>] [--pending] [--cap 0.8] [--concurrency 6]
 //        [--limit N] [--print-prompt <id>] [--res low|medium|high] [--no-product-update]
 // Reads the classification queue, sends ONLY the pre-selected image (plus title/brand), is idempotent per
 // (product, taxonomy, model, input hash), retries with backoff, stores model/version/tokens/cost.
@@ -164,6 +164,7 @@ async function processProduct(item: any, q: { id: number | null }) {
   embVersionMeta = (await (await fetch(`${GEMINI_API_BASE}/models/${MODELS.embedding}`, { headers: { "x-goog-api-key": KEY } })).json()).version;
 
   let ids: number[] | undefined = opt("ids")?.split(",").map(Number);
+  if (flag("pending")) ids = await rpc<number[]>("classify_pending", { p_limit: 5000 });   // every active clothing / shoe product that has no v2 classification yet
   if (flag("sample")) {
     const quotas = JSON.parse(opt("quotas") ?? '{"tops":45,"bottoms":40,"dresses":20,"outerwear":35,"shoes":35,"accessories":25}');
     ids = await rpc<number[]>("pick_classification_sample", { p_quotas: quotas });
