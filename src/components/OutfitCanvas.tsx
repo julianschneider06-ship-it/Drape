@@ -21,7 +21,7 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
     const pieces: Partial<Record<SlotName, PieceIn>> = {};
     for (const [slot, c] of Object.entries(cards) as [SlotName, FeedCard][]) {
       const g = cropGeometry(c);
-      pieces[slot] = { slot, cls: pieceClass(slot, c), aspect: g ? g.cw / g.ch : null, presentation: c.presentation ?? null, hem: c.hem ?? null, waist: c.waist ?? null };
+      pieces[slot] = { slot, cls: pieceClass(slot, c), aspect: g ? g.cw / g.ch : null, presentation: c.presentation ?? null, hem: c.hem ?? null, waist: c.waist ?? null, fill: c.fill ?? null };
     }
     const seed = hash32(String(outfit.id));
     // rule layout by default; ?layout=A,FB forces one of the old random templates (debug)

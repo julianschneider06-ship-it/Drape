@@ -131,6 +131,7 @@ language sql stable set search_path = public as $$
            'presentation', case when p.presentation_src = p.feed_image_url then p.presentation end,
            'hem', case when p.measure_status = 'ok' and p.measure_src = p.cutout_url then p.hem_ratio end,
            'waist', case when p.measure_status = 'ok' and p.measure_src = p.cutout_url then p.waist_ratio end,
+           'fill', case when p.measure_src = p.cutout_url then p.shape_fill end,
            'price_cents', o.price_cents, 'compare_at_cents', o.compare_at_cents,
            'currency', o.currency, 'url', o.url, 'store', s.slug, 'in_stock', o.availability = 'in_stock')
     from products p

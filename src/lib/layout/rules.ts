@@ -28,7 +28,9 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
 
   const full = P.full;
   const top = P.top, bottom = P.bottom;
-  const folded = !full && !!top && !!bottom && (!R.stackedPresentations.includes(top.presentation ?? "spread_front") || !R.stackedPresentations.includes(bottom.presentation ?? "spread_front"));
+  const isTopLike = (p: PieceIn) => p.cls === "top" || p.cls === "outer" || p.cls === "longcoat";
+  const spread = (p: PieceIn) => R.stackedPresentations.includes(p.presentation ?? "spread_front") && !(isTopLike(p) && (p.fill ?? 0) >= R.foldedFillMin);
+  const folded = !full && !!top && !!bottom && (!spread(top) || !spread(bottom));
 
   if (full) {
     dbg.mode = "full";

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Full product pipeline for new/changed products (every step is idempotent and only touches what is still todo):
-#   ingest -> image pre-selection -> classification -> bounding boxes -> cutout -> image check (-> next-best image -> cutout -> check, up to 3 rounds) -> outfit pool
+#   ingest -> image pre-selection -> classification -> bounding boxes -> cutout -> image check incl. presentation (-> next-best image -> cutout -> check, up to 3 rounds) -> measurements -> outfit pool
 # Needs DRAPE_PIPELINE_TOKEN and GEMINI_API_KEY in the environment; PY = python with rembg/onnxruntime (default: python3).
 # Usage: npm run ingest:all [-- --no-outfits]
 set -euo pipefail
@@ -20,4 +20,8 @@ for round in 1 2 3; do
   # products switched to another image need one more cutout + check round; stop when nothing was switched
   grep -q '"switched":0' /tmp/image-check-round.log && break
 done
+# mask measurements (hem / waist ratios) for the rule-based layout; only cutouts not measured yet
+"$PY" scripts/cutout/measure.py
+# presentation of images that passed an older check (new products get it from the check itself)
+npx tsx scripts/image-check.ts --presentation
 if [ "${1:-}" != "--no-outfits" ]; then npx tsx scripts/build-outfits.ts; fi

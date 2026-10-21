@@ -9,6 +9,7 @@ export type SlotName = "top" | "bottom" | "shoes" | "full";
 export interface PieceIn {
   slot: SlotName; cls: GarmentClass; aspect: number | null; // aspect = content width / height
   presentation?: string | null;                              // spread_front | folded | other (null = unknown, treated as spread)
+  fill?: number | null;                                      // mask area / bbox area (geometry hint: >= RULES.foldedFillMin on a top = folded)
   hem?: number | null; waist?: number | null;                // seam widths as ratios of the piece's bbox width (tops: hem, bottoms: waist)
 }
 export interface Rect { x: number; y: number; w: number; h: number }

@@ -121,5 +121,6 @@ export const RULES = {
   foldedGap: 0.03,            // folded case: gap between them (fraction of canvas width)
   foldedHeightTol: 0.05,      // folded case: bbox heights equal within this tolerance (we use exactly equal)
   foldedShoesCy: 0.76,        // folded case: vertical centre of the shoes (fraction of canvas height), lower half
+  foldedFillMin: 0.90,        // geometry override for TOPS: a compact rectangular mask (area/bbox >= this) is a folded shirt even if the model said spread_front
   stackedPresentations: ["spread_front"], // anything else (folded, other) goes to the side-by-side layout; null/unknown = stacked
 };
