@@ -112,9 +112,9 @@ export const SOURCES: SourceConfig[] = [
   // Round 2: thin styles (techwear, grunge / punk / goth, men's y2k, shoes for old money / quiet luxury / preppy).
   shopify("satisfyrunning", "Satisfy", "https://satisfyrunning.com", "USD", { brand: "Satisfy", exclude: ["accessories"], max: 100 }),
   shopify("whitemountaineering", "White Mountaineering", "https://whitemountaineering.com", "JPY", { brand: "White Mountaineering", exclude: ["accessories"], max: 100 }),
-  shopify("trippnyc", "Tripp NYC", "https://trippnyc.com", "USD", { brand: "Tripp NYC", exclude: ["accessories"], max: 110 }),
-  shopify("dollskill", "Dolls Kill", "https://dollskill.com", "USD", { defaultGender: "women", exclude: ["accessories"], max: 120 }),
-  shopify("blackmilk", "Black Milk", "https://blackmilkclothing.com", "USD", { brand: "Black Milk", defaultGender: "women", exclude: ["accessories"], max: 60 }),
+  flagged(shopify("trippnyc", "Tripp NYC", "https://trippnyc.com", "USD", { brand: "Tripp NYC", exclude: ["accessories"], max: 110 })),
+  flagged(shopify("dollskill", "Dolls Kill", "https://dollskill.com", "USD", { defaultGender: "women", exclude: ["accessories"], max: 120 })),
+  flagged(shopify("blackmilk", "Black Milk", "https://blackmilkclothing.com", "USD", { brand: "Black Milk", defaultGender: "women", exclude: ["accessories"], max: 60 })),
   shopify("pleasuresnow", "Pleasures", "https://pleasuresnow.com", "USD", { brand: "Pleasures", defaultGender: "men", exclude: ["accessories"], max: 100 }),
   shopify("hellstar", "Hellstar", "https://hellstar.com", "USD", { brand: "Hellstar", exclude: ["accessories"], max: 100 }),
   shopify("crockettandjones", "Crockett & Jones", "https://crockettandjones.com", "GBP", { brand: "Crockett & Jones", defaultGender: "men", exclude: ["accessories"], max: 90 }),
