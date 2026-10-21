@@ -122,19 +122,20 @@ export const RULES = {
   ratioClamp: [0.6, 1.7] as [number, number], // allowed w_top / w_bottom when matching hem and waist
   heightRatioRange: [0.4, 2.0] as [number, number], // soft rule: top height / bottom height stays inside this range (limits odd size jumps, e.g. a huge shirt over tiny shorts); seam match gives way
   edgePad: 0.025,             // min distance to the left/right canvas edges (fraction of width)
-  edgePadY: 0.015,            // min distance to the top/bottom canvas edges (fraction of height)
+  edgePadY: 0.010,            // min distance to the top/bottom canvas edges (fraction of height)
   shoeOverlap: 0.50,          // the trouser/dress hem line runs through the middle of the shoes (45-55% of the shoe height overlap)
   foldedTopHalfH: 0.5,        // folded case: the pair sits in the upper part, at most this share of the canvas height
   foldedGap: 0.03,            // folded case: gap between them (fraction of canvas width)
   foldedMaxW: 0.45,           // folded case: each piece at most this share of the canvas width; both pieces have EQUAL VISUAL AREA (aspect ratios kept)
-  foldedShoeMaxH: 0.5,        // folded case: shoe height at most this x the (taller) height of the folded pair
+  foldedShoeMaxH: 0.65,       // folded case: shoe height at most this x the (taller) height of the folded pair (was 0.5: shoes +30%)
+  foldedAccMaxOfShoe: 1.0,    // folded case: an accessory's longest side is at most this x the shoes' longest side (accessories never look bigger than the shoes)
   shortAspectMin: 0.95,       // a bottom at least this wide (w/h) counts as a short item, like shorts and knee-length skirts
   shortShoeMaxH: 0.5,         // short bottoms: shoe height at most this x the bottom's height
   shortMaxCover: 0.25,        // short bottoms: shoes cover at most this share of the bottom's height
   foldedShoesCy: 0.76,        // folded case: vertical centre of the shoes (fraction of canvas height), lower half
   foldedFillMin: 0.90,        // geometry override for TOPS: a compact rectangular mask (area/bbox >= this) is a folded shirt even if the model said spread_front
   stackSlackShare: 1.0,       // spare vertical space is split: this share goes ABOVE the stack (0.5 = centred, 1 = stack sits on the bottom edge), so trousers sit lower
-  edgePadTop: 0.005,          // min distance of the stack to the TOP edge of the canvas (the header is outside the canvas); the bottom keeps edgePadY as the safe gap above the buttons
+  edgePadTop: 0.0,          // min distance of the stack to the TOP edge of the canvas (the header is outside the canvas); the bottom keeps edgePadY as the safe gap above the buttons
   stackedPresentations: ["spread_front"], // anything else (folded, other) goes to the side-by-side layout; null/unknown = stacked
 };
 
@@ -150,11 +151,12 @@ export const REAL_CM: Record<string, { small: number; medium: number; large: num
   belt: { small: 90, medium: 105, large: 115 }, gloves: { small: 22, medium: 25, large: 28 }, other_wearable: { small: 10, medium: 14, large: 20 },
   tie: { small: 55, medium: 60, large: 65 },   // folded / short view; a straight tie (tall, thin) uses tieStraightCm
 };
+export const SALE_MARKER_ENABLED = true;   // red hand-drawn outline around products on sale; ?sale=off / ?sale=on override it (testing)
 export const ACCESSORIES = {
   enabled: true,
   headMaxShrink: 0.18,        // head zone (hat above the top): if it would shrink the main stack by more than this, the item goes to the side column
   head:    { collarMul: 1.15, mulRange: [1.0, 1.3] as [number, number], fallbackWidthOfTop: 0.55, minW: 0.15, maxH: 0.17, overlap: 0.08 }, // head item width = collar width x collarMul (clamped); without a collar measurement at most fallbackWidthOfTop x the top's width
-  necklace: { widthOfTop: 0.50, neckline: 0.04, maxHOfTop: 0.3 }, // overlay on the top, centred on its axis, starting this share of the top's height below its upper edge
+  necklace: { widthOfTop: 0.50, neckline: 0.04, maxHOfTop: 0.3, minWidthOfTop: 0.12 }, // overlay on the top, centred on its axis, starting this share of the top's height below its upper edge
   belt:    { widthOfSeam: 1.0, maxH: 0.045 },                  // drawn across the seam, as wide as the waist/seam, no extra height
   sleeve:  { gap: 0.015, at: 0.35, maxW: 0.17 },               // watch / bracelet right of the top at sleeve height (at = share of the top's height from its upper edge), gap in W
   // size boost per type on top of the real-world size (long accessories were too small in the column); sunglasses 2x, caps +20% (the bill makes them look small), backpack +20%, hats / beanies unchanged, everything else +15%

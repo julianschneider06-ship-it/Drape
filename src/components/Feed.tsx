@@ -10,6 +10,7 @@ import { canvasSize } from "@/lib/layout/engine";
 import ProductSheet from "./ProductSheet";
 import OutfitButtons, { type Reaction } from "./OutfitButtons";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
+import { SaleInkDefs } from "@/lib/client/sale";
 import type { SlotName } from "@/lib/layout/engine";
 
 type Gender = "women" | "men";
@@ -192,6 +193,7 @@ export default function Feed() {
 
   return (
     <main className="h-dvh bg-white">
+      <SaleInkDefs />
       <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
         <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
         <div className="flex rounded-full bg-neutral-100 p-0.5 text-sm" role="tablist" aria-label="Section">

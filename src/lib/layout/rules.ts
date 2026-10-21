@@ -111,36 +111,14 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
   let rects: Partial<Record<SlotName, Rect>> = {};
   let fitF = 1;
   const placedExtra: Placed[] = [];
-  // sunglasses always go to the side column (no head zone, no inline)
-  const accs = (A.enabled ? (opts.accessories ?? []) : []).map((a): AccIn => (a.type === "sunglasses" ? { ...a, placement: "side", zone: "upper" } : a));
+  // sunglasses and head items (cap, hat, beanie) always go to the side column (no head zone, no inline)
+  const accs = (A.enabled ? (opts.accessories ?? []) : []).map((a): AccIn => (a.type === "sunglasses" ? { ...a, placement: "side", zone: "upper" } : HEAD_TYPES.has(a.type) ? { ...a, placement: "side", zone: "head" } : a));
   const accInfo = { headZone: false, headShrink: 0, placed: [] as { slot: string; type: string; kind: string; zone: string }[], demoted: [] as string[], dropped: [] as string[], shrunkTo: 1, limited: [] as string[] };
 
   if (!folded) {
     dbg.mode = full ? "full" : "stacked";
     let m = layMain(0);
-    // ---- head zone: hat above the top, as wide as the collar x ~1.15; only if the main stack does not shrink by more than headMaxShrink ----
-    const hat = accs.find((a) => a.placement === "head" && HEAD_TYPES.has(a.type));
-    const taken = new Set<string>();
-    const hooded = !!(full ?? top)?.hood;   // never a head item above a hood: it goes to the side column
-    if (hat && hooded) accInfo.demoted.push(`${hat.type}:hooded-top`);
-    if (hat && !hooded) {
-      const mainPc = (full ?? top)!;
-      // the hat's size depends on the top's width, which depends on the reserve: iterate (reserve -> stack -> size -> reserve)
-      let reserve = 0, m1 = m, hs = headSize(hat, (m1.rects.top ?? m1.rects.full)!.w, mainPc.collar, W, H);
-      for (let it = 0; it < 3; it++) {
-        hs = headSize(hat, (m1.rects.top ?? m1.rects.full)!.w, mainPc.collar, W, H);
-        reserve = hs.h * (1 - A.head.overlap);
-        m1 = layMain(reserve);
-      }
-      const shrink = 1 - m1.fit / Math.max(1e-9, m.fit);
-      if (shrink <= A.headMaxShrink) {
-        accInfo.headZone = true; accInfo.headShrink = shrink; m = m1;
-        const t0 = (m.rects.top ?? m.rects.full)!;
-        const rect = { x: axis - hs.w / 2, y: t0.y - hs.h * (1 - A.head.overlap), w: hs.w, h: hs.h };
-        placedExtra.push({ slot: hat.slot, rect, rot: 0, z: A.z.inline }); taken.add(hat.slot);
-        accInfo.placed.push({ slot: hat.slot, type: hat.type, kind: "head", zone: "head" });
-      } else accInfo.demoted.push(`${hat.type}:head-zone-too-costly(${(shrink * 100).toFixed(0)}%)`);
-    }
+    const taken = new Set<string>();   // (no head zone any more: caps, hats and beanies go to the side column like everything else)
     rects = m.rects; fitF = m.fit; dbg.binding = m.binding; dbg.ratio = m.ratio; dbg.seamMatched = m.seamMatched; dbg.hemLine = m.hemLine; dbg.waistLine = m.waistLine;
 
     // ---- inline overlays: necklace on the top (front_flat), belt across the seam (straight strip, front_flat, stacked only) ----
@@ -153,6 +131,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
         let w = A.necklace.widthOfTop * topRect.w, h = w / ar;
         const hMax = A.necklace.maxHOfTop * topRect.h;
         if (h > hMax) { h = hMax; w = h * ar; }
+        if (w < A.necklace.minWidthOfTop * topRect.w) { accInfo.demoted.push(`${a.type}:tiny-pendant->column`); continue; }   // a tiny pendant would be invisible on the top
         const rect = { x: axis - w / 2, y: topRect.y + A.necklace.neckline * topRect.h, w, h };
         placedExtra.push({ slot: a.slot, rect, rot: 0, z: A.z.inline }); taken.add(a.slot);
         accInfo.placed.push({ slot: a.slot, type: a.type, kind: "inline", zone: "neck" });
@@ -206,25 +185,10 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     const pairH = Math.max(ht, hb);
     if (sh > pairH * R.foldedShoeMaxH) { sh = pairH * R.foldedShoeMaxH; sw = sh * sa; dbg.binding.push("folded-shoe-cap"); }
     rects.shoes = { x: centre - sw / 2, y: R.foldedShoesCy * H - sh / 2, w: sw, h: sh };
-    // folded outfits: a head item sits above the folded top if there is room (the pair may move down, never into the shoes); everything else goes to the side column
-    const takenF = new Set<string>();
-    const hatF = accs.find((a) => a.placement === "head" && HEAD_TYPES.has(a.type));
-    if (hatF && t.hood) accInfo.demoted.push(`${hatF.type}:hooded-top`);
-    else if (hatF) {
-      const hs = headSize(hatF, rects.top.w, t.collar, W, H);
-      const need = hs.h * (1 - A.head.overlap);
-      const pairTop = Math.min(rects.top.y, rects.bottom.y), pairBottom = Math.max(rects.top.y + rects.top.h, rects.bottom.y + rects.bottom.h);
-      const room = rects.shoes.y - 0.02 * H - pairBottom;
-      const shift = Math.max(0, padTop + need - pairTop);
-      if (shift <= room) {
-        rects.top.y += shift; rects.bottom.y += shift;
-        const rect = { x: Math.max(padX, rects.top.x + rects.top.w / 2 - hs.w / 2), y: rects.top.y - need, w: hs.w, h: hs.h };
-        placedExtra.push({ slot: hatF.slot, rect, rot: 0, z: A.z.inline }); takenF.add(hatF.slot);
-        accInfo.headZone = true; accInfo.placed.push({ slot: hatF.slot, type: hatF.type, kind: "head", zone: "head" });
-      } else accInfo.demoted.push(`${hatF.type}:head->column(folded-no-room)`);
-    }
-    for (const a of accs) if (!takenF.has(a.slot) && a.placement !== "side" && !(a === hatF)) accInfo.demoted.push(`${a.type}:${a.placement}->column(folded)`);
-    placeSide(accs.filter((a) => !takenF.has(a.slot)), rects, placedExtra, accInfo, { W, H, padX, padY, ppc: rects.top.w / REF_CM.topW, topRect: rects.top, bottomRect: rects.bottom, aspectOf: (a) => (a.aspect && a.aspect > 0.05 ? a.aspect : 1) });
+    // folded outfits: everything that is not a watch/bracelet goes to the side column; accessories never look bigger than the shoes (real-world proportions)
+    for (const a of accs) if (a.placement === "inline") accInfo.demoted.push(`${a.type}:inline->column(folded)`);
+    const maxLongest = Math.max(sw, sh) * R.foldedAccMaxOfShoe;
+    placeSide(accs, rects, placedExtra, accInfo, { W, H, padX, padY, maxLongest, ppc: rects.top.w / REF_CM.topW, topRect: rects.top, bottomRect: rects.bottom, aspectOf: (a) => (a.aspect && a.aspect > 0.05 ? a.aspect : 1) });
   }
   if (accs.length) dbg.acc = accInfo;
 
@@ -248,17 +212,6 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-/** Head item: as wide as the collar x collarMul (1.0-1.3), at most maxH tall; without a collar measurement at most fallbackWidthOfTop x the top's width. */
-function headSize(a: AccIn, topW: number, collar: number | null | undefined, W: number, H: number) {
-  const ar = a.aspect && a.aspect > 0.05 ? a.aspect : 1.4;
-  const mul = Math.min(A.head.mulRange[1], Math.max(A.head.mulRange[0], A.head.collarMul));
-  let w = collar ? collar * topW * mul : A.head.fallbackWidthOfTop * topW;
-  if (a.type === "cap") w *= A.boost.cap;   // the bill makes caps look small: the visible crown needs ~20% more
-  let h = w / ar;
-  if (w < A.head.minW * W) { w = A.head.minW * W; h = w / ar; }   // narrow necks (halter, straps) must not make the hat tiny
-  if (h > A.head.maxH * H) { h = A.head.maxH * H; w = h * ar; }
-  return { w: Math.min(w, 0.6 * W), h };
-}
 /** Real-world size -> pixels with the top's pixels-per-cm. Longest side = REAL_CM; straight ties are drawn about as long as the top is tall; minimum visible size per type. */
 function sideSize(a: AccIn, ppc: number, topH: number, W: number, H: number, ar: number) {
   const row = REAL_CM[a.type] ?? REAL_CM.other_wearable;
@@ -282,7 +235,7 @@ const collides = (r: Rect, others: Rect[], pad = 0) => others.some((o) => overla
 /** Side column: items sit right-aligned at the canvas edge in vertical zones; collisions are resolved by moving up/down;
  *  if something does not fit, all side items shrink (down to minScale), then the lowest-priority item is dropped. Main pieces are never touched. */
 function placeSide(items: AccIn[], main: Partial<Record<SlotName, Rect>>, out: Placed[], info: { placed: { slot: string; type: string; kind: string; zone: string }[]; dropped: string[]; shrunkTo: number; limited: string[] },
-  c: { W: number; H: number; padX: number; padY: number; ppc: number; topRect?: Rect; bottomRect?: Rect; aspectOf: (a: AccIn) => number }) {
+  c: { W: number; H: number; padX: number; padY: number; maxLongest?: number; ppc: number; topRect?: Rect; bottomRect?: Rect; aspectOf: (a: AccIn) => number }) {
   if (!items.length) return;
   const fixed = [...Object.values(main), ...out.map((p) => p.rect)] as Rect[];
   const zoneCy = (a: AccIn) => {
@@ -298,7 +251,8 @@ function placeSide(items: AccIn[], main: Partial<Record<SlotName, Rect>>, out: P
     fitted.clear();
     const order = [...list].sort((x, y) => (A.side.priority[y.type] ?? 1) - (A.side.priority[x.type] ?? 1));
     for (const a of order) {
-      const sz = sideSize(a, c.ppc, c.topRect?.h ?? 0.4 * c.H, c.W, c.H, c.aspectOf(a));
+      let sz = sideSize(a, c.ppc, c.topRect?.h ?? 0.4 * c.H, c.W, c.H, c.aspectOf(a));
+      if (c.maxLongest && Math.max(sz.w, sz.h) > c.maxLongest) { const k = c.maxLongest / Math.max(sz.w, sz.h); sz = { w: sz.w * k, h: sz.h * k }; info.limited.push(`${a.type}(shoe-cap)`); }
       const w = sz.w * scale, h = sz.h * scale;
       const cy0 = zoneCy(a);
       let ok: Rect | null = null;

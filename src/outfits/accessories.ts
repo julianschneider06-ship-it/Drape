@@ -107,7 +107,7 @@ export function scoreAcc(a: Acc, o: OutfitCtx): number {
 /** Preferred placement kind and zone (the layout may demote inline -> side when the image or the space does not allow it). */
 export function placementFor(a: Acc, o?: OutfitCtx): { placement: Placement; zone: string } {
   switch (a.type) {
-    case "cap": case "hat": case "beanie": return { placement: "head", zone: "head" };
+    case "cap": case "hat": case "beanie": return { placement: "side", zone: "head" };   // head items live in the right column, never above the top
     case "sunglasses": return { placement: "side", zone: "upper" };   // always the right column
     case "necklace": return a.frontFlat && !o?.outerTop && !o?.full ? { placement: "inline", zone: "neck" } : { placement: "side", zone: "mid" };
     case "belt": return a.frontFlat && a.beltShape === "straight_strip" ? { placement: "inline", zone: "seam" } : { placement: "side", zone: "hip" };
