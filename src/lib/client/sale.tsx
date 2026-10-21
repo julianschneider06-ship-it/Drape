@@ -38,3 +38,24 @@ export function SaleInkDefs() {
     </svg>
   );
 }
+
+/** Outline filter for a PAIR: same ink as above, but the gap between the two shapes is closed first (dilate, then erode by the same radius), so one common outline wraps both. */
+export function SaleJoinFilter({ id, size, close }: { id: string; size: "s" | "m" | "l"; close: number }) {
+  const r = RING[size];
+  return (
+    <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
+      <filter id={id} x="-15%" y="-15%" width="130%" height="130%" colorInterpolationFilters="sRGB">
+        <feMorphology in="SourceAlpha" operator="dilate" radius={close} result="d0" />
+        <feMorphology in="d0" operator="erode" radius={close} result="closed" />
+        <feMorphology in="closed" operator="dilate" radius={r.grow} result="grown" />
+        <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="7" result="noise" />
+        <feDisplacementMap in="grown" in2="noise" scale={r.wobble} xChannelSelector="R" yChannelSelector="G" result="wobbly" />
+        <feMorphology in="closed" operator="dilate" radius={r.core} result="core" />
+        <feComposite in="wobbly" in2="core" operator="out" result="ring" />
+        <feFlood floodColor="#e0221b" result="red" />
+        <feComposite in="red" in2="ring" operator="in" result="ink" />
+        <feMerge><feMergeNode in="ink" /><feMergeNode in="SourceGraphic" /></feMerge>
+      </filter>
+    </svg>
+  );
+}
