@@ -133,7 +133,8 @@ export const RULES = {
   shortMaxCover: 0.25,        // short bottoms: shoes cover at most this share of the bottom's height
   foldedShoesCy: 0.76,        // folded case: vertical centre of the shoes (fraction of canvas height), lower half
   foldedFillMin: 0.90,        // geometry override for TOPS: a compact rectangular mask (area/bbox >= this) is a folded shirt even if the model said spread_front
-  stackSlackShare: 0.75,      // spare vertical space is split: this share goes ABOVE the stack (0.5 = centred), so trousers sit a bit lower
+  stackSlackShare: 1.0,       // spare vertical space is split: this share goes ABOVE the stack (0.5 = centred, 1 = stack sits on the bottom edge), so trousers sit lower
+  edgePadTop: 0.005,          // min distance of the stack to the TOP edge of the canvas (the header is outside the canvas); the bottom keeps edgePadY as the safe gap above the buttons
   stackedPresentations: ["spread_front"], // anything else (folded, other) goes to the side-by-side layout; null/unknown = stacked
 };
 
@@ -156,6 +157,8 @@ export const ACCESSORIES = {
   necklace: { widthOfTop: 0.50, neckline: 0.04, maxHOfTop: 0.3 }, // overlay on the top, centred on its axis, starting this share of the top's height below its upper edge
   belt:    { widthOfSeam: 1.0, maxH: 0.045 },                  // drawn across the seam, as wide as the waist/seam, no extra height
   sleeve:  { gap: 0.015, at: 0.35, maxW: 0.17 },               // watch / bracelet right of the top at sleeve height (at = share of the top's height from its upper edge), gap in W
+  // size boost per type on top of the real-world size (long accessories were too small in the column); sunglasses 2x, caps +20% (the bill makes them look small), backpack +20%, hats / beanies unchanged, everything else +15%
+  boost: { sunglasses: 2.0, cap: 1.2, backpack: 1.2, hat: 1.0, beanie: 1.0, default: 1.15 } as Record<string, number>,
   tieStraightCm: 150, tieAspectStraight: 3, tieMaxOfTopH: 0.95, // a straight tie is drawn at most this share of the top's height long
   beltCoiledCm: 40,           // belts that are not a straight strip are shown coiled
   minLongest: { sunglasses: 0.11, ring: 0.045, earrings: 0.05, watch: 0.08, bracelet: 0.07, necklace: 0.08, default: 0.08 } as Record<string, number>, // minimum visible size: longest side as share of W

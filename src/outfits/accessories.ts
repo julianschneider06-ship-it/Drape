@@ -21,6 +21,7 @@ export const ACC = {
   tailoredFormality: 0.68,              // outfit formality (mean) at or above this = tailored / formal: no hat, no backpack
   quietMaxN: 2,                         // soft rule: formal / tailored or quiet minimal outfits (no accent colour, no pattern, no statement piece, formality >= quietFormality) take at most this many
   quietFormality: 0.5,
+  accentPenalty: Number(process.env.DRAPE_ACC_ACCENT_PENALTY ?? 0.5), // score x this for a second accessory with a strong (non-neutral) colour in the same outfit (red scarf + red belt)
   statementMin: 0.7,                    // a "statement piece"
   reusePenalty: 0.28,                   // score x 1/(1 + penalty * uses so far)
   recentWindow: 14,                     // same accessory or same store within the last N outfits of the feed order = penalised
@@ -140,6 +141,8 @@ export function chooseAccessories(o: OutfitCtx, cands: Acc[], usage: Usage): Pic
   for (const { a, s } of scored) {
     if (picks.length >= o.maxN) break;
     if (s < ACC.minScore[picks.length]) break;
+    const second = a.accent && picks.some((p) => p.acc.accent);
+    if (second && s * ACC.accentPenalty < ACC.minScore[picks.length]) continue;   // two strong accent colours in one outfit are penalised
     if (types.has(a.type)) continue;
     if (HEAD.has(a.type) && head) continue;
     if (BAG.has(a.type) && bag) continue;

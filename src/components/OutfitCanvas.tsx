@@ -28,7 +28,7 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
     const pieces: Partial<Record<SlotName, PieceIn>> = {};
     for (const [slot, c] of Object.entries(cards) as [SlotName, FeedCard][]) {
       const g = cropGeometry(c);
-      pieces[slot] = { slot, cls: pieceClass(slot, c), aspect: g ? g.cw / g.ch : null, presentation: c.presentation ?? null, hem: c.hem ?? null, waist: c.waist ?? null, collar: c.collar ?? null, fill: c.fill ?? null };
+      pieces[slot] = { slot, cls: pieceClass(slot, c), aspect: g ? g.cw / g.ch : null, presentation: c.presentation ?? null, hem: c.hem ?? null, waist: c.waist ?? null, collar: c.collar ?? null, hood: c.hood ?? null, fill: c.fill ?? null };
     }
     const seed = hash32(String(outfit.id));
     const accessories: AccIn[] = accs.map(({ slot, acc, card }) => { const g = cropGeometry(card); return { slot, type: acc.type, size: acc.size, aspect: g ? g.cw / g.ch : null, placement: acc.placement, zone: acc.zone ?? "mid", frontFlat: !!acc.front_flat, beltShape: acc.belt_shape }; });
@@ -42,7 +42,7 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
   const { w: W, h: H } = canvas;
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
   return (
-    <div className="relative" style={{ width: W, height: H }} data-layout={layout.template} data-cuts={layout.pieces.map((p) => ((cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)?.cut ? "1" : "0")).join("")} data-stack={(() => { const b = layout.pieces.find((p) => p.slot === "bottom" || p.slot === "full"), t = layout.pieces.find((p) => p.slot === "top" || p.slot === "full"), sh = layout.pieces.find((p) => p.slot === "shoes"); return b && t && sh ? `${(t.rect.y / H).toFixed(3)}:${(b.rect.y / H).toFixed(3)}:${((sh.rect.y + sh.rect.h) / H).toFixed(3)}` : ""; })()} data-head={layout.debug?.acc ? `${layout.debug.acc.headZone ? 1 : 0}:${layout.debug.acc.headShrink.toFixed(3)}:${layout.debug.acc.dropped.length}:${layout.debug.acc.demoted.length}` : ""} data-acc={layout.debug?.acc ? layout.debug.acc.placed.map((a) => `${a.type}:${a.kind}`).join(",") : ""}>
+    <div className="relative" style={{ width: W, height: H }} data-layout={layout.template} data-cuts={layout.pieces.map((p) => ((cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)?.cut ? "1" : "0")).join("")} data-stack={(() => { const b = layout.pieces.find((p) => p.slot === "bottom" || p.slot === "full"), t = layout.pieces.find((p) => p.slot === "top" || p.slot === "full"), sh = layout.pieces.find((p) => p.slot === "shoes"); return b && t && sh ? `${(t.rect.y / H).toFixed(3)}:${(b.rect.y / H).toFixed(3)}:${((sh.rect.y + sh.rect.h) / H).toFixed(3)}` : ""; })()} data-dem={layout.debug?.acc?.demoted.join("|") ?? ""} data-lim={layout.debug?.acc?.limited?.join(",") ?? ""} data-head={layout.debug?.acc ? `${layout.debug.acc.headZone ? 1 : 0}:${layout.debug.acc.headShrink.toFixed(3)}:${layout.debug.acc.dropped.length}:${layout.debug.acc.demoted.length}` : ""} data-acc={layout.debug?.acc ? layout.debug.acc.placed.map((a) => `${a.type}:${a.kind}`).join(",") : ""}>
       {debug && <>
         <div className="absolute border border-dashed border-sky-400 bg-sky-50/60" style={{ left: pct(layout.marginRect.x, W), top: 0, width: pct(layout.marginRect.w, W), height: "100%" }} />
         <span className="absolute left-1 top-0 z-50 rounded bg-black px-1 text-[10px] text-white">{layout.template}{layout.debug ? ` ${layout.debug.binding.join("+")}` : ""}</span>

@@ -11,7 +11,7 @@ export interface PieceIn {
   slot: SlotName; cls: GarmentClass; aspect: number | null; // aspect = content width / height
   presentation?: string | null;                              // spread_front | folded | other (null = unknown, treated as spread)
   fill?: number | null;                                      // mask area / bbox area (geometry hint: >= RULES.foldedFillMin on a top = folded)
-  hem?: number | null; waist?: number | null; collar?: number | null; // collar = neck width ratio (head items); seam widths as ratios of the piece's bbox width (tops: hem, bottoms: waist)
+  hem?: number | null; waist?: number | null; collar?: number | null; hood?: boolean | null; // collar = neck width ratio (head items); seam widths as ratios of the piece's bbox width (tops: hem, bottoms: waist)
 }
 /** An accessory to place: what it is, how it looks (aspect of its cutout) and where the pool prefers it. */
 export interface AccIn { slot: AccSlot; type: string; size: string | null; aspect: number | null; placement: "head" | "inline" | "side"; zone: string; frontFlat: boolean; beltShape: string | null }
@@ -21,7 +21,7 @@ export interface LayoutDebug {
   mode: "stacked" | "folded" | "full"; axisX: number; centreX: number;
   hemLine?: { y: number; x0: number; x1: number }; waistLine?: { y: number; x0: number; x1: number };
   seamMatched?: boolean; ratio?: number; binding: string[];
-  acc?: { headZone: boolean; headShrink: number; placed: { slot: string; type: string; kind: string; zone: string }[]; demoted: string[]; dropped: string[]; shrunkTo: number }; // which constraints limited the size (class-cap, axis-width, height-fit, ...)
+  acc?: { limited?: string[]; headZone: boolean; headShrink: number; placed: { slot: string; type: string; kind: string; zone: string }[]; demoted: string[]; dropped: string[]; shrunkTo: number }; // which constraints limited the size (class-cap, axis-width, height-fit, ...)
 }
 export interface Layout {
   fit: number; template: string; margin: "left" | "right"; pieces: Placed[]; frame: Rect; marginRect: Rect; canvas: { w: number; h: number };

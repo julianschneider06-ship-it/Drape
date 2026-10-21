@@ -6,6 +6,7 @@ import { toPiece, type Piece, type RawPiece } from "../src/outfits/score";
 import { chooseAccessories, outfitCtx, toAcc, type Acc, type RawAcc, type Usage } from "../src/outfits/accessories";
 
 const args = process.argv.slice(2);
+let twoAccent = 0;
 const DRY = args.includes("--dry");
 const outIdx = args.indexOf("--out");
 
@@ -40,6 +41,7 @@ async function paged<T>(fn: string, limit: number, extra: Record<string, unknown
       if (ps.some((p) => !p)) { stats[gender]["?"] = (stats[gender]["?"] ?? 0) + 1; continue; }
       const ctx = outfitCtx(gender, ps as Piece[], [o.top, o.bottom, o.shoes].map((id) => names.get(id) ?? ""));
       const picks = chooseAccessories(ctx, cands, usage);
+      if (picks.filter((p) => p.acc.accent).length >= 2) twoAccent++;
       stats[gender][String(picks.length)] = (stats[gender][String(picks.length)] ?? 0) + 1;
       picks.forEach((p, i) => {
         rows.push({ outfit_id: o.id, slot_no: i + 1, product_id: p.acc.id, accessory_type: p.acc.type, placement: p.placement, zone: p.zone, score: +p.score.toFixed(3) });
@@ -50,7 +52,7 @@ async function paged<T>(fn: string, limit: number, extra: Record<string, unknown
       if (usage.recentIds.length > 14) { usage.recentIds.shift(); usage.recentStores.shift(); }
     }
   }
-  console.log("accessories per outfit", JSON.stringify(stats)); console.log("placements", JSON.stringify(placements)); console.log("by type", JSON.stringify(byType));
+  console.log("accessories per outfit", JSON.stringify(stats)); console.log("placements", JSON.stringify(placements)); console.log("by type", JSON.stringify(byType)); console.log("outfits with two strong accent colours in the accessories", twoAccent);
   if (outIdx >= 0) writeFileSync(args[outIdx + 1], JSON.stringify(rows));
   if (!DRY) {
     for (let i = 0; i < rows.length; i += 500) await rpc("outfit_acc_upsert", { p_run: run, p_items: rows.slice(i, i + 500) });

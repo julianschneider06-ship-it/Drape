@@ -16,13 +16,13 @@ interface Main { rects: Partial<Record<SlotName, Rect>>; fit: number; binding: s
 export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partial<Record<SlotName, PieceIn>>; seed: number; canvas: { w: number; h: number }; accessories?: AccIn[] }): Layout {
   const { w: W, h: H } = opts.canvas;
   const P = opts.pieces, R = RULES;
-  const padX = R.edgePad * W, padY = R.edgePadY * H;
+  const padX = R.edgePad * W, padY = R.edgePadY * H, padTop = R.edgePadTop * H;
   const frameRight = W - MARGIN_ZONE * W;                      // the right margin zone stays free of main pieces
   const axis = R.axisX * W, centre = R.centreX * W;
   const aspect = (p: PieceIn) => (p.aspect && p.aspect > 0.05 ? p.aspect : DEFAULT_ASPECT[p.cls]);
   const sc = (p: PieceIn) => (p.slot === "shoes" ? SCALE_SHOES : SCALE_TOP_BOTTOM);
   const capW = (p: PieceIn) => SIZE[p.cls].maxW * W * sc(p), capH = (p: PieceIn) => SIZE[p.cls].maxH * H * sc(p);
-  const availH = H - 2 * padY;
+  const availH = H - padTop - padY;
   const shoe = P.shoes!, sa = aspect(shoe);
   const ov = R.shoeOverlap;
   const shoeMaxW = 2 * Math.min(centre - padX, frameRight - padX - centre);   // shoes stay left of the margin zone and inside the canvas
@@ -60,7 +60,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
       const f = Math.min(1, aH / T);
       if (f < 1) binding.push("height-fit");
       w *= f; h *= f; sw *= f; sh *= f; ovPx *= f;
-      const y0 = padY + reserve + (aH - (h + sh - ovPx)) * R.stackSlackShare;
+      const y0 = padTop + reserve + (aH - (h + sh - ovPx)) * R.stackSlackShare;
       rects.full = { x: axis - w / 2, y: y0, w, h };
       rects.shoes = { x: centre - sw / 2, y: y0 + h - ovPx, w: sw, h: sh };
       return { rects, fit: f, binding };
@@ -96,7 +96,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     if (f < 1) binding.push("height-fit");
     wt *= f; wb *= f; ht *= f; hb *= f; sw *= f; sh *= f; ovPx *= f;
     const gapPx = gap * f;
-    const y0 = padY + reserve + (aH - (ht + gapPx + hb + sh - ovPx)) * R.stackSlackShare;
+    const y0 = padTop + reserve + (aH - (ht + gapPx + hb + sh - ovPx)) * R.stackSlackShare;
     rects.top = { x: axis - wt / 2, y: y0, w: wt, h: ht };
     rects.bottom = { x: axis - wb / 2, y: y0 + ht + gapPx, w: wb, h: hb };
     rects.shoes = { x: centre - sw / 2, y: rects.bottom.y + hb - ovPx, w: sw, h: sh };
@@ -113,7 +113,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
   const placedExtra: Placed[] = [];
   // sunglasses always go to the side column (no head zone, no inline)
   const accs = (A.enabled ? (opts.accessories ?? []) : []).map((a): AccIn => (a.type === "sunglasses" ? { ...a, placement: "side", zone: "upper" } : a));
-  const accInfo = { headZone: false, headShrink: 0, placed: [] as { slot: string; type: string; kind: string; zone: string }[], demoted: [] as string[], dropped: [] as string[], shrunkTo: 1 };
+  const accInfo = { headZone: false, headShrink: 0, placed: [] as { slot: string; type: string; kind: string; zone: string }[], demoted: [] as string[], dropped: [] as string[], shrunkTo: 1, limited: [] as string[] };
 
   if (!folded) {
     dbg.mode = full ? "full" : "stacked";
@@ -121,7 +121,9 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     // ---- head zone: hat above the top, as wide as the collar x ~1.15; only if the main stack does not shrink by more than headMaxShrink ----
     const hat = accs.find((a) => a.placement === "head" && HEAD_TYPES.has(a.type));
     const taken = new Set<string>();
-    if (hat) {
+    const hooded = !!(full ?? top)?.hood;   // never a head item above a hood: it goes to the side column
+    if (hat && hooded) accInfo.demoted.push(`${hat.type}:hooded-top`);
+    if (hat && !hooded) {
       const mainPc = (full ?? top)!;
       // the hat's size depends on the top's width, which depends on the reserve: iterate (reserve -> stack -> size -> reserve)
       let reserve = 0, m1 = m, hs = headSize(hat, (m1.rects.top ?? m1.rects.full)!.w, mainPc.collar, W, H);
@@ -223,7 +225,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
   const placed: Placed[] = (Object.entries(rects) as [SlotName, Rect][]).map(([slot, rect]) => ({ slot, rect, rot: slot === "shoes" ? rotShoe : 0, z: z[slot] ?? 2 }));
   placed.push(...placedExtra);
   placed.sort((a, b) => a.z - b.z);
-  const frame: Rect = { x: 0, y: padY, w: frameRight, h: availH };
+  const frame: Rect = { x: 0, y: padTop, w: frameRight, h: availH };
   return { fit: fitF, template: dbg.mode === "folded" ? "R-folded" : dbg.mode === "full" ? "R-full" : "R-stacked", margin: "right", pieces: placed, frame,
     marginRect: { x: frameRight, y: 0, w: W - frameRight, h: H }, canvas: opts.canvas, debug: dbg };
 }
@@ -234,7 +236,9 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
 function headSize(a: AccIn, topW: number, collar: number | null | undefined, W: number, H: number) {
   const ar = a.aspect && a.aspect > 0.05 ? a.aspect : 1.4;
   const mul = Math.min(A.head.mulRange[1], Math.max(A.head.mulRange[0], A.head.collarMul));
-  let w = collar ? collar * topW * mul : A.head.fallbackWidthOfTop * topW, h = w / ar;
+  let w = collar ? collar * topW * mul : A.head.fallbackWidthOfTop * topW;
+  if (a.type === "cap") w *= A.boost.cap;   // the bill makes caps look small: the visible crown needs ~20% more
+  let h = w / ar;
   if (w < A.head.minW * W) { w = A.head.minW * W; h = w / ar; }   // narrow necks (halter, straps) must not make the hat tiny
   if (h > A.head.maxH * H) { h = A.head.maxH * H; w = h * ar; }
   return { w: Math.min(w, 0.6 * W), h };
@@ -248,6 +252,7 @@ function sideSize(a: AccIn, ppc: number, topH: number, W: number, H: number, ar:
   if (a.type === "tie" && (ar <= 1 / A.tieAspectStraight)) L = Math.min(A.tieStraightCm * ppc, A.tieMaxOfTopH * topH);   // tall, thin = straight tie
   else if (a.type === "belt" && a.beltShape !== "straight_strip") cm = A.beltCoiledCm;
   if (!L) L = cm * ppc;
+  L *= A.boost[a.type] ?? A.boost.default;
   L = Math.max(L, (A.minLongest[a.type] ?? A.minLongest.default) * W);
   let w = ar >= 1 ? L : L * ar, h = ar >= 1 ? L / ar : L;
   const maxW = A.side.maxColW * W;
@@ -260,7 +265,7 @@ const collides = (r: Rect, others: Rect[], pad = 0) => others.some((o) => overla
 
 /** Side column: items sit right-aligned at the canvas edge in vertical zones; collisions are resolved by moving up/down;
  *  if something does not fit, all side items shrink (down to minScale), then the lowest-priority item is dropped. Main pieces are never touched. */
-function placeSide(items: AccIn[], main: Partial<Record<SlotName, Rect>>, out: Placed[], info: { placed: { slot: string; type: string; kind: string; zone: string }[]; dropped: string[]; shrunkTo: number },
+function placeSide(items: AccIn[], main: Partial<Record<SlotName, Rect>>, out: Placed[], info: { placed: { slot: string; type: string; kind: string; zone: string }[]; dropped: string[]; shrunkTo: number; limited: string[] },
   c: { W: number; H: number; padX: number; padY: number; ppc: number; topRect?: Rect; bottomRect?: Rect; aspectOf: (a: AccIn) => number }) {
   if (!items.length) return;
   const fixed = [...Object.values(main), ...out.map((p) => p.rect)] as Rect[];
@@ -271,8 +276,10 @@ function placeSide(items: AccIn[], main: Partial<Record<SlotName, Rect>>, out: P
     return (A.side.zoneY[a.zone] ?? A.side.zoneY.mid) * c.H;
   };
   const gap = A.side.gapX * c.W;
+  const fitted = new Set<string>();   // types that had to be shrunk to the free column width
   const tryPlace = (list: AccIn[], scale: number) => {
     const placedHere: { slot: string; rect: Rect; a: AccIn }[] = [];
+    fitted.clear();
     const order = [...list].sort((x, y) => (A.side.priority[y.type] ?? 1) - (A.side.priority[x.type] ?? 1));
     for (const a of order) {
       const sz = sideSize(a, c.ppc, c.topRect?.h ?? 0.4 * c.H, c.W, c.H, c.aspectOf(a));
@@ -294,7 +301,7 @@ function placeSide(items: AccIn[], main: Partial<Record<SlotName, Rect>>, out: P
           // not enough free width at this height: shrink the item to the free width if that is still big enough (>= minScale of its size and its minimum visible size)
           const fw = c.W - c.padX - left, f = fw / w;
           const minL = (A.minLongest[a.type] ?? A.minLongest.default) * c.W;
-          if (f >= A.side.minScale && Math.max(fw, h * f) >= minL) ok = { x: left, y: y + (h - h * f) / 2, w: fw, h: h * f };
+          if (f >= A.side.minScale && Math.max(fw, h * f) >= minL) { ok = { x: left, y: y + (h - h * f) / 2, w: fw, h: h * f }; fitted.add(a.type); }
         }
       }
       if (!ok) return null;
@@ -308,6 +315,7 @@ function placeSide(items: AccIn[], main: Partial<Record<SlotName, Rect>>, out: P
     for (const s of [1, 0.85, A.side.minScale]) { res = tryPlace(list, s); if (res) { scale = s; break; } }
     if (res) {
       info.shrunkTo = Math.min(info.shrunkTo, scale);
+      for (const p of res) if (scale < 1 || fitted.has(p.a.type)) info.limited.push(p.a.type);
       for (const p of res) { out.push({ slot: p.slot as SlotName, rect: p.rect, rot: 0, z: A.z.side }); info.placed.push({ slot: p.slot, type: p.a.type, kind: "side", zone: p.a.zone }); }
       return;
     }
