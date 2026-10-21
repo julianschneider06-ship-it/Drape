@@ -147,7 +147,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     for (const a of accs) {
       if (taken.has(a.slot) || a.placement !== "inline") continue;
       const ar = a.aspect && a.aspect > 0.05 ? a.aspect : 1;
-      if (a.zone === "neck" && a.frontFlat) {
+      if (a.zone === "neck" && a.frontFlat && !full) {   // no necklace overlay on dresses / full-body pieces (it goes to the side column)
         let w = A.necklace.widthOfTop * topRect.w, h = w / ar;
         const hMax = A.necklace.maxHOfTop * topRect.h;
         if (h > hMax) { h = hMax; w = h * ar; }

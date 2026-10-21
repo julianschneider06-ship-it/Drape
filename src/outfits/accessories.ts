@@ -108,7 +108,7 @@ export function placementFor(a: Acc, o?: OutfitCtx): { placement: Placement; zon
   switch (a.type) {
     case "cap": case "hat": case "beanie": return { placement: "head", zone: "head" };
     case "sunglasses": return { placement: "side", zone: "upper" };   // always the right column
-    case "necklace": return a.frontFlat && !o?.outerTop ? { placement: "inline", zone: "neck" } : { placement: "side", zone: "mid" };
+    case "necklace": return a.frontFlat && !o?.outerTop && !o?.full ? { placement: "inline", zone: "neck" } : { placement: "side", zone: "mid" };
     case "belt": return a.frontFlat && a.beltShape === "straight_strip" ? { placement: "inline", zone: "seam" } : { placement: "side", zone: "hip" };
     case "watch": case "bracelet": return { placement: "side", zone: "sleeve" };
     case "scarf": case "gloves": case "tie": return { placement: "side", zone: "upper" };
