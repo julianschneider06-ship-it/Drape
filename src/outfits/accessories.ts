@@ -25,7 +25,7 @@ export const ACC = {
   recentPenalty: 0.55,
   weights: { style: 0.4, colour: 0.2, formal: 0.2, season: 0.1, type: 0.1 },
   // how much each type is wanted as one of the (prefer 2) accessories; head items and bags are the most characteristic
-  typeBase: { cap: 0.95, hat: 0.95, beanie: 0.95, bag: 1, backpack: 0.8, sunglasses: 0.95, watch: 0.9, necklace: 0.9, bracelet: 0.85, earrings: 0.8, ring: 0.75,
+  typeBase: { cap: 0.9, hat: 0.95, beanie: 0.95, bag: 1, backpack: 0.8, sunglasses: 0.85, watch: 0.9, necklace: 0.9, bracelet: 0.85, earrings: 0.8, ring: 0.75,
               belt: 0.85, scarf: 0.9, tie: 0.85, gloves: 0.8, other_wearable: 0.6 } as Record<string, number>,
 };
 const NEUTRALS = new Set(["black", "white", "grey", "beige", "cream", "navy", "brown", "silver", "gold"]);
@@ -51,7 +51,7 @@ export function toAcc(r: RawAcc): Acc {
 
 export interface OutfitCtx {
   gender: "women" | "men"; vec: Float32Array; mask: number; formality: number; accents: Set<string>; statements: number;
-  warm: boolean; cold: boolean; tailored: boolean; hasBottom: boolean; full: boolean;
+  warm: boolean; cold: boolean; tailored: boolean; hasBottom: boolean; full: boolean; outerTop: boolean;
 }
 
 /** Summary of an outfit (its 2-3 main pieces) for the accessory rules. */
@@ -71,7 +71,7 @@ export function outfitCtx(gender: "women" | "men", pieces: Piece[], names: strin
   const cold = pieces.some((x) => x.cold) || winterOnly || (mask & 7) === 0 && (mask & 8) !== 0;
   const tailored = formality >= ACC.tailoredFormality || names.some((n) => /\b(blazer|suit|tuxedo|tailored|dress shirt|waistcoat)\b/i.test(n));
   const top = pieces.find((x) => x.slot === "top"), bottom = pieces.find((x) => x.slot === "bottom");
-  return { gender, vec, mask, formality, accents, statements, warm, cold, tailored, hasBottom: !!bottom, full: pieces.some((x) => x.slot === "full_body") && !top };
+  return { gender, vec, mask, formality, accents, statements, warm, cold, tailored, hasBottom: !!bottom, outerTop: names.some((n) => /\b(coat|jacket|parka|blazer|overshirt|trench|puffer|anorak|bomber|cardigan|vest|gilet)\b/i.test(n)), full: pieces.some((x) => x.slot === "full_body") && !top };
 }
 
 /** Hard rules for a single accessory against an outfit; null = fine, string = the reason it is rejected. */
@@ -102,11 +102,11 @@ export function scoreAcc(a: Acc, o: OutfitCtx): number {
 }
 
 /** Preferred placement kind and zone (the layout may demote inline -> side when the image or the space does not allow it). */
-export function placementFor(a: Acc): { placement: Placement; zone: string } {
+export function placementFor(a: Acc, o?: OutfitCtx): { placement: Placement; zone: string } {
   switch (a.type) {
     case "cap": case "hat": case "beanie": return { placement: "head", zone: "head" };
     case "sunglasses": return a.frontFlat ? { placement: "inline", zone: "glasses" } : { placement: "side", zone: "upper" };
-    case "necklace": return a.frontFlat ? { placement: "inline", zone: "neck" } : { placement: "side", zone: "mid" };
+    case "necklace": return a.frontFlat && !o?.outerTop ? { placement: "inline", zone: "neck" } : { placement: "side", zone: "mid" };
     case "belt": return a.frontFlat && a.beltShape === "straight_strip" ? { placement: "inline", zone: "seam" } : { placement: "side", zone: "hip" };
     case "watch": case "bracelet": return { placement: "side", zone: "sleeve" };
     case "scarf": case "gloves": case "tie": return { placement: "side", zone: "upper" };
@@ -146,7 +146,7 @@ export function chooseAccessories(o: OutfitCtx, cands: Acc[], usage: Usage): Pic
     if (a.accent && accent && a.accent !== accent) continue;
     types.add(a.type); if (HEAD.has(a.type)) head = true; if (BAG.has(a.type)) bag = true; if (NECK.has(a.type)) neck = true;
     if (a.statement >= ACC.statementMin) statement = true; if (a.accent) accent = a.accent;
-    picks.push({ acc: a, score: s, ...placementFor(a) });
+    picks.push({ acc: a, score: s, ...placementFor(a, o) });
   }
   return picks;
 }
