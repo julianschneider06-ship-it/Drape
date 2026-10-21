@@ -8,7 +8,7 @@ export const MARGIN_ZONE = 0.18;            // free column (fraction of W) on on
 export const FRAME_PAD = 0.012;              // vertical padding of the usable frame (fraction of H)
 
 export const EDGE_PAD = 0.025;             // min gap between the composition and the canvas edge on the open side (fraction of W)
-export const PIECE_SCALE = 1.13;             // all pieces x this factor (1.1 = 10% larger); the fit step still shrinks a composition that cannot fit the frame
+export const PIECE_SCALE = 1.243;             // all pieces x this factor (v3: 1.13 x 1.10 = 1.243); the fit step still shrinks a composition that cannot fit the frame
 
 // --- Sizes by garment class: a piece is fitted inside (maxW * W) x (maxH * H), keeping its content aspect ratio. ---
 export type GarmentClass = "top" | "outer" | "longcoat" | "trousers" | "shorts" | "skirt" | "longskirt" | "shoes" | "full";
@@ -106,3 +106,20 @@ export const TEMPLATES: Template[] = [
   ...BASE.map((t): Template => ({ ...t, id: t.id + "m", label: t.label + " (mirrored)", margin: "left",
     top: mirrorPlace(t.top), bottom: mirrorPlace(t.bottom), full: mirrorPlace(t.full), shoes: mirrorPlace(t.shoes)! })),
 ];
+
+// --- Rule-based layout (v3): replaces the random templates for standard outfits. All numbers here. ---
+export const RULES = {
+  enabled: true,              // false = old random templates again
+  random: false,              // true = bring back jitter (cluster shift + shoe rotation) on top of the rules; mirroring stays in the old templates
+  axisX: 0.38,                // vertical axis of the top/bottom pair (fraction of canvas width): the pair lives in the left half
+  centreX: 0.5,               // axis of the shoes (canvas centre)
+  seamGap: 0.025,             // white gap between top and bottom (fraction of canvas height)
+  ratioClamp: [0.75, 1.35] as [number, number], // allowed w_top / w_bottom when matching hem and waist
+  edgePad: 0.025,             // min distance to the canvas edges (fraction of width / height)
+  shoeOverlap: 0.20,          // shoes overlap the trouser hem by this share of the shoe height (15-25% allowed)
+  foldedTopHalfH: 0.5,        // folded case: top and bottom sit side by side in the upper part (fraction of canvas height)
+  foldedGap: 0.03,            // folded case: gap between them (fraction of canvas width)
+  foldedHeightTol: 0.05,      // folded case: bbox heights equal within this tolerance (we use exactly equal)
+  foldedShoesCy: 0.76,        // folded case: vertical centre of the shoes (fraction of canvas height), lower half
+  stackedPresentations: ["spread_front"], // anything else (folded, other) goes to the side-by-side layout; null/unknown = stacked
+};

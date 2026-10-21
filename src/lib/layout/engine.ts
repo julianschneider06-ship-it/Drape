@@ -1,14 +1,27 @@
 // Pure layout engine: (outfit pieces, template, seed, canvas size) -> rectangles in px. No React, no DOM.
+import { computeRuleLayout } from "./rules";
 import {
-  DEFAULT_ASPECT, FRAME_PAD, HEADER_PX, FOOTER_PX, JITTER, MARGIN_ZONE, MAX_CANVAS_W, OVERLAP, EDGE_PAD, PIECE_SCALE, SIZE, TEMPLATES,
+  DEFAULT_ASPECT, FRAME_PAD, HEADER_PX, FOOTER_PX, JITTER, MARGIN_ZONE, MAX_CANVAS_W, OVERLAP, EDGE_PAD, PIECE_SCALE, RULES, SIZE, TEMPLATES,
   type GarmentClass, type Place, type Template,
 } from "./config";
 
 export type SlotName = "top" | "bottom" | "shoes" | "full";
-export interface PieceIn { slot: SlotName; cls: GarmentClass; aspect: number | null } // aspect = content width / height
+export interface PieceIn {
+  slot: SlotName; cls: GarmentClass; aspect: number | null; // aspect = content width / height
+  presentation?: string | null;                              // spread_front | folded | other (null = unknown, treated as spread)
+  hem?: number | null; waist?: number | null;                // seam widths as ratios of the piece's bbox width (tops: hem, bottoms: waist)
+}
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface Placed { slot: SlotName; rect: Rect; rot: number; z: number }
-export interface Layout { fit: number; template: string; margin: "left" | "right"; pieces: Placed[]; frame: Rect; marginRect: Rect; canvas: { w: number; h: number } }
+export interface LayoutDebug {
+  mode: "stacked" | "folded" | "full"; axisX: number; centreX: number;
+  hemLine?: { y: number; x0: number; x1: number }; waistLine?: { y: number; x0: number; x1: number };
+  seamMatched?: boolean; ratio?: number; binding: string[]; // which constraints limited the size (class-cap, axis-width, height-fit, ...)
+}
+export interface Layout {
+  fit: number; template: string; margin: "left" | "right"; pieces: Placed[]; frame: Rect; marginRect: Rect; canvas: { w: number; h: number };
+  debug?: LayoutDebug;
+}
 
 export function hash32(s: string): number {
   let h = 2166136261;
@@ -30,6 +43,8 @@ export function pickTemplate(kind: "three" | "full", seed: number, override?: st
 }
 
 export function computeLayout(opts: { kind: "three" | "full"; pieces: Partial<Record<SlotName, PieceIn>>; seed: number; canvas: { w: number; h: number }; template?: Template }): Layout {
+  // Rule-based layout (v3) for standard outfits; the random templates only when a template is forced (?layout=A) or RULES.enabled is false.
+  if (RULES.enabled && !opts.template) return computeRuleLayout(opts);
   const { canvas } = opts, W = canvas.w, H = canvas.h;
   const t = opts.template ?? pickTemplate(opts.kind, opts.seed);
   const rnd = mulberry32(opts.seed ^ 0x9e3779b9);

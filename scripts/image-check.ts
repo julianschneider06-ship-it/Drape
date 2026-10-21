@@ -55,10 +55,10 @@ async function check(t: Todo) {
   let b64: string;
   try { b64 = await prepare(t.checked_url); } catch (e) {
     // image gone from the shop / storage (404 etc.): a failed image like any other, so the next candidate is tried
-    if (/image (4\d\d)/.test(String(e))) return { id: t.id, src: t.url, checked_url: t.checked_url, model: MODEL, model_version: null, item_count: 0, is_single: false, defects: [] as string[], confidence: 1, verdict: "fail", reason: "image_missing", usage: { rev: IMAGE_CHECK_REV }, cost: 0 };
+    if (/image (4\d\d)/.test(String(e))) return { id: t.id, src: t.url, checked_url: t.checked_url, model: MODEL, model_version: null, item_count: 0, is_single: false, defects: [] as string[], confidence: 1, verdict: "fail", reason: "image_missing", usage: { rev: IMAGE_CHECK_REV }, cost: 0, presentation: null as string | null };
     throw e;
   }
-  let cost = 0, usage: Record<string, unknown> = {}, out: { item_count: number; is_single_product: boolean; defects: string[]; confidence: number } | null = null;
+  let cost = 0, usage: Record<string, unknown> = {}, out: { item_count: number; is_single_product: boolean; defects: string[]; presentation: string; confidence: number } | null = null;
   for (let tries = 0; tries < 2 && !out; tries++) {
     const gen = await gemini({
       contents: [{ parts: [{ text: PROMPT({ slot: t.slot }) }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }],
@@ -83,12 +83,41 @@ async function check(t: Todo) {
   else if (out.confidence < MIN_CONFIDENCE) reason = "low_confidence";
   return {
     id: t.id, src: t.url, checked_url: t.checked_url, model: MODEL, model_version: modelVersion ?? null,
-    item_count: out.item_count, is_single: out.is_single_product && out.item_count === 1, defects: out.defects, confidence: out.confidence,
+    item_count: out.item_count, is_single: out.is_single_product && out.item_count === 1, defects: out.defects, confidence: out.confidence, presentation: t.slot === "shoes" ? null : out.presentation,
     verdict: reason ? "fail" : "pass", reason, usage: { ...usage, rev: IMAGE_CHECK_REV, resolution: "low" }, cost,
   };
 }
 
+// Backfill of `presentation` for products that already passed the check (once per product and image, own cost cap).
+async function presentationBackfill() {
+  const PCAP = Number(opt("cap") ?? 3);
+  let spent = Number(await rpc<string>("presentation_cost"));
+  let after = 0, done = 0, errors = 0; const t0 = Date.now(); const counts: Record<string, number> = {};
+  console.log(`presentation backfill: model ${MODEL}, cap $${PCAP}, already spent $${spent.toFixed(4)}`);
+  while (done < LIMIT && spent < PCAP) {
+    const todo = await rpc<Todo[]>("presentation_todo", { p_after: after, p_limit: Math.min(BATCH, LIMIT - done) });
+    if (!todo.length) break;
+    after = todo[todo.length - 1].id;
+    const items: object[] = []; let i = 0;
+    await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
+      while (i < todo.length) {
+        if (spent >= PCAP) return;
+        const t = todo[i++];
+        try {
+          const r = await check(t); spent += r.cost;
+          if (r.presentation) { counts[r.presentation] = (counts[r.presentation] ?? 0) + 1; items.push({ id: t.id, src: t.url, model: MODEL, presentation: r.presentation, confidence: r.confidence, cost: r.cost }); }
+        } catch (e) { errors++; console.error(`product ${t.id}: ${String(e).slice(0, 100)}`); }
+      }
+    }));
+    if (items.length) await rpc("presentation_apply", { p_items: items });
+    done += todo.length;
+    console.log(`presentation ${done} ${JSON.stringify(counts)} errors ${errors} spent $${spent.toFixed(4)} ${((Date.now() - t0) / 1000) | 0}s`);
+  }
+  console.log("done", JSON.stringify({ done, counts, errors, spent_usd: Number(spent.toFixed(4)) }));
+}
+
 (async () => {
+  if (args.includes("--presentation")) return presentationBackfill();
   let spent = Number(await rpc<string>("image_check_cost"));
   const t0 = Date.now();
   const tot = { checked: 0, pass: 0, fail: 0, switched: 0, excluded: 0, errors: 0 };

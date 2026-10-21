@@ -21,10 +21,11 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
     const pieces: Partial<Record<SlotName, PieceIn>> = {};
     for (const [slot, c] of Object.entries(cards) as [SlotName, FeedCard][]) {
       const g = cropGeometry(c);
-      pieces[slot] = { slot, cls: pieceClass(slot, c), aspect: g ? g.cw / g.ch : null };
+      pieces[slot] = { slot, cls: pieceClass(slot, c), aspect: g ? g.cw / g.ch : null, presentation: c.presentation ?? null, hem: c.hem ?? null, waist: c.waist ?? null };
     }
     const seed = hash32(String(outfit.id));
-    return computeLayout({ kind: outfit.kind, pieces, seed, canvas, template: pickTemplate(outfit.kind, seed, override) });
+    // rule layout by default; ?layout=A,FB forces one of the old random templates (debug)
+    return computeLayout({ kind: outfit.kind, pieces, seed, canvas, template: override?.length ? pickTemplate(outfit.kind, seed, override) : undefined });
   }, [cards, outfit, canvas, override]);
 
   const orig = (c: FeedCard): FeedCard => (c.id === outfit.top.id ? outfit.top : c.id === outfit.shoes.id ? outfit.shoes : outfit.bottom ?? c);
@@ -34,7 +35,14 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
     <div className="relative" style={{ width: W, height: H }} data-layout={layout.template} data-cuts={layout.pieces.map((p) => (cards[p.slot]!.cut ? "1" : "0")).join("")}>
       {debug && <>
         <div className="absolute border border-dashed border-sky-400 bg-sky-50/60" style={{ left: pct(layout.marginRect.x, W), top: 0, width: pct(layout.marginRect.w, W), height: "100%" }} />
-        <span className="absolute left-1 top-0 z-50 rounded bg-black px-1 text-[10px] text-white">{layout.template}</span>
+        <span className="absolute left-1 top-0 z-50 rounded bg-black px-1 text-[10px] text-white">{layout.template}{layout.debug ? ` ${layout.debug.binding.join("+")}` : ""}</span>
+        {layout.debug && <>
+          <div className="absolute z-40 border-l border-dashed border-blue-600" style={{ left: pct(layout.debug.axisX, W), top: 0, height: "100%" }} title="left axis" />
+          <div className="absolute z-40 border-l border-dashed border-green-600" style={{ left: pct(layout.debug.centreX, W), top: 0, height: "100%" }} title="canvas centre axis" />
+          {[layout.debug.hemLine, layout.debug.waistLine].map((l, i) => l && (
+            <div key={i} className="absolute z-50 h-[3px] bg-red-600" style={{ left: pct(l.x0, W), width: pct(l.x1 - l.x0, W), top: pct(l.y - 1.5, H) }} />
+          ))}
+        </>}
       </>}
       {layout.pieces.map((p) => {
         const c = cards[p.slot]!;
