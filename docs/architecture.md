@@ -258,7 +258,7 @@ Some product photos show several items (three tees in a row, stacked garments). 
 
 | Daily users (20 pages each) | pages / day | composer function path / day | images / day (same for the old pool!) |
 |---|---|---|---|
-| 1,000 | 20 thousand | about $0.25 | about $8 (48 GB + 12 M image requests... see below) |
+| 1,000 | 20 thousand | about $0.25 | about $8.4 (48 GB + 0.6 million image requests) |
 | 100,000 | 2 million | about $25 | about $840 |
 | 1,000,000 | 20 million | about $250 (CPU $99, invocations $24, memory $8, page transfer $39, CDN requests $80) | about $8,400 |
 
