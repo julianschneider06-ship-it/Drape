@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { SwapEvt } from "@/lib/client/swap";
 import type { FeedAccessory, FeedCard, FeedOutfit } from "@/lib/types";
 import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/format";
-import { garmentClass } from "@/lib/layout/config";
+import { garmentClass, RULES, SALE_LABEL } from "@/lib/layout/config";
+import { isOnSale, saleMarkerOn } from "@/lib/client/sale";
 import { computeLayout, hash32, pickTemplate, type AccIn, type AccSlot, type PieceIn, type SlotName } from "@/lib/layout/engine";
 import FeedImage from "./FeedImage";
 
@@ -81,6 +82,31 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
     prevPieces.current = m;
   });
 
+  // "SALE" label per piece on sale: side with room (away from the other pieces first), never over a piece, the margin or outside the canvas
+  const labels = useMemo(() => {
+    const out: Record<string, { side: "left" | "right"; dy: number }> = {};
+    if (!saleMarkerOn()) return out;
+    const { w: W, h: H } = canvas;
+    const fs = SALE_LABEL.fontShare * W, lw = fs * SALE_LABEL.lineEm, lh = fs * SALE_LABEL.lenEm, gap = SALE_LABEL.gap * W, pad = RULES.edgePad * W;
+    for (const p of layout.pieces) {
+      const c = cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card;
+      if (!c || !c.cut || !isOnSale(c)) continue;
+      const others = layout.pieces.filter((q) => q.slot !== p.slot);
+      const meanX = others.length ? others.reduce((a, q) => a + q.rect.x + q.rect.w / 2, 0) / others.length : W / 2;
+      const order: ("left" | "right")[] = p.rect.x + p.rect.w / 2 < meanX ? ["left", "right"] : ["right", "left"];
+      const cy = p.rect.y + p.rect.h / 2, y = Math.min(H - pad - lh, Math.max(pad, cy - lh / 2));
+      for (const side of order) {
+        const x = side === "right" ? p.rect.x + p.rect.w + gap : p.rect.x - gap - lw;
+        const r = { x, y, w: lw, h: lh };
+        if (x < pad || x + lw > W - pad) continue;
+        if (others.some((q) => r.x < q.rect.x + q.rect.w + 2 && r.x + r.w + 2 > q.rect.x && r.y < q.rect.y + q.rect.h + 2 && r.y + r.h + 2 > q.rect.y)) continue;
+        out[p.slot] = { side, dy: y - p.rect.y };
+        break;
+      }
+    }
+    return out;
+  }, [layout, cards, accs, canvas]);
+
   const orig = (c: FeedCard, slot: SlotName): FeedCard => (slot.startsWith("acc") ? (accs.find((a) => a.slot === slot)?.acc.card ?? c) : c.id === outfit.top.id ? outfit.top : c.id === outfit.shoes.id ? outfit.shoes : outfit.bottom ?? c);
   const { w: W, h: H } = canvas;
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
@@ -111,6 +137,12 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
             <button key={`${p.slot}-${c.id}-${isNew ? swapEvt!.seq : 0}`} type="button" onClickCapture={(e) => { if (Date.now() < suppressUntil.current) { e.stopPropagation(); e.preventDefault(); } }} onClick={() => onOpen(orig(c, p.slot), p.slot)} aria-label={`${c.brand} ${c.name}`}
               className={`absolute inset-0 ${isNew ? (swapEvt!.dir === "next" ? "swap-in-next" : "swap-in-prev") : ""} ${debug ? "outline outline-1 outline-red-400" : ""}`} style={{ touchAction: "pan-y" }}>
               <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} />
+              {labels[p.slot] && (
+                <span aria-hidden className="pointer-events-none absolute select-none whitespace-nowrap" data-sale-label={labels[p.slot].side}
+                  style={{ [labels[p.slot].side === "right" ? "left" : "right"]: "100%", [labels[p.slot].side === "right" ? "marginLeft" : "marginRight"]: SALE_LABEL.gap * W, top: labels[p.slot].dy,
+                    fontFamily: "var(--font-marker), 'Permanent Marker', cursive", fontSize: SALE_LABEL.fontShare * W, lineHeight: SALE_LABEL.lineEm, color: "#e0221b",
+                    writingMode: "vertical-rl", transform: "rotate(180deg) rotate(1.5deg)", letterSpacing: "0.02em" }}>SALE</span>
+              )}
             </button>
           </div>
         );

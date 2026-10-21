@@ -152,6 +152,9 @@ export const REAL_CM: Record<string, { small: number; medium: number; large: num
   tie: { small: 55, medium: 60, large: 65 },   // folded / short view; a straight tie (tall, thin) uses tieStraightCm
 };
 export const SALE_MARKER_ENABLED = true;   // red hand-drawn outline around products on sale; ?sale=off / ?sale=on override it (testing)
+// "SALE" label next to every piece on sale: one fixed size for all products (share of the canvas width), rotated 90 degrees (reads bottom to top),
+// attached to the side of the piece's box with a small gap to the red outline; skipped when neither side has room.
+export const SALE_LABEL = { fontShare: 0.032, gap: 0.016, lenEm: 2.9, lineEm: 1.15 };
 export const ACCESSORIES = {
   enabled: true,
   headMaxShrink: 0.18,        // head zone (hat above the top): if it would shrink the main stack by more than this, the item goes to the side column
