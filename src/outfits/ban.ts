@@ -39,9 +39,11 @@ export class BanState {
 }
 
 /** Soft fallback: filter banned ids out, but if fewer than `minPool` remain, release the oldest bans first until there are enough. */
+export const banStats = { releases: 0, calls: 0 };   // simulation counters: how often the soft fallback had to release bans
 export function allowed<T extends { id: number }>(list: T[], eff: { banned: Set<number>; age: Map<number, number> }, minPool: number): T[] {
-  const ok = list.filter((x) => !eff.banned.has(x.id));
+  const ok = list.filter((x) => !eff.banned.has(x.id)); banStats.calls++;
   if (ok.length >= minPool) return ok;
+  banStats.releases++;
   const banned = list.filter((x) => eff.banned.has(x.id)).sort((a, b) => (eff.age.get(b.id) ?? 0) - (eff.age.get(a.id) ?? 0));   // oldest (largest age) first
   return [...ok, ...banned.slice(0, minPool - ok.length)];
 }

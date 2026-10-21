@@ -14,7 +14,7 @@ import { outfitStyle, scoreOutfit, type Piece } from "./score";
 import { outfitSeason, seasonRole, type SeasonResult, type SeasonPiece } from "./season";
 import { connBonus, tasteMatch, type Taste } from "./taste";
 
-export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number> }
+export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number }
 export interface ComposedAcc { id: number; type: string; placement: string; zone: string; score: number }
 export interface ComposedOutfit {
   kind: "three" | "full"; ids: number[]; acc: ComposedAcc[]; score: number; style: string; season: SeasonResult; bucket: Bucket; pattern?: string; hash: number;
@@ -76,7 +76,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
   const mix = profile.mix ?? (guest ? COMPOSE.guestMix : COMPOSE.mix);
   const contrastShare = profile.contrastShare ?? mix.contrast;
   const buckets: [Bucket, number][] = [["match", mix.match], ["near", mix.near], ["new", mix.new], ["contrast", contrastShare]];
-  const eff = banIn.effective(cat, g);
+  const eff = banIn.effective(cat, g, profile.banFraction);
   if (profile.likedIds && !COMPOSE.likesBanned) for (const id of profile.likedIds) eff.banned.delete(id);
   const stats: ComposeStats = { ms: 0, attempts: 0, rejects: {}, buckets: {} };
   const rej = (k: string) => { stats.rejects[k] = (stats.rejects[k] ?? 0) + 1; };
@@ -105,6 +105,13 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
   };
   const accPool = accCands();
 
+  // candidate sample for a slot: with a taste profile half of the sample are the best taste matches, the other half random (keeps surprise); guests: random
+  const sampleFor = (list: CatPiece[], k: number): CatPiece[] => {
+    if (list.length <= k) return list;
+    if (guest) return sample(list, k, rnd);
+    const sorted = [...list].sort((a, b) => tm(b) - tm(a)), head = sorted.slice(0, k >> 1);
+    return [...head, ...sample(sorted.slice(k >> 1), k - (k >> 1), rnd)];
+  };
   const buildOne = (bucket: Bucket): { ps: CatPiece[]; kind: "three" | "full"; score: number; pattern?: string } | null => {
     const minS = bucket === "contrast" ? COMPOSE.contrastMinScore : minScore;
     const sSeason = ((): number => { const r = rnd(); const cur = COMPOSE.seasonWeightCurrent; if (r < cur) return curSeason; const o = [0, 1, 2, 3].filter((x) => x !== curSeason); return o[Math.floor((r - cur) / ((1 - cur) / 3)) % 3]; })();
@@ -122,7 +129,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
     if (!anchor) return null;
     if (anchorSlot === "full_body") {
       const shoes = cand("shoes", sSeason); const sc: [CatPiece, number][] = [];
-      for (const s of sample(shoes, COMPOSE.shoeSample, rnd)) { const r = scoreOutfit([anchor, s]); if (r && r.score >= minS) sc.push([s, r.score]); }
+      for (const s of sampleFor(shoes, COMPOSE.shoeSample)) { const r = scoreOutfit([anchor, s]); if (r && r.score >= minS) sc.push([s, r.score]); }
       sc.sort((a, b) => b[1] - a[1]); const top = sc.slice(0, COMPOSE.topN);
       const ch = pick(top, ([s, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(s) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, s)) * fresh(s), rnd);
       return ch ? { ps: [anchor, ch[0]], kind: "full", score: ch[1] } : null;
@@ -133,7 +140,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
     let secL = cand(second, sSeason);
     if (pat && pat.partner === second) secL = secL.filter(pat.b);
     const sec: [CatPiece, number][] = [];
-    for (const y of sample(secL, COMPOSE.partnerSample, rnd)) { const s = pairScore(anchor, y, rnd); if (s > 0) sec.push([y, s]); }
+    for (const y of sampleFor(secL, COMPOSE.partnerSample)) { const s = pairScore(anchor, y, rnd); if (s > 0) sec.push([y, s]); }
     sec.sort((a, b) => b[1] - a[1]);
     const secPick = pick(sec.slice(0, COMPOSE.pairK), ([y, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(y) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, y)) * fresh(y), rnd);
     if (!secPick) return null;
@@ -142,8 +149,8 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
     if (pat && pat.partner === third) thirdL = thirdL.filter(pat.b);
     const trio = (z: CatPiece) => { const o = [anchor!, y, z]; const by = (s: string) => o.find((p) => p.slot === s)!; return [by("top"), by("bottom"), by("shoes")]; };
     const fin: [CatPiece, number][] = [];
-    for (const z of sample(thirdL, COMPOSE.shoeSample, rnd)) {
-      const ps = trio(z); if (!lengthShoeOk(ps[1], ps[2])) { rej("length-shoes"); continue; }
+    for (const z of sampleFor(thirdL, COMPOSE.shoeSample)) {
+      const ps = trio(z); if (!lengthShoeOk(ps[1], ps[2])) { rej("candidate:length-shoes"); continue; }
       const r = scoreOutfit(ps); if (r && r.score >= minS) fin.push([z, r.score]);
     }
     fin.sort((a, b) => b[1] - a[1]);
@@ -156,10 +163,11 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
   const ban = new BanState([...banIn.ids]);
   for (let k = 0; k < n; k++) {
     let done: ComposedOutfit | null = null;
+    const wanted = pick(buckets.filter(([, v]) => v > 0), ([, v]) => v, rnd)![0];   // the bucket is drawn once per outfit; a contrast outfit retries its pattern a few times before giving up
     for (let attempt = 0; attempt < COMPOSE.attempts + 4 && !done; attempt++) {
       stats.attempts++;
       const level = attempt < COMPOSE.attempts ? 0 : 1;      // after the strict attempts only the "no repeated product" rule stays
-      const bucket = pick(buckets.filter(([, v]) => v > 0), ([, v]) => v, rnd)![0];
+      const bucket: Bucket = wanted === "contrast" && attempt >= 7 ? "new" : wanted;
       const b = buildOne(bucket);
       if (!b) { rej("no-candidate"); continue; }
       const ids = b.ps.map((p) => p.id);
