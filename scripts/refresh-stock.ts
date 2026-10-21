@@ -4,7 +4,7 @@
 // rebuilt (scripts/build-catalogue.ts: a new snapshot version only appears when the content changed).
 // Respects robots.txt and the per-host rate limit (src/ingest/http.ts); a host that answers 401 / 403 / 404 / 410 / 429 / 503 (or disallows the path) is skipped and
 // reported, never retried through another route. Intended schedule: once a day (not scheduled yet).
-// Usage: DRAPE_PIPELINE_TOKEN=... npx tsx scripts/refresh-stock.ts [--source slug]... [--dry-run] [--no-snapshot] [--concurrency 3]
+// Usage: DRAPE_PIPELINE_TOKEN=... npx tsx scripts/refresh-stock.ts [--source slug]... [--dry-run] [--no-snapshot] [--concurrency 2]
 import { spawnSync } from "node:child_process";
 import { createAdapter } from "../src/ingest/adapters";
 import { rpc } from "../src/ingest/gateway";
@@ -15,7 +15,7 @@ import type { SourceConfig } from "../src/ingest/types";
 const args = process.argv.slice(2);
 const many = (n: string) => args.flatMap((a, i) => (a === `--${n}` ? [args[i + 1]] : []));
 const flag = (n: string) => args.includes(`--${n}`);
-const DRY = flag("dry-run"), CONC = Number(many("concurrency")[0] ?? 3), only = many("source");
+const DRY = flag("dry-run"), CONC = Number(many("concurrency")[0] ?? 2), only = many("source");
 const t0 = Date.now();
 
 interface Item { external_id: string; availability: string; price_cents: number | null; compare_at_cents: number | null }
