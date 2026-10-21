@@ -4,7 +4,7 @@ import { clientIp, isUuid, limited } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
-const TYPES = new Set(["impression", "dwell_ms", "like", "unlike", "tap_product", "view_product_click", "scroll_past", "outfit_up", "outfit_down", "outfit_clear"]);
+const TYPES = new Set(["impression", "dwell_ms", "like", "unlike", "tap_product", "view_product_click", "scroll_past", "outfit_up", "outfit_down", "outfit_clear", "swap"]);
 const SLOTS = new Set(["top", "bottom", "shoes", "full", "sheet", "accessory"]);
 const int = (v: unknown, max = 2_000_000_000) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? Math.round(v) : null);
 
@@ -14,6 +14,8 @@ function cleanCtx(c: unknown) {
   const o = c as Record<string, unknown>, out: Record<string, unknown> = {};
   for (const k of ["layout", "mode", "v"]) if (typeof o[k] === "string" && (o[k] as string).length <= 24) out[k] = o[k];
   if (o.prev === "up" || o.prev === "down") out.prev = o.prev;
+  const prevId = int(o.out), rank = int(o.rank, 100);
+  if (prevId !== null) out.out = prevId; if (rank !== null) out.rank = rank; if (o.dir === "next" || o.dir === "prev") out.dir = o.dir;   // swap: product that left, direction, alternative rank (0 = the original)
   if (Array.isArray(o.canvas) && o.canvas.length === 2) { const a = int(o.canvas[0], 5000), b = int(o.canvas[1], 5000); if (a !== null && b !== null) out.canvas = [a, b]; }
   return Object.keys(out).length ? out : null;
 }

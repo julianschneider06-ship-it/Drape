@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { SwapEvt } from "@/lib/client/swap";
 import type { FeedAccessory, FeedCard, FeedOutfit } from "@/lib/types";
 import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/format";
 import { garmentClass } from "@/lib/layout/config";
@@ -9,9 +10,10 @@ import FeedImage from "./FeedImage";
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout }: {
+export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string) => void;
+  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt;
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
@@ -38,11 +40,52 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
 
   useEffect(() => { onLayout?.(layout.template, layout.debug?.mode ?? "template"); }, [layout, onLayout]);
 
+  // ---- swipe on a piece = swap that piece (horizontal, mostly-horizontal drags only; vertical scrolling is never touched) ----
+  const gest = useRef<{ x: number; y: number; slot: string | null; mode: "idle" | "swipe" | "scroll" } | null>(null);
+  const suppressUntil = useRef(0);
+  const down = (e: React.PointerEvent) => {
+    if (!onSwipe || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-slot]");   // topmost piece under the finger (shoes / overlays win)
+    gest.current = { x: e.clientX, y: e.clientY, slot: el?.getAttribute("data-slot") ?? null, mode: "idle" };
+  };
+  const move = (e: React.PointerEvent) => {
+    const g = gest.current; if (!g || g.mode === "scroll") return;
+    const dx = e.clientX - g.x, dy = e.clientY - g.y;
+    if (g.mode === "idle") {
+      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx) * 0.7) g.mode = "scroll";
+      else if (g.slot && Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 2) g.mode = "swipe";
+    }
+  };
+  const up = (e: React.PointerEvent) => {
+    const g = gest.current; gest.current = null;
+    if (!g || g.mode !== "swipe") return;
+    const dx = e.clientX - g.x;
+    suppressUntil.current = Date.now() + 350;   // the tap that would follow a drag must not open the sheet
+    if (Math.abs(dx) >= 44 && g.slot) onSwipe?.(g.slot as SlotName, dx < 0 ? "next" : "prev");
+  };
+  // ghosts: the piece that was swapped out slides away while the new one slides in
+  const prevPieces = useRef<Record<string, { card: ReturnType<typeof viewCard>; rect: { x: number; y: number; w: number; h: number } }>>({});
+  const [ghosts, setGhosts] = useState<{ id: string; card: ReturnType<typeof viewCard>; rect: { x: number; y: number; w: number; h: number }; dir: "next" | "prev"; slot: string }[]>([]);
+  useEffect(() => {
+    if (!swapEvt || swapEvt.kind !== "swap") return;
+    const old = prevPieces.current[swapEvt.slot];
+    if (!old || old.card.id === swapEvt.newId) return;
+    const gid = `${swapEvt.seq}`;
+    setGhosts((g) => [...g, { id: gid, card: old.card, rect: old.rect, dir: swapEvt.dir, slot: swapEvt.slot }]);
+    const t = setTimeout(() => setGhosts((g) => g.filter((x) => x.id !== gid)), 340);
+    return () => clearTimeout(t);
+  }, [swapEvt?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const m: typeof prevPieces.current = {};
+    for (const p of layout.pieces) { const c = cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card; if (c) m[p.slot] = { card: c, rect: p.rect }; }
+    prevPieces.current = m;
+  });
+
   const orig = (c: FeedCard, slot: SlotName): FeedCard => (slot.startsWith("acc") ? (accs.find((a) => a.slot === slot)?.acc.card ?? c) : c.id === outfit.top.id ? outfit.top : c.id === outfit.shoes.id ? outfit.shoes : outfit.bottom ?? c);
   const { w: W, h: H } = canvas;
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
   return (
-    <div className="relative" style={{ width: W, height: H }} data-layout={layout.template} data-cuts={layout.pieces.map((p) => ((cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)?.cut ? "1" : "0")).join("")} data-stack={(() => { const b = layout.pieces.find((p) => p.slot === "bottom" || p.slot === "full"), t = layout.pieces.find((p) => p.slot === "top" || p.slot === "full"), sh = layout.pieces.find((p) => p.slot === "shoes"); return b && t && sh ? `${(t.rect.y / H).toFixed(3)}:${(b.rect.y / H).toFixed(3)}:${((sh.rect.y + sh.rect.h) / H).toFixed(3)}` : ""; })()} data-rects={layout.pieces.map((p) => `${p.slot}${layout.debug?.acc?.placed.find((q) => q.slot === p.slot)?.type ? "=" + layout.debug.acc.placed.find((q) => q.slot === p.slot)!.type + "/" + layout.debug.acc.placed.find((q) => q.slot === p.slot)!.kind : ""}:${Math.round(p.rect.x)},${Math.round(p.rect.y)},${Math.round(p.rect.w)},${Math.round(p.rect.h)}`).join(";")} data-dem={layout.debug?.acc?.demoted.join("|") ?? ""} data-lim={layout.debug?.acc?.limited?.join(",") ?? ""} data-head={layout.debug?.acc ? `${layout.debug.acc.headZone ? 1 : 0}:${layout.debug.acc.headShrink.toFixed(3)}:${layout.debug.acc.dropped.length}:${layout.debug.acc.demoted.length}` : ""} data-acc={layout.debug?.acc ? layout.debug.acc.placed.map((a) => `${a.type}:${a.kind}`).join(",") : ""}>
+    <div className="relative" style={{ width: W, height: H, touchAction: "pan-y" }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { gest.current = null; }} data-layout={layout.template} data-cuts={layout.pieces.map((p) => ((cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)?.cut ? "1" : "0")).join("")} data-stack={(() => { const b = layout.pieces.find((p) => p.slot === "bottom" || p.slot === "full"), t = layout.pieces.find((p) => p.slot === "top" || p.slot === "full"), sh = layout.pieces.find((p) => p.slot === "shoes"); return b && t && sh ? `${(t.rect.y / H).toFixed(3)}:${(b.rect.y / H).toFixed(3)}:${((sh.rect.y + sh.rect.h) / H).toFixed(3)}` : ""; })()} data-rects={layout.pieces.map((p) => `${p.slot}${layout.debug?.acc?.placed.find((q) => q.slot === p.slot)?.type ? "=" + layout.debug.acc.placed.find((q) => q.slot === p.slot)!.type + "/" + layout.debug.acc.placed.find((q) => q.slot === p.slot)!.kind : ""}:${Math.round(p.rect.x)},${Math.round(p.rect.y)},${Math.round(p.rect.w)},${Math.round(p.rect.h)}`).join(";")} data-dem={layout.debug?.acc?.demoted.join("|") ?? ""} data-lim={layout.debug?.acc?.limited?.join(",") ?? ""} data-head={layout.debug?.acc ? `${layout.debug.acc.headZone ? 1 : 0}:${layout.debug.acc.headShrink.toFixed(3)}:${layout.debug.acc.dropped.length}:${layout.debug.acc.demoted.length}` : ""} data-acc={layout.debug?.acc ? layout.debug.acc.placed.map((a) => `${a.type}:${a.kind}`).join(",") : ""}>
       {debug && <>
         <div className="absolute border border-dashed border-sky-400 bg-sky-50/60" style={{ left: pct(layout.marginRect.x, W), top: 0, width: pct(layout.marginRect.w, W), height: "100%" }} />
         <span className="absolute left-1 top-0 z-50 rounded bg-black px-1 text-[10px] text-white">{layout.template}{layout.debug ? ` ${layout.debug.binding.join("+")}` : ""}</span>
@@ -54,11 +97,19 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
           ))}
         </>}
       </>}
+      {ghosts.map((gh) => (
+        <div key={`ghost-${gh.id}`} className={`pointer-events-none absolute ${gh.dir === "next" ? "swap-out-next" : "swap-out-prev"}`} style={{ left: pct(gh.rect.x, W), top: pct(gh.rect.y, H), width: pct(gh.rect.w, W), height: pct(gh.rect.h, H), zIndex: 60 }}>
+          <FeedImage card={gh.card} src={feedSrc(gh.card, pieceClass(gh.slot as SlotName, gh.card))} fill={1} priority blend={!gh.card.cut} wShare={gh.rect.w / W} />
+        </div>
+      ))}
       {layout.pieces.map((p) => {
         const c = (cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)!;
+        const isNew = swapEvt?.kind === "swap" && swapEvt.slot === p.slot && swapEvt.newId === c.id;
+        const bounce = swapEvt?.kind === "bounce" && swapEvt.slot === p.slot ? `swap-bounce-${swapEvt.dir}` : "";
         return (
-          <div key={p.slot} className="absolute" style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined }}>
-            <button type="button" onClick={() => onOpen(orig(c, p.slot), p.slot)} aria-label={`${c.brand} ${c.name}`} className={`absolute inset-0 ${debug ? "outline outline-1 outline-red-400" : ""}`}>
+          <div key={p.slot} data-slot={p.slot} className={`absolute ${bounce}`} style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined, transition: "left .32s ease, top .32s ease, width .32s ease, height .32s ease", touchAction: "pan-y" }}>
+            <button key={`${p.slot}-${c.id}-${isNew ? swapEvt!.seq : 0}`} type="button" onClickCapture={(e) => { if (Date.now() < suppressUntil.current) { e.stopPropagation(); e.preventDefault(); } }} onClick={() => onOpen(orig(c, p.slot), p.slot)} aria-label={`${c.brand} ${c.name}`}
+              className={`absolute inset-0 ${isNew ? (swapEvt!.dir === "next" ? "swap-in-next" : "swap-in-prev") : ""} ${debug ? "outline outline-1 outline-red-400" : ""}`} style={{ touchAction: "pan-y" }}>
               <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} />
             </button>
           </div>

@@ -21,3 +21,17 @@ body {
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 img { -webkit-user-drag: none; }
+
+/* Swap a piece: the old piece slides out sideways, the new one slides in; at the end of the list the piece bounces */
+@keyframes swapOutNext { to { transform: translateX(-55%); opacity: 0; } }
+@keyframes swapOutPrev { to { transform: translateX(55%); opacity: 0; } }
+@keyframes swapInNext { from { transform: translateX(55%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes swapInPrev { from { transform: translateX(-55%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes swapBounceNext { 30% { transform: translateX(-12px); } 60% { transform: translateX(4px); } }
+@keyframes swapBouncePrev { 30% { transform: translateX(12px); } 60% { transform: translateX(-4px); } }
+.swap-out-next { animation: swapOutNext .3s ease-in forwards; }
+.swap-out-prev { animation: swapOutPrev .3s ease-in forwards; }
+.swap-in-next { animation: swapInNext .32s ease-out both; }
+.swap-in-prev { animation: swapInPrev .32s ease-out both; }
+.swap-bounce-next { animation: swapBounceNext .35s ease-out; }
+.swap-bounce-prev { animation: swapBouncePrev .35s ease-out; }

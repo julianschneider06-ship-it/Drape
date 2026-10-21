@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeedCard, FeedOutfit, FeedResponse } from "@/lib/types";
 import { getDeviceId } from "@/lib/client/device";
 import { feedSrc, viewCard, type CutMode } from "@/lib/client/format";
@@ -11,6 +11,7 @@ import ProductSheet from "./ProductSheet";
 import OutfitButtons, { type Reaction } from "./OutfitButtons";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { SaleInkDefs } from "@/lib/client/sale";
+import { applySwaps, slotKeyOf, type Alt, type AltLists, type SwapEvt, type SwapState } from "@/lib/client/swap";
 import type { SlotName } from "@/lib/layout/engine";
 
 type Gender = "women" | "men";
@@ -38,6 +39,11 @@ export default function Feed() {
   const device = useRef("");
   const scroller = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<FeedOutfit[]>([]);
+  const [swaps, setSwaps] = useState<SwapState>({});          // in-session swap state (reset on reload)
+  const [altLists, setAltLists] = useState<AltLists>({});
+  const [swapEvts, setSwapEvts] = useState<Record<number, SwapEvt>>({});
+  const swapBusy = useRef(new Set<string>());
+  const swapSeq = useRef(0);
   const cursorRef = useRef<number | null>(null);
   const loadingRef = useRef(false);
   const genderRef = useRef<Gender>("women");
@@ -45,7 +51,8 @@ export default function Feed() {
   const interacted = useRef(new Set<number>());
   const prefetched = useRef(new Set<string>());
   const exhausted = useRef(false);
-  itemsRef.current = items;
+  const shown = useMemo(() => items.map((o) => applySwaps(o, swaps[o.id], altLists)), [items, swaps, altLists]);   // the outfits as the user sees them after swaps
+  itemsRef.current = shown;
 
   // remembered outfit reactions (this device)
   useEffect(() => { try { const r = JSON.parse(store.get("drape.reactions") ?? "{}"); if (r && typeof r === "object") setReactions(r); } catch { /* ignore */ } }, []);
@@ -185,6 +192,34 @@ export default function Feed() {
     });
   };
 
+  // Swipe on a piece: swap only that piece (next-best / previous alternative, precomputed). Alternatives are fetched lazily on the first swipe.
+  const swapPiece = async (o: FeedOutfit, index: number, slot: SlotName, dir: "next" | "prev") => {
+    const key = slotKeyOf(slot), lk = `${o.id}:${key}`;
+    if (swapBusy.current.has(lk)) return;
+    swapBusy.current.add(lk);
+    try {
+      let list = altLists[lk];
+      if (!list) {
+        const res = await fetch(`/api/alternatives?outfit=${o.id}&slot=${key}`).catch(() => null);
+        list = res && res.ok ? ((await res.json()) as { items: Alt[] }).items : [];
+        setAltLists((p) => ({ ...p, [lk]: list! }));
+      }
+      const cur = swaps[o.id]?.[key] ?? -1, nxt = dir === "next" ? cur + 1 : cur - 1;
+      const seq = ++swapSeq.current;
+      if (nxt >= list.length || nxt < -1) { setSwapEvts((p) => ({ ...p, [o.id]: { slot, dir, seq, kind: "bounce" } })); return; }   // end of the list: bounce, nothing else
+      const shownNow = itemsRef.current.find((x) => x.id === o.id)!;
+      const accIdx = key.startsWith("acc") ? Number(key.slice(3)) - 1 : -1;
+      const out = key === "top" ? shownNow.top : key === "bottom" ? shownNow.bottom! : key === "shoes" ? shownNow.shoes : shownNow.accessories![accIdx].card;
+      const incoming = nxt === -1 ? (key === "top" ? o.top : key === "bottom" ? o.bottom! : key === "shoes" ? o.shoes : o.accessories![accIdx].card) : list[nxt].card;
+      setSwaps((p) => ({ ...p, [o.id]: { ...(p[o.id] ?? {}), [key]: nxt } }));
+      setSwapEvts((p) => ({ ...p, [o.id]: { slot, dir, seq, kind: "swap", newId: incoming.id } }));
+      interacted.current.add(index);
+      track({ event_type: "swap", outfit_id: o.id, feed_index: index, slot: trackSlot(slot), product_id: incoming.id, gender: genderRef.current, ctx: { out: out.id, dir, rank: nxt + 1 } });
+      const ahead = list[dir === "next" ? nxt + 1 : nxt - 1];   // prefetch the image of the alternative after this one
+      if (ahead) { const img = new Image(); img.referrerPolicy = "no-referrer"; img.src = feedSrc(viewCard(ahead.card, dbg.cut), pieceClass(slot, ahead.card)); }
+    } finally { setTimeout(() => swapBusy.current.delete(lk), 380); }
+  };
+
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
     track({ event_type: "tap_product", product_id: card.id, outfit_id: outfit.id, feed_index: index, slot: trackSlot(slot), gender: genderRef.current });
@@ -210,9 +245,9 @@ export default function Feed() {
       </header>
 
       <div ref={scroller} className="no-scrollbar h-dvh snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
-        {items.map((o, i) => (
+        {shown.map((o, i) => (
           <section key={o.id} data-i={i} className="relative flex h-dvh snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + env(safe-area-inset-bottom))` }}>
-            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)}
+            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
               onLayout={(layout, mode) => layoutInfo.current.set(o.id, { layout, mode })} />}
             <OutfitButtons value={reactions[o.id] ?? null} onPress={(d) => pressOutfit(o, i, d)} />
           </section>
