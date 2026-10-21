@@ -114,7 +114,8 @@ export const RULES = {
   axisX: 0.38,                // vertical axis of the top/bottom pair (fraction of canvas width): the pair lives in the left half
   centreX: 0.5,               // axis of the shoes (canvas centre)
   seamGap: 0.025,             // white gap between top and bottom (fraction of canvas height)
-  ratioClamp: [0.75, 1.35] as [number, number], // allowed w_top / w_bottom when matching hem and waist
+  ratioClamp: [0.6, 1.7] as [number, number], // allowed w_top / w_bottom when matching hem and waist
+  heightRatioRange: [0.4, 2.0] as [number, number], // soft rule: top height / bottom height stays inside this range (limits odd size jumps, e.g. a huge shirt over tiny shorts); seam match gives way
   edgePad: 0.025,             // min distance to the canvas edges (fraction of width / height)
   shoeOverlap: 0.20,          // shoes overlap the trouser hem by this share of the shoe height (15-25% allowed)
   foldedTopHalfH: 0.5,        // folded case: top and bottom sit side by side in the upper part (fraction of canvas height)

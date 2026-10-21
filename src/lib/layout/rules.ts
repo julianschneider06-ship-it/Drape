@@ -51,7 +51,16 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     // seam match: hem_top * w_top = waist_bottom * w_bottom  ->  w_top / w_bottom = waist / hem (equal widths when a measurement is missing)
     const measured = !!t.hem && !!b.waist;
     const want = measured ? b.waist! / t.hem! : 1;
-    const r = Math.min(R.ratioClamp[1], Math.max(R.ratioClamp[0], want));
+    // allowed width ratio: seam clamp, narrowed by the soft height rule (h_top / h_bottom = r * a_bottom / a_top stays in heightRatioRange)
+    let lo = R.ratioClamp[0], hi = R.ratioClamp[1];
+    const hLo = (R.heightRatioRange[0] * at) / ab, hHi = (R.heightRatioRange[1] * at) / ab;
+    const softMin = hLo > lo && want < hLo, softMax = hHi < hi && want > hHi;   // only reported when the soft rule actually changes the width
+    if (hLo > lo) lo = hLo;
+    if (hHi < hi) hi = hHi;
+    if (softMin) binding.push("soft-height-min");
+    if (softMax) binding.push("soft-height-max");
+    if (lo > hi) { lo = hi = hLo > R.ratioClamp[1] ? hLo : hHi; }   // rules disagree: the visual size rule wins
+    const r = Math.min(hi, Math.max(lo, want));
     dbg.ratio = r; dbg.seamMatched = measured && Math.abs(r - want) < 1e-6;
     // largest bottom width k such that every cap holds: bottom caps, top caps (top width = r * k), axis width
     const lim = { "class-cap-bottom": Math.min(capW(b), capH(b) * ab), "class-cap-top": Math.min(capW(t), capH(t) * at) / r, "axis-width": axisMaxW / Math.max(1, r) };
