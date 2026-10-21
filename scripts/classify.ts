@@ -12,6 +12,7 @@ import {
 } from "../src/config/models";
 import { GEMINI_API_BASE, MODELS } from "../src/config/models";
 import { rpc } from "../src/ingest/gateway";
+import { HOUSE_SHOE } from "../src/classify/exclude";
 import { startStep } from "../src/lib/budget";
 import { CLASSIFICATION_SCHEMA, PROMPT, PROMPT_REV, TAXONOMY_VERSION } from "../src/classify/taxonomy-v2";
 
@@ -127,7 +128,8 @@ async function processProduct(item: any, q: { id: number | null }) {
   // Only the primary model drives the stored embedding / feed image; comparison runs must not overwrite them.
   const emb = UPDATE_PRODUCT ? await embed(best.img) : null;
   const a = best.attrs!;
-  const ready = !a.has_model && !a.needs_cutout && a.feed_suitability >= FEED_READY_MIN_SUITABILITY;
+  const houseShoe = a.feed_slot === "shoes" && HOUSE_SHOE.test(`${item.name ?? ""} ${a.subcategory ?? ""}`);   // indoor shoes are not outfit pieces
+  const ready = !a.has_model && !a.needs_cutout && a.feed_suitability >= FEED_READY_MIN_SUITABILITY && !houseShoe;
   const reason = ready ? null : a.has_model ? "has_model" : a.needs_cutout ? "needs_cutout" : "low_suitability";
   const cost = attempts.reduce((s, x) => s + x.cost, 0);
   const ms = attempts.reduce((s, x) => s + x.ms, 0);

@@ -1,5 +1,6 @@
 // Outfit scoring: simple, explainable rules on the v2 attributes. Pure functions (no I/O), used by the pool builder.
 import { STYLE_KEYS } from "../classify/styles";
+import { HOUSE_SHOE } from "../classify/exclude";
 
 export type Slot = "top" | "bottom" | "shoes" | "full_body";
 export interface RawPiece {
@@ -25,7 +26,7 @@ const EXCLUDED = /\b(bra|bralette|bikini|swimsuit|swim|swimwear|trunks?|brief|br
 export const ALL_GENDERS: ("women" | "men")[] = ["women", "men"];
 
 export function toPiece(r: RawPiece): Piece | null {
-  if (EXCLUDED.test(`${r.sub ?? ""} ${r.name ?? ""}`)) return null;
+  if (EXCLUDED.test(`${r.sub ?? ""} ${r.name ?? ""}`) || (r.slot === "shoes" && HOUSE_SHOE.test(`${r.sub ?? ""} ${r.name ?? ""}`))) return null;
   const vec = new Float32Array(STYLE_KEYS.length);
   let norm = 0, best = 0, dom = STYLE_KEYS[0];
   STYLE_KEYS.forEach((k, i) => { const w = r.styles?.[k] ?? 0; vec[i] = w; norm += w * w; if (w > best) { best = w; dom = k; } });
