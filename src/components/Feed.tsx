@@ -108,10 +108,11 @@ export default function Feed() {
         }
         if (!items.length) {
           const recent = itemsRef.current.slice(-12).filter((o) => o.dyn).map((o) => ({ ids: o.dyn!.ids, style: o.dyn!.style, store: o.dyn!.store }));
-          const r = await fetch("/api/dynamic", { method: "POST", signal: AbortSignal.timeout(20000), body: JSON.stringify({ device_id: device.current, gender: g, recent, startersServed: dynState.current.startersSent ? 0 : dynState.current.servedStarters }) });
+          const r = await fetch("/api/dynamic", { method: "POST", signal: AbortSignal.timeout(20000), body: JSON.stringify({ device_id: device.current, gender: g, recent, ban: new URLSearchParams(location.search).get("ban") === "db" ? "db" : (store.get(`drape.ban.${g}`) ?? ""), startersServed: dynState.current.startersSent ? 0 : dynState.current.servedStarters }) });
           if (!r.ok) throw new Error(String(r.status));
           dynState.current.startersSent = true;
-          items = ((await r.json()) as { items: FeedOutfit[] }).items;
+          const j = (await r.json()) as { items: FeedOutfit[]; ban?: string };
+          items = j.items; if (j.ban !== undefined) store.set(`drape.ban.${g}`, j.ban);   // the ban list lives on the device (about 4 KB)
         }
         data = { items, next_cursor: 1, size: 1 };
       } else {

@@ -53,10 +53,10 @@ export async function toFeedOutfits(cat: Catalogue, g: "women" | "men", outs: Co
   return res;
 }
 
-export interface PageInput { device: string; gender: "women" | "men"; recent?: { ids: number[]; style: string; store: string }[]; startersServed?: number; persona?: string | null }
-export async function dynamicPage(inp: PageInput): Promise<{ items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number } }> {
+export interface PageInput { banB64?: string | null; device: string; gender: "women" | "men"; recent?: { ids: number[]; style: string; store: string }[]; startersServed?: number; persona?: string | null }
+export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number } }> {
   const t0 = performance.now(); const cat = await getCat();
-  const tb = performance.now(); const ban = await readBan(inp.device);
+  const tb = performance.now(); const ban = inp.banB64 !== undefined && inp.banB64 !== null ? BanState.fromBase64(inp.banB64) : await readBan(inp.device);   // client-held ban list (no storage round trip) or the database copy
   if (inp.startersServed && inp.startersServed > 0) {            // first dynamic page after the starter set: the starter pieces are banned too
     const rows = (await starterRows(inp.gender)).slice(0, inp.startersServed); ban.push(rows.flatMap((r) => [...r.piece_ids, ...r.acc_ids]));
   }
@@ -71,8 +71,9 @@ export async function dynamicPage(inp: PageInput): Promise<{ items: FeedOutfit[]
   const tk = performance.now();
   const items = await toFeedOutfits(cat, inp.gender, outfits, alts, 0);
   const te = performance.now();
-  await writeBan(inp.device, ban2);
-  return { items, ms: { total: performance.now() - t0, ban: tc - tb, compose: tk - tc, cards: te - tk } };
+  const tw = performance.now();
+  if (inp.banB64 === undefined || inp.banB64 === null) await writeBan(inp.device, ban2);
+  return { ban: ban2.toBase64(), items, ms: { total: performance.now() - t0, ban: tc - tb, compose: tk - tc, cards: te - tk, write: performance.now() - tw } };
 }
 
 export async function starterPage(g: "women" | "men", page: number): Promise<FeedOutfit[]> {
