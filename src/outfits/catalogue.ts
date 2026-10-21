@@ -83,15 +83,25 @@ export function buildCatalogue(snap: Snapshot): Catalogue {
 export const packSnapshot = (s: Snapshot) => gzipSync(Buffer.from(JSON.stringify(s)), { level: 9 }).toString("base64");
 export const unpackSnapshot = (b64: string): Snapshot => JSON.parse(gunzipSync(Buffer.from(b64, "base64")).toString("utf8"));
 
-/** Per function instance cache with a version stamp: a cheap `snapshot_get(version)` call answers "unchanged" without sending the blob. */
-let cached: Catalogue | null = null; let checkedAt = 0;
+/** Per function instance cache with a version stamp: a cheap `snapshot_get(version)` call answers "unchanged" without sending the blob.
+ *  Concurrent callers share ONE in-flight load (two requests arriving together on a cold instance must not both download and unpack the snapshot). */
+let cached: Catalogue | null = null; let checkedAt = 0; let inflight: Promise<Catalogue> | null = null;
+export const catalogueLoad: { fetchMs: number; unpackMs: number; buildMs: number; blobKB: number; at: number; count: number } = { fetchMs: 0, unpackMs: 0, buildMs: 0, blobKB: 0, at: 0, count: 0 };   // timings of the last load on this instance (cold start diagnosis)
 export async function getCatalogue(fetchSnapshot: (known: string | null) => Promise<{ version: string; unchanged?: boolean; data?: string } | null>, maxAgeMs = 5 * 60_000): Promise<Catalogue> {
   if (cached && Date.now() - checkedAt < maxAgeMs) return cached;
-  const r = await fetchSnapshot(cached?.version ?? null);
-  checkedAt = Date.now();
-  if (!r) { if (cached) return cached; throw new Error("no catalogue snapshot"); }
-  if (r.unchanged && cached) return cached;
-  cached = buildCatalogue(unpackSnapshot(r.data!));
-  return cached;
+  if (inflight) return inflight;
+  inflight = (async () => {
+    try {
+      const t0 = performance.now(); const r = await fetchSnapshot(cached?.version ?? null); const t1 = performance.now();
+      checkedAt = Date.now();
+      if (!r) { if (cached) return cached; throw new Error("no catalogue snapshot"); }
+      if (r.unchanged && cached) return cached;
+      const snap = unpackSnapshot(r.data!); const t2 = performance.now();
+      cached = buildCatalogue(snap); const t3 = performance.now();
+      Object.assign(catalogueLoad, { fetchMs: t1 - t0, unpackMs: t2 - t1, buildMs: t3 - t2, blobKB: r.data!.length / 1024, at: Date.now(), count: catalogueLoad.count + 1 });
+      return cached;
+    } finally { inflight = null; }
+  })();
+  return inflight;
 }
 export const _resetCatalogueCache = () => { cached = null; checkedAt = 0; };

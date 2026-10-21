@@ -2,7 +2,7 @@
 // Nothing here touches outfit_pool or the default feed.
 import "server-only";
 import { BanState } from "@/outfits/ban";
-import { getCatalogue, type Catalogue } from "@/outfits/catalogue";
+import { catalogueLoad, getCatalogue, type Catalogue } from "@/outfits/catalogue";
 import { compose, newSession, type ComposedOutfit, type Session } from "@/outfits/compose";
 import { alternativesFor } from "@/outfits/compose-alts";
 import { subGroup } from "@/outfits/compose-polish";
@@ -63,8 +63,8 @@ export interface PageInput { banB64?: string | null; device: string; gender: "wo
   /** hybrid: the client-held taste (base64) and the signals since the last page; null / undefined = plain composer without taste */
   taste?: string | null; signals?: Signal[]; hybrid?: boolean }
 export interface TasteOut { taste: string; n: number; personalized: boolean; applied: number; skipped: number; bytes: number; thin: string[]; mix: Record<string, number> }
-export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number; taste?: number }; taste?: TasteOut }> {
-  const t0 = performance.now(); const cat = await getCat();
+export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number; taste?: number; cat?: typeof catalogueLoad & { coldMs: number } }; taste?: TasteOut }> {
+  const t0 = performance.now(); const countBefore = catalogueLoad.count; const cat = await getCat(); const tCat = performance.now() - t0;
   const tb = performance.now(); const ban = inp.banB64 !== undefined && inp.banB64 !== null ? BanState.fromBase64(inp.banB64) : await readBan(inp.device);   // client-held ban list (no storage round trip) or the database copy
   if (inp.startersServed && inp.startersServed > 0) {            // first dynamic page after the starter set: the starter pieces are banned too
     const rows = (await starterRows(inp.gender)).slice(0, inp.startersServed); ban.push(rows.flatMap((r) => [...r.piece_ids, ...r.acc_ids]));
@@ -93,7 +93,7 @@ export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items:
   const te = performance.now();
   const tw = performance.now();
   if (inp.banB64 === undefined || inp.banB64 === null) await writeBan(inp.device, ban2);
-  return { ban: ban2.toBase64(), items, ms: { total: performance.now() - t0, ban: tc - tb, compose: tk - tc, cards: te - tk, write: performance.now() - tw, taste: tt }, taste: tasteOut };
+  return { ban: ban2.toBase64(), items, ms: { total: performance.now() - t0, ban: tc - tb, compose: tk - tc, cards: te - tk, write: performance.now() - tw, taste: tt, cat: { ...catalogueLoad, coldMs: tCat, ...(catalogueLoad.count === countBefore ? { fetchMs: 0, unpackMs: 0, buildMs: 0 } : {}) } }, taste: tasteOut };
 }
 
 export async function starterPage(g: "women" | "men", page: number): Promise<FeedOutfit[]> {
