@@ -21,9 +21,15 @@ Scalability is very important to the user. Design for millions of products and u
 
 - **Source adapters.** Product data enters through a source-adapter layer (crawler, affiliate feed, ...). Every adapter normalizes into the same product schema, so sources are swappable and new shops can be added without touching the rest. The same product from several shops merges into one canonical product with several offers.
 - **Background work, never in the request path.** Ingestion and AI classification run as batched, idempotent background jobs (queue, cron, edge functions). Classify each product once and store attributes plus an embedding (pgvector). Never re-classify unchanged products.
-- **Fast feed.** Feed requests use precomputed or cached candidate pools, indexed queries and cursor pagination. No full-table scans, no heavy computation per request.
+- **Fast feed.** A feed page is either precomputed or CDN-cached (starter set, guests, pool pages) or composed on demand from a versioned in-memory catalogue snapshot kept per function instance. No database read per page except small per-device state such as a taste vector, no full-table scans, a budget under 150 ms per page, and never a paid service call. Catalogue, candidate lists and alternatives are refreshed by background jobs. Per-device state (taste, ban list) is small, incremental and expires when inactive.
 - **User signals.** Store interactions in an append-only event log and keep a compact per-user taste vector that is updated incrementally. Plan for partitioning or archiving of events.
 - **Cost control.** Batch AI calls, cache results, and keep paid calls out of public reach.
+- **Composed outfits are not stored.** An outfit is a list of piece ids; its id is a hash of those ids and events carry the piece ids. Season, dominant style and the other outfit tags (season_primary always set + season_fit, style_primary / style_secondary / style_distinct, formality_level, weather, occasion, palette, boldness, silhouette, contrast, has_outer_layer, sale_count) are computed on demand by shared pure functions and never stored per outfit. A per-device ban list holds recently served single products only (at most 25% of each group and at most 300, client-held by default, with a soft fallback), never outfits.
+- **Availability.** Only pieces with an in-stock offer, a clean cutout and measurements are shown, in both feeds. A refresh job (`scripts/refresh-stock.ts`) keeps availability and prices current (run on demand, to be scheduled daily).
+- **Cost guards.** Every paid script prints an estimate first, has its own cap from an environment variable, and runs under the shared run cap DRAPE_RUN_CAP_USD (default $10) enforced in code (`src/lib/budget.ts`). No AI call exists in the web app or edge functions. Session tokens always expire after 24h (the web token vercel-sample-page is the one documented exception); never delete rows; never mint tokens without expiry; token hashes only in `pipeline_tokens`, plaintext only in memory.
+- **Shop crawling.** Public product feeds only; respect robots.txt and rate limits; skip hosts that answer 401/403/404/410/429/503 and never work around them.
+- **Gender.** products.gender is filled from the classification when empty (trigger); unisex means usable for both genders.
+- **Sale marker.** A red hand-drawn outline per shape plus one SALE label per product, switchable (SALE_MARKER_ENABLED).
 - Record architecture decisions that matter for scale in `docs/architecture.md`.
 
 ## Project setup (done so far)
@@ -63,5 +69,4 @@ The user tells you step by step what to work on right now. Do not start later st
 - After every step check that the Vercel build is green before reporting anything as done.
 - New libraries may be added without asking if they serve progress.
 - Create database tables and migrations yourself (Supabase tools or SQL migrations in the repo).
-- **Session tokens always expire after 24h; never delete rows, never mint tokens without expiry.** Hash only in `pipeline_tokens`, plaintext only in memory.
 - End every reply with one sentence saying what comes next.
