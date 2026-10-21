@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  let b: { ban?: unknown; device_id?: unknown; gender?: unknown; startersServed?: unknown; recent?: unknown };
+  let b: { contrast?: unknown; ban?: unknown; device_id?: unknown; gender?: unknown; startersServed?: unknown; recent?: unknown };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "json" }, { status: 400 }); }
   if (!isUuid(b.device_id) || (b.gender !== "women" && b.gender !== "men")) return NextResponse.json({ error: "params" }, { status: 400 });
   if (limited(`dynp:${clientIp(req)}`, 60, 60_000) || limited(`dynp:${b.device_id}`, 30, 60_000)) return NextResponse.json({ error: "slow down" }, { status: 429 });
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const startersServed = Number.isInteger(b.startersServed) ? Math.max(0, Math.min(200, b.startersServed as number)) : 0;
   try {
     const banB64 = b.ban === "db" ? null : typeof b.ban === "string" && b.ban.length <= 6000 && /^[A-Za-z0-9+/=]*$/.test(b.ban) ? b.ban : undefined;   // ban list held by the client (default) or "db" = the database copy
-    const { items, ms, ban } = await dynamicPage({ device: b.device_id, gender: b.gender, recent, startersServed, banB64: banB64 === undefined ? "" : banB64 });
+    const { items, ms, ban } = await dynamicPage({ device: b.device_id, gender: b.gender, recent, startersServed, contrast: typeof b.contrast === "number" && b.contrast > 0 && b.contrast <= 1 ? b.contrast : undefined, banB64: banB64 === undefined ? "" : banB64 });
     return NextResponse.json({ items, ms, ban: banB64 === null ? undefined : ban }, { headers: { "cache-control": "no-store" } });
   } catch (e) { return NextResponse.json({ error: "unavailable", detail: String(e).slice(0, 120) }, { status: 502 }); }
 }

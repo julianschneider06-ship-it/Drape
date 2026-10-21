@@ -100,7 +100,7 @@ export default function Feed() {
       if (dynRef.current) {
         // dynamic prototype: the fixed starter set first (CDN-cached pages), then pages composed for this device
         let items: FeedOutfit[] = [];
-        if (!dynState.current.startersDone) {
+        if (!dynState.current.startersDone && new URLSearchParams(location.search).get("starter") !== "off") {   // ?starter=off: straight to composed pages (tests)
           const r = await fetch(`/api/dynamic?gender=${g}&starter=${dynState.current.page}`, { signal: AbortSignal.timeout(15000) });
           if (!r.ok) throw new Error(String(r.status));
           items = ((await r.json()) as { items: FeedOutfit[] }).items;
@@ -108,7 +108,7 @@ export default function Feed() {
         }
         if (!items.length) {
           const recent = itemsRef.current.slice(-12).filter((o) => o.dyn).map((o) => ({ ids: o.dyn!.ids, style: o.dyn!.style, store: o.dyn!.store }));
-          const r = await fetch("/api/dynamic", { method: "POST", signal: AbortSignal.timeout(20000), body: JSON.stringify({ device_id: device.current, gender: g, recent, ban: new URLSearchParams(location.search).get("ban") === "db" ? "db" : (store.get(`drape.ban.${g}`) ?? ""), startersServed: dynState.current.startersSent ? 0 : dynState.current.servedStarters }) });
+          const r = await fetch("/api/dynamic", { method: "POST", signal: AbortSignal.timeout(20000), body: JSON.stringify({ device_id: device.current, gender: g, recent, contrast: Number(new URLSearchParams(location.search).get("contrast")) || undefined, ban: new URLSearchParams(location.search).get("ban") === "db" ? "db" : (store.get(`drape.ban.${g}`) ?? ""), startersServed: dynState.current.startersSent ? 0 : dynState.current.servedStarters }) });
           if (!r.ok) throw new Error(String(r.status));
           dynState.current.startersSent = true;
           const j = (await r.json()) as { items: FeedOutfit[]; ban?: string };

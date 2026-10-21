@@ -8,16 +8,16 @@ const BIT = { spring: 1, summer: 2, autumn: 4, winter: 8 } as const;
 
 export interface SeasonPiece {
   mask: number;                       // season list as bits (0 or 15 = no information / all seasons)
-  role?: "outer" | "shorts" | "skirt" | "boots" | "sandals" | "beanie" | "scarf" | "gloves" | "sunglasses" | "hat" | "light-outer" | "tank" | null;
+  role?: "acc" | "outer" | "shorts" | "skirt" | "boots" | "sandals" | "beanie" | "scarf" | "gloves" | "sunglasses" | "hat" | "light-outer" | "tank" | null;
 }
 export interface SeasonResult { season: SeasonName; fit: number; mask: number; votes: Record<string, number> }
 
-const W: Record<string, number> = { outer: 2.5, "light-outer": 2, shorts: 2, skirt: 1.6, boots: 2, sandals: 2, beanie: 2, scarf: 2, gloves: 2, sunglasses: 1.5, hat: 1.0, tank: 1.5 };
+const W: Record<string, number> = { acc: 0.4, outer: 2.5, "light-outer": 2, shorts: 2, skirt: 1.6, boots: 2, sandals: 2, beanie: 2, scarf: 2, gloves: 2, sunglasses: 1.5, hat: 1.0, tank: 1.5 };
 const pop = (m: number) => ((m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1));
 
 /** role of a piece from its name / subcategory (used by the composer; accessories pass their type) */
 export function seasonRole(slot: string, text: string, outer: boolean, cold: boolean, warm: boolean, accType?: string): SeasonPiece["role"] {
-  if (accType) return (["beanie", "scarf", "gloves", "sunglasses"].includes(accType) ? accType : accType === "hat" || accType === "cap" ? "hat" : null) as SeasonPiece["role"];
+  if (accType) return (["beanie", "scarf", "gloves", "sunglasses"].includes(accType) ? accType : accType === "hat" || accType === "cap" ? "hat" : "acc") as SeasonPiece["role"];   // "acc" = bag, belt, watch, jewellery ...: no veto
   const t = text.toLowerCase();
   if (slot === "shoes") return /\b(sandal|slide|flip|espadrille|slingback|thong)s?\b/.test(t) || /\b(sandals?|slides?)\b/.test(t) ? "sandals" : /\b(boots?|chelsea|hiker)\b/.test(t) ? "boots" : null;
   if (slot === "bottom") return /\b(shorts?|skort|bermuda)\b/.test(t) ? "shorts" : /\bskirt\b/.test(t) && /\b(mini|short)\b/.test(t) ? "skirt" : null;
@@ -28,7 +28,8 @@ export function seasonRole(slot: string, text: string, outer: boolean, cold: boo
 
 export function outfitSeason(pieces: SeasonPiece[]): SeasonResult {
   const ms = pieces.map((p) => ({ m: !p.mask || p.mask === 15 ? 15 : p.mask & 15, role: p.role ?? null }));
-  let inter = 15; for (const x of ms) inter &= x.m;
+  // neutral accessories (bag, belt, watch, jewellery: role "acc") only vote, they never narrow the intersection (their season lists are too coarse to veto an outfit)
+  let inter = 15; for (const x of ms) if (x.role !== "acc") inter &= x.m;
   // weighted votes: a piece spreads its weight over its own seasons (a winter-only coat votes fully winter, an all-season shirt votes little for each)
   const votes: Record<string, number> = { spring: 0, summer: 0, autumn: 0, winter: 0 }; let total = 0;
   for (const x of ms) {

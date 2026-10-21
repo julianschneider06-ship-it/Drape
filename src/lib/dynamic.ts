@@ -53,7 +53,7 @@ export async function toFeedOutfits(cat: Catalogue, g: "women" | "men", outs: Co
   return res;
 }
 
-export interface PageInput { banB64?: string | null; device: string; gender: "women" | "men"; recent?: { ids: number[]; style: string; store: string }[]; startersServed?: number; persona?: string | null }
+export interface PageInput { banB64?: string | null; device: string; gender: "women" | "men"; recent?: { ids: number[]; style: string; store: string }[]; startersServed?: number; persona?: string | null; contrast?: number }
 export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number } }> {
   const t0 = performance.now(); const cat = await getCat();
   const tb = performance.now(); const ban = inp.banB64 !== undefined && inp.banB64 !== null ? BanState.fromBase64(inp.banB64) : await readBan(inp.device);   // client-held ban list (no storage round trip) or the database copy
@@ -65,7 +65,7 @@ export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items:
   for (const r of inp.recent ?? []) for (const id of r.ids) session.uses.set(id, (session.uses.get(id) ?? 0) + 1);
   const tc = performance.now();
   const seed = Math.floor(Math.random() * 2 ** 31);
-  const { outfits, ban: ban2 } = compose(cat, { gender: inp.gender, taste: null }, ban, 6, session, makeRnd(seed));
+  const { outfits, ban: ban2 } = compose(cat, { gender: inp.gender, taste: null, ...(inp.contrast ? { mix: { match: 0, near: 0, new: 1 - inp.contrast, contrast: inp.contrast } } : {}) }, ban, 6, session, makeRnd(seed));
   const eff = ban2.effective(cat, inp.gender);
   const alts = outfits.map((o) => alternativesFor(cat, inp.gender, o, eff));
   const tk = performance.now();
