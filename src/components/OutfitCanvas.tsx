@@ -10,10 +10,10 @@ import FeedImage from "./FeedImage";
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt }: {
+export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, onTouchPiece, swapEvt }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string) => void;
-  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt;
+  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; onTouchPiece?: (slot: SlotName) => void; swapEvt?: SwapEvt;
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
@@ -47,6 +47,7 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
     if (!onSwipe || (e.pointerType === "mouse" && e.button !== 0)) return;
     const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-slot]");   // topmost piece under the finger (shoes / overlays win)
     gest.current = { x: e.clientX, y: e.clientY, slot: el?.getAttribute("data-slot") ?? null, mode: "idle" };
+    if (gest.current.slot) onTouchPiece?.(gest.current.slot as SlotName);   // start the lazy lookup of this piece's alternatives
   };
   const move = (e: React.PointerEvent) => {
     const g = gest.current; if (!g || g.mode === "scroll") return;

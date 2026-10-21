@@ -193,17 +193,24 @@ export default function Feed() {
   };
 
   // Swipe on a piece: swap only that piece (next-best / previous alternative, precomputed). Alternatives are fetched lazily on the first swipe.
+  const listPromises = useRef(new Map<string, Promise<Alt[]>>());
+  // lazy fetch of the alternatives of one piece; started when the finger touches the piece (before the swipe is even decided), cached afterwards
+  const ensureList = (o: FeedOutfit, slot: SlotName): Promise<Alt[]> => {
+    const key = slotKeyOf(slot), lk = `${o.id}:${key}`;
+    let pr = listPromises.current.get(lk);
+    if (!pr) {
+      pr = fetch(`/api/alternatives?outfit=${o.id}&slot=${key}`).then((r) => (r.ok ? r.json() : { items: [] })).then((j: { items: Alt[] }) => j.items).catch(() => [] as Alt[]);
+      listPromises.current.set(lk, pr);
+      pr.then((items) => { setAltLists((p) => ({ ...p, [lk]: items })); for (const a of items.slice(0, 2)) { const img = new Image(); img.referrerPolicy = "no-referrer"; img.src = feedSrc(viewCard(a.card, dbg.cut), pieceClass(slot, a.card)); } });
+    }
+    return pr;
+  };
   const swapPiece = async (o: FeedOutfit, index: number, slot: SlotName, dir: "next" | "prev") => {
     const key = slotKeyOf(slot), lk = `${o.id}:${key}`;
     if (swapBusy.current.has(lk)) return;
     swapBusy.current.add(lk);
     try {
-      let list = altLists[lk];
-      if (!list) {
-        const res = await fetch(`/api/alternatives?outfit=${o.id}&slot=${key}`).catch(() => null);
-        list = res && res.ok ? ((await res.json()) as { items: Alt[] }).items : [];
-        setAltLists((p) => ({ ...p, [lk]: list! }));
-      }
+      const list = altLists[lk] ?? await ensureList(o, slot);
       const cur = swaps[o.id]?.[key] ?? -1, nxt = dir === "next" ? cur + 1 : cur - 1;
       const seq = ++swapSeq.current;
       if (nxt >= list.length || nxt < -1) { setSwapEvts((p) => ({ ...p, [o.id]: { slot, dir, seq, kind: "bounce" } })); return; }   // end of the list: bounce, nothing else
@@ -253,7 +260,7 @@ export default function Feed() {
       <div ref={scroller} className="no-scrollbar h-dvh snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
         {shown.map((o, i) => (
           <section key={o.id} data-i={i} className="relative flex h-dvh snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + env(safe-area-inset-bottom))` }}>
-            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
+            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onTouchPiece={(slot) => { void ensureList(items[i], slot); }} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
               onLayout={(layout, mode) => layoutInfo.current.set(o.id, { layout, mode })} />}
             <OutfitButtons value={reactions[o.id] ?? null} onPress={(d) => pressOutfit(o, i, d)} />
           </section>
