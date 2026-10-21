@@ -142,7 +142,7 @@ export const ACCESSORIES = {
   headMaxShrink: 0.12,        // head zone (hat / inline glasses above the top): if it would shrink the main stack by more than this, the item goes to the side column
   hat:     { widthOfTop: 0.55, maxH: 0.17, overlap: 0.08 },   // hat/cap/beanie: width as share of the top's width, max height (of H), overlap onto the element below (share of its own height)
   glasses: { widthOfTop: 0.50, maxH: 0.07, overlap: 0.25 },   // inline sunglasses directly below the hat, slightly over the top's upper edge
-  necklace: { widthOfTop: 0.50, neckline: 0.04, maxHOfTop: 0.5 }, // overlay on the top, centred on its axis, starting this share of the top's height below its upper edge
+  necklace: { widthOfTop: 0.50, neckline: 0.04, maxHOfTop: 0.3 }, // overlay on the top, centred on its axis, starting this share of the top's height below its upper edge
   belt:    { widthOfSeam: 1.0, maxH: 0.045 },                  // drawn across the seam, as wide as the waist/seam, no extra height
   sleeve:  { gap: 0.015, at: 0.35, maxW: 0.13 },               // watch / bracelet right of the top at sleeve height (at = share of the top's height from its upper edge), gap in W
   side: {

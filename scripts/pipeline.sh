@@ -24,4 +24,4 @@ done
 "$PY" scripts/cutout/measure.py
 # presentation of images that passed an older check (new products get it from the check itself)
 npx tsx scripts/image-check.ts --presentation
-if [ "${1:-}" != "--no-outfits" ]; then npx tsx scripts/build-outfits.ts; fi
+if [ "${1:-}" != "--no-outfits" ]; then npx tsx scripts/build-outfits.ts; npx tsx scripts/build-accessories.ts; fi
