@@ -43,12 +43,14 @@ export const CONTRAST_PATTERNS_V1: { name: string; anchor: "shoes" | "bottom" | 
   { name: "sporty top + tailored bottom", anchor: "top", partner: "bottom", a: (p) => sportyness(p) >= 0.6, b: (p) => p.formality >= 0.6 },
 ];
 
-/** style breaks v2: stronger, visibly different pairs (formality gap >= 0.3 between the two pattern pieces, scored with scoreContrast) */
+/** style breaks v2: stronger, visibly different pairs. A piece counts as "sporty" / "tailored" by its dominant style (not just a formality number), the gap between the two pattern pieces must be large */
+const SPORTY_DOM = new Set(["sporty", "athleisure", "streetwear", "skater", "retro_sport", "gorpcore", "techwear"]);
+const TAILORED_DOM = new Set(["classic", "business_casual", "old_money", "quiet_luxury", "preppy"]);
 export const CONTRAST_PATTERNS: typeof CONTRAST_PATTERNS_V1 = [
-  { name: "smart shoes + relaxed bottom", anchor: "shoes", partner: "bottom", a: (p) => p.formality >= 0.7, b: (p) => p.formality <= 0.3 && (p.looseOk || p.volume >= 0.5) },
-  { name: "tailored bottom + sporty shoes", anchor: "bottom", partner: "shoes", a: (p) => p.formality >= 0.65, b: (p) => sportyness(p) >= 0.7 },
-  { name: "formal top + relaxed bottom", anchor: "top", partner: "bottom", a: (p) => p.formality >= 0.65, b: (p) => p.formality <= 0.3 && (p.looseOk || p.volume >= 0.4) },
-  { name: "sporty top + tailored bottom", anchor: "top", partner: "bottom", a: (p) => sportyness(p) >= 0.7, b: (p) => p.formality >= 0.65 },
+  { name: "smart shoes + relaxed bottom", anchor: "shoes", partner: "bottom", a: (p) => p.formality >= 0.7 && TAILORED_DOM.has(p.dom), b: (p) => p.formality <= 0.35 && SPORTY_DOM.has(p.dom) },
+  { name: "tailored bottom + sporty shoes", anchor: "bottom", partner: "shoes", a: (p) => p.formality >= 0.65 && TAILORED_DOM.has(p.dom), b: (p) => SPORTY_DOM.has(p.dom) && p.formality <= 0.4 },
+  { name: "formal top + relaxed bottom", anchor: "top", partner: "bottom", a: (p) => p.formality >= 0.65 && TAILORED_DOM.has(p.dom), b: (p) => p.formality <= 0.35 && SPORTY_DOM.has(p.dom) },
+  { name: "sporty top + tailored bottom", anchor: "top", partner: "bottom", a: (p) => SPORTY_DOM.has(p.dom) && p.formality <= 0.4, b: (p) => p.formality >= 0.65 && TAILORED_DOM.has(p.dom) },
 ];
 
 const BOOTS = /\b(boots?|chelsea|hiker)\b/i;
