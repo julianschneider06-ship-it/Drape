@@ -13,8 +13,10 @@ import type { CatPiece } from "./catalogue";
 
 const D = STYLE_KEYS.length;
 export interface Taste {
-  v: 2; n: number;
-  styles: { top: Float32Array; bottom: Float32Array; shoes: Float32Array };
+  v: 3; n: number;
+  styles: { top: Float32Array; bottom: Float32Array; shoes: Float32Array };   // POSITIVE evidence per slot (likes, ups, dwell, keep ...)
+  neg: { top: Float32Array; bottom: Float32Array; shoes: Float32Array };      // NEGATIVE evidence per slot (scroll past, swap away, outfit down, unlike), kept apart so
+                                                                               // frequent weak negatives cannot push common styles below never-seen ones
   colours: Record<string, number>; silhouettes: Record<string, number>; categories: Record<string, number>;
   formality: number; boldness: number;             // running means over positive events
   tags: Record<string, number>;                    // "se:summer", "oc:office", "pk:neutral", "si:relaxed", "fo:casual", "w:cold", "ct:1" ...
@@ -25,7 +27,7 @@ export interface Taste {
   lastEventId: number;                             // watermark for the idempotent replay job
   updatedAt: number;                               // ms
 }
-export const newTaste = (): Taste => ({ v: 2, n: 0, styles: { top: new Float32Array(D), bottom: new Float32Array(D), shoes: new Float32Array(D) }, colours: {}, silhouettes: {}, categories: {},
+export const newTaste = (): Taste => ({ v: 3, n: 0, styles: { top: new Float32Array(D), bottom: new Float32Array(D), shoes: new Float32Array(D) }, neg: { top: new Float32Array(D), bottom: new Float32Array(D), shoes: new Float32Array(D) }, colours: {}, silhouettes: {}, categories: {},
   formality: 0.4, boldness: 0.3, tags: {}, tb: new Float32Array(D * D), bs: new Float32Array(D * D), fgap: new Float32Array(5), catPair: new Float32Array(64), counts: {}, lastEventId: 0, updatedAt: 0 });
 
 export { SIGNAL };
@@ -50,7 +52,10 @@ export interface TasteEvent {
 
 const capDict = (d: Record<string, number>) => { const k = Object.keys(d); if (k.length <= TASTE.maxCategories) return; k.sort((a, b) => Math.abs(d[a]) - Math.abs(d[b])).slice(0, k.length - TASTE.maxCategories).forEach((x) => delete d[x]); };
 function addPiece(t: Taste, p: CatPiece, w: number) {
-  const s = t.styles[slotOf(p)]; for (let i = 0; i < D; i++) s[i] = s[i] * TASTE.decay + w * p.vec[i];
+  const sl = slotOf(p), s = t.styles[sl], ng = t.neg[sl];
+  for (let i = 0; i < D; i++) { s[i] *= TASTE.decay; ng[i] *= TASTE.decay; }
+  if (w > 0) for (let i = 0; i < D; i++) s[i] += w * p.vec[i];
+  else for (let i = 0; i < D; i++) { const take = Math.min(s[i], -w * p.vec[i] * 0.5); s[i] -= Math.max(0, take); ng[i] += -w * p.vec[i]; }   // a negative also takes back up to half of its weight from the positive side
   const dec = (d: Record<string, number>, k: string) => { if (!k) return; d[k] = (d[k] ?? 0) * TASTE.decay + w; };
   dec(t.colours, p.main); dec(t.silhouettes, p.silhouette); dec(t.categories, p.sub);
   capDict(t.colours); capDict(t.silhouettes); capDict(t.categories);
@@ -119,7 +124,7 @@ export function attrMatch(t: Taste, p: CatPiece): number {
 /** how well a piece matches the device's taste for its slot, 0..1 (0.5 neutral when there is no history) */
 export const tasteMatch = (t: Taste | null, p: CatPiece): number => {
   if (!t || t.n < 5) return 0.5;
-  const s = cos(t.styles[slotOf(p)], p.vec);
+  const sl = slotOf(p), s = Math.max(0, Math.min(1, cos(t.styles[sl], p.vec) - TASTE.negWeight * cos(t.neg[sl], p.vec)));
   return STEER.styleVsAttributes * s + (1 - STEER.styleVsAttributes) * (attrMatch(t, p) + 1) / 2;
 };
 /** tag match -1..1 of an outfit's tags against the device's tag preferences (mean over the tag families that have a preference) */
@@ -146,7 +151,9 @@ export function connBonus(t: Taste | null, a: CatPiece, b: CatPiece): number {
   return Math.max(-1, Math.min(1, c));
 }
 /** size of the raw state (what one device holds before compression) */
-export const tasteBytes = (t: Taste) => 4 * (3 * D + 2 * D * D + 5 + 64) + JSON.stringify({ c: t.colours, s: t.silhouettes, k: t.categories, g: t.tags, n: t.counts }).length + 40;
+export const tasteBytes = (t: Taste) => 4 * (6 * D + 2 * D * D + 5 + 64) + JSON.stringify({ c: t.colours, s: t.silhouettes, k: t.categories, g: t.tags, n: t.counts }).length + 40;
 /** top styles of a slot (debug page, reports) */
 export const topStyles = (t: Taste, slot: "top" | "bottom" | "shoes", n = 5) => Array.from(t.styles[slot], (v, i) => [STYLE_KEYS[i], v] as [string, number]).sort((a, b) => b[1] - a[1]).slice(0, n);
+/** styles with the most negative evidence of a slot */
+export const lessStyles = (t: Taste, slot: "top" | "bottom" | "shoes", n = 3) => Array.from(t.neg[slot], (v, i) => [STYLE_KEYS[i], v] as [string, number]).sort((a, b) => b[1] - a[1]).slice(0, n);
 export { STYLE_KEYS };

@@ -100,7 +100,8 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
   const slots = ["top", "bottom", "shoes", "full_body"] as const;
 
   // taste bands per slot (percentile of the taste match over the gender's pieces of that slot), computed once per call
-  const tm = (p: CatPiece) => tasteMatch(taste, p);
+  const tmMemo = new Float32Array(cat.pieces.length).fill(NaN);   // taste match per piece, computed once per call (sorting and banding call it many times)
+  const tm = (p: CatPiece) => { let v = tmMemo[p.idx]; if (v !== v) v = tmMemo[p.idx] = tasteMatch(taste, p); return v; };
   const bandCut: Record<string, [number, number]> = {};
   if (taste) for (const s of slots) { const l = cat.index.get(`${g}:${s}`); if (!l) continue; const v = Array.from(l, (i) => tm(cat.pieces[i])).sort((a, b) => b - a); bandCut[s] = [v[Math.floor(v.length * COMPOSE.bands.match)] ?? 1, v[Math.floor(v.length * COMPOSE.bands.near)] ?? 0]; }
   const bandOf = (p: CatPiece): Bucket => { const c = bandCut[p.slot]; if (!c) return "new"; const v = tm(p); return v >= c[0] ? "match" : v >= c[1] ? "near" : "new"; };
@@ -114,7 +115,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
     return kept.length >= POLISH.subCapMinPool ? kept : list;
   };
   const fresh = (p: CatPiece) => 1 / (1 + COMPOSE.freshnessPerUse * (session.uses.get(p.id) ?? 0));
-  const tasteW = (p: CatPiece) => 1 - COMPOSE.tasteWeight + COMPOSE.tasteWeight * (guest ? 0.5 : tm(p));
+  const tasteW = (p: CatPiece) => (guest ? 1 - COMPOSE.tasteWeight * 0.5 : Math.pow(1 - COMPOSE.tasteWeight + COMPOSE.tasteWeight * tm(p), STEER.tasteExponent));
   // tag preferences: final pick weight x (1 + tagWeight x tag match) - outfit tags without accessories (cheap; the accessories are chosen afterwards)
   const tagF = (ps: CatPiece[], bucket: Bucket): number => { if (!taste) return 1; const t = outfitTags(cat, { pieces: ps, accs: [], bucket }); return 1 + STEER.tagWeight * tagMatch(taste, { se: t.season_primary, oc: t.occasion, pk: t.palette.kind, si: t.silhouette, fo: t.formality_level, w: t.weather, ct: t.contrast ? 1 : 0 }); };
   const fullShare = Math.min(0.5, ((cat.index.get(`${g}:full_body`)?.length ?? 0) / Math.max(1, (cat.index.get(`${g}:top`)?.length ?? 1))) * COMPOSE.anchorFullBoost);

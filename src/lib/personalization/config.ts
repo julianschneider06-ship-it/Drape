@@ -28,6 +28,7 @@ export const TASTE = {
   decay: 0.995,               // per event: older behaviour fades (half-life about 140 events)
   connectionDecay: 0.999,
   personalizeFrom: 20,        // events before the composer personalizes (below: starter set, then neutral composer)
+  negWeight: 0.5,             // style match = cos(positive evidence) - negWeight x cos(negative evidence)
   maxCategories: 40,          // colours / categories / silhouettes kept per device (smallest weights dropped)
   outboxMax: 80,              // signals the client keeps until the next page request
   thinSupply: 15,             // a taste style with fewer pieces (per slot and gender) counts as thin: the composer uses the nearest styles and reports it
@@ -44,6 +45,7 @@ export const MIX = {
 /** How strongly the taste steers the composer (multipliers on the sampling weights). */
 export const STEER = {
   styleVsAttributes: 0.75,   // taste match of a piece = 0.75 x style cosine + 0.25 x attribute match (colour, category, silhouette, formality, boldness)
+  tasteExponent: 2,          // sampling weight of a piece = (1 - tasteWeight + tasteWeight x taste match) ^ tasteExponent for personalized devices (1 = old spike behaviour)
   tagWeight: 0.35,           // final pick weight x (1 + tagWeight x tag match -1..1)
   connectionWeight: 1.0,     // x (1 + connectionWeight x connection bonus -1..1)
 };

@@ -14,7 +14,7 @@ const TYPES = new Set<TasteEventType>(["like", "unlike", "tap_product", "view_pr
 export function encodeTaste(t: Taste): string {
   const head = Buffer.from(JSON.stringify({ v: t.v, n: t.n, f: +t.formality.toFixed(4), b: +t.boldness.toFixed(4), c: t.colours, s: t.silhouettes, k: t.categories, g: t.tags, cn: t.counts, l: t.lastEventId, u: t.updatedAt }, (_, v) => (typeof v === "number" ? +v.toFixed(4) : v)));
   // float arrays quantized to int16 with one float32 scale per array (precision 1/32767 of the array's max: plenty for preferences), then deflate
-  const arrs = [t.styles.top, t.styles.bottom, t.styles.shoes, t.tb, t.bs, t.fgap, t.catPair];
+  const arrs = [t.styles.top, t.styles.bottom, t.styles.shoes, t.neg.top, t.neg.bottom, t.neg.shoes, t.tb, t.bs, t.fgap, t.catPair];
   const body = Buffer.alloc(arrs.reduce((a, x) => a + 4 + 2 * x.length, 0)); let o = 0;
   for (const a of arrs) { let mx = 0; for (const v of a) mx = Math.max(mx, Math.abs(v)); const sc = mx / 32767 || 1; body.writeFloatLE(sc, o); o += 4; for (const v of a) { body.writeInt16LE(Math.round(v / sc), o); o += 2; } }
   const len = Buffer.alloc(4); len.writeUInt32LE(head.length);
@@ -25,12 +25,12 @@ export function decodeTaste(b64: string | null | undefined): Taste | null {
   try {
     const buf = inflateRawSync(Buffer.from(b64, "base64"), { maxOutputLength: 64_000 });
     const hl = buf.readUInt32LE(0), h = JSON.parse(buf.subarray(4, 4 + hl).toString());
-    if (h.v !== 2) return null;
-    const sizes = [D, D, D, D * D, D * D, 5, 64]; let o = 4 + hl;
+    if (h.v !== 3) return null;   // format 3: positive + negative style evidence
+    const sizes = [D, D, D, D, D, D, D * D, D * D, 5, 64]; let o = 4 + hl;
     if (buf.length !== o + sizes.reduce((a, n) => a + 4 + 2 * n, 0)) return null;
     const arrs = sizes.map((n) => { const sc = buf.readFloatLE(o); o += 4; const a = new Float32Array(n); for (let i = 0; i < n; i++) { a[i] = buf.readInt16LE(o) * (Number.isFinite(sc) ? sc : 0); o += 2; } return a; });
     const t = newTaste();
-    t.styles = { top: arrs[0], bottom: arrs[1], shoes: arrs[2] }; t.tb = arrs[3]; t.bs = arrs[4]; t.fgap = arrs[5]; t.catPair = arrs[6];
+    t.styles = { top: arrs[0], bottom: arrs[1], shoes: arrs[2] }; t.neg = { top: arrs[3], bottom: arrs[4], shoes: arrs[5] }; t.tb = arrs[6]; t.bs = arrs[7]; t.fgap = arrs[8]; t.catPair = arrs[9];
     const num = (x: unknown, d: number) => (typeof x === "number" && Number.isFinite(x) ? x : d), dict = (x: unknown) => (x && typeof x === "object" ? Object.fromEntries(Object.entries(x as Record<string, unknown>).filter(([, v]) => typeof v === "number" && Number.isFinite(v)).slice(0, 80)) as Record<string, number> : {});
     Object.assign(t, { n: Math.max(0, num(h.n, 0)), formality: num(h.f, 0.4), boldness: num(h.b, 0.3), colours: dict(h.c), silhouettes: dict(h.s), categories: dict(h.k), tags: dict(h.g), counts: dict(h.cn), lastEventId: num(h.l, 0), updatedAt: num(h.u, 0) });
     return t;
