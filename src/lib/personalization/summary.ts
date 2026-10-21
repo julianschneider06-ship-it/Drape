@@ -15,8 +15,8 @@ export function summarize(t: Taste) {
   const tagFam = (k: string) => top(Object.fromEntries(Object.entries(t.tags).filter(([x]) => x.startsWith(`${k}:`)).map(([x, v]) => [x.slice(k.length + 1), v])), 5);
   return {
     events: t.n, personalized: t.n >= TASTE.personalizeFrom, personalizeFrom: TASTE.personalizeFrom, counts: t.counts, updatedAt: t.updatedAt ? new Date(t.updatedAt).toISOString() : null, lastEventId: t.lastEventId,
-    styles: { top: topStyles(t, "top").map(([k, v]) => [k, +v.toFixed(2)]), bottom: topStyles(t, "bottom").map(([k, v]) => [k, +v.toFixed(2)]), shoes: topStyles(t, "shoes").map(([k, v]) => [k, +v.toFixed(2)]) },
-    stylesLess: { top: lessStyles(t, "top").map(([k, v]) => [k, +v.toFixed(2)]), bottom: lessStyles(t, "bottom").map(([k, v]) => [k, +v.toFixed(2)]), shoes: lessStyles(t, "shoes").map(([k, v]) => [k, +v.toFixed(2)]) },
+    styles: { top: topStyles(t, "top").filter(([, v]) => v > 0).map(([k, v]) => [k, +v.toFixed(2)]), bottom: topStyles(t, "bottom").filter(([, v]) => v > 0).map(([k, v]) => [k, +v.toFixed(2)]), shoes: topStyles(t, "shoes").filter(([, v]) => v > 0).map(([k, v]) => [k, +v.toFixed(2)]) },
+    stylesLess: { top: lessStyles(t, "top").filter(([, v]) => v > 0).map(([k, v]) => [k, +v.toFixed(2)]), bottom: lessStyles(t, "bottom").filter(([, v]) => v > 0).map(([k, v]) => [k, +v.toFixed(2)]), shoes: lessStyles(t, "shoes").filter(([, v]) => v > 0).map(([k, v]) => [k, +v.toFixed(2)]) },
     attributes: { colours: top(t.colours), coloursLess: bottom(t.colours), categories: top(t.categories), categoriesLess: bottom(t.categories), silhouettes: top(t.silhouettes, 4), formality: +t.formality.toFixed(2), boldness: +t.boldness.toFixed(2) },
     tags: { season: tagFam("se"), occasion: tagFam("oc"), palette: tagFam("pk"), silhouette: tagFam("si"), formality: tagFam("fo"), weather: tagFam("w"), contrast: tagFam("ct") },
     connections: { topBottom: strongest(t.tb), bottomShoes: strongest(t.bs), formalityGap: Array.from(t.fgap, (v) => +v.toFixed(2)) },
