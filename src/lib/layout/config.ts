@@ -156,7 +156,8 @@ export const ACCESSORIES = {
   enabled: true,
   headMaxShrink: 0.18,        // head zone (hat above the top): if it would shrink the main stack by more than this, the item goes to the side column
   head:    { collarMul: 1.15, mulRange: [1.0, 1.3] as [number, number], fallbackWidthOfTop: 0.55, minW: 0.15, maxH: 0.17, overlap: 0.08 }, // head item width = collar width x collarMul (clamped); without a collar measurement at most fallbackWidthOfTop x the top's width
-  necklace: { widthOfTop: 0.50, neckline: 0.04, maxHOfTop: 0.3, minWidthOfTop: 0.12, maxAspect: 0.55 }, // maxAspect: compact (square) pendants / initials look like stickers on the top -> side column; only long chains (tall, narrow) go inline // overlay on the top, centred on its axis, starting this share of the top's height below its upper edge
+  necklace: { widthOfTop: 0.50, neckline: 0.04, maxHOfTop: 0.3, minWidthOfTop: 0.12, maxAspect: 0.55, minLongest: 0.09 }, // minLongest: an inline necklace whose longest side is below this share of the canvas width is unreadable -> side column
+  // maxAspect: compact (square) pendants / initials look like stickers on the top -> side column; only long chains (tall, narrow) go inline // overlay on the top, centred on its axis, starting this share of the top's height below its upper edge
   belt:    { widthOfSeam: 1.0, maxH: 0.045 },                  // drawn across the seam, as wide as the waist/seam, no extra height
   sleeve:  { gap: 0.015, at: 0.35, maxW: 0.17 },               // watch / bracelet right of the top at sleeve height (at = share of the top's height from its upper edge), gap in W
   // size boost per type on top of the real-world size (long accessories were too small in the column); sunglasses 2x, caps +20% (the bill makes them look small), backpack +20%, hats / beanies unchanged, everything else +15%

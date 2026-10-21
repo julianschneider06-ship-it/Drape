@@ -2,17 +2,17 @@
 import { useState } from "react";
 import type { FeedCard } from "@/lib/types";
 import { blendStyle, cropGeometry, imgUrl } from "@/lib/client/format";
-import { isOnSale, saleMarkerOn } from "@/lib/client/sale";
+import { isOnSale, saleMarkerOn, saleSize } from "@/lib/client/sale";
 
 /**
  * Product image fitted to its box, cropped to the product's content box (shop whitespace removed) when known,
  * with the backdrop blended into white. The parent must have a fixed size (it becomes a size container).
  */
-export default function FeedImage({ card, src: srcIn, priority, fill = 0.92, minW = 700, blend = true }: { card: FeedCard; src?: string; blend?: boolean; priority?: boolean; fill?: number; minW?: number }) {
+export default function FeedImage({ card, src: srcIn, priority, fill = 0.92, minW = 700, blend = true, wShare = 0.3 }: { card: FeedCard; src?: string; blend?: boolean; priority?: boolean; fill?: number; minW?: number; wShare?: number }) {
   const [failed, setFailed] = useState(false);
   const g = cropGeometry(card);
   const sale = !blend && saleMarkerOn() && isOnSale(card);   // only cutouts (transparent) get the outline
-  const look = blend ? blendStyle(card) : sale ? { filter: "url(#drape-sale-ink)" } : undefined; // cutouts are transparent: no multiply (shoes stay opaque over trousers)
+  const look = blend ? blendStyle(card) : sale ? { filter: `url(#drape-sale-ink-${saleSize(wShare)})` } : undefined; // cutouts are transparent: no multiply (shoes stay opaque over trousers)
   if (failed) return <span className="absolute inset-0 flex items-center justify-center px-6 text-center text-xs text-neutral-400">{card.brand}<br />{card.name}</span>;
   const src = srcIn ?? imgUrl(card.image, minW);
   if (!g) {
@@ -22,7 +22,7 @@ export default function FeedImage({ card, src: srcIn, priority, fill = 0.92, min
   }
   const k = `min(${(fill * 100) / g.cw}cqw, ${(fill * 100) / g.ch}cqh)`;
   return (
-    <div className="absolute inset-0 overflow-hidden" style={{ containerType: "size" }}>
+    <div className={`absolute inset-0 ${sale ? "" : "overflow-hidden"}`} style={{ containerType: "size" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt="" referrerPolicy="no-referrer" loading={priority ? "eager" : "lazy"} decoding="async" onError={() => setFailed(true)} draggable={false}
         style={{

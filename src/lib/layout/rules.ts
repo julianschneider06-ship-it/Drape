@@ -131,7 +131,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
         let w = A.necklace.widthOfTop * topRect.w, h = w / ar;
         const hMax = A.necklace.maxHOfTop * topRect.h;
         if (h > hMax) { h = hMax; w = h * ar; }
-        if (ar > A.necklace.maxAspect || w < A.necklace.minWidthOfTop * topRect.w) { accInfo.demoted.push(`${a.type}:pendant->column`); continue; }   // a tiny pendant would be invisible on the top
+        if (ar > A.necklace.maxAspect || w < A.necklace.minWidthOfTop * topRect.w || Math.max(w, h) < A.necklace.minLongest * W) { accInfo.demoted.push(`${a.type}:pendant->column`); continue; }   // a tiny pendant would be invisible on the top
         const rect = { x: axis - w / 2, y: topRect.y + A.necklace.neckline * topRect.h, w, h };
         placedExtra.push({ slot: a.slot, rect, rot: 0, z: A.z.inline }); taken.add(a.slot);
         accInfo.placed.push({ slot: a.slot, type: a.type, kind: "inline", zone: "neck" });

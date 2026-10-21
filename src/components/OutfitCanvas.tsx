@@ -59,7 +59,7 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
         return (
           <div key={p.slot} className="absolute" style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined }}>
             <button type="button" onClick={() => onOpen(orig(c, p.slot), p.slot)} aria-label={`${c.brand} ${c.name}`} className={`absolute inset-0 ${debug ? "outline outline-1 outline-red-400" : ""}`}>
-              <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} />
+              <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} />
             </button>
           </div>
         );
