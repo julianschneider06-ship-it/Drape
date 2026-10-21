@@ -13,6 +13,7 @@ const HOST = "generativelanguage.googleapis.com";
 export const RUN_CAP_USD = () => Number(process.env.DRAPE_RUN_CAP_USD ?? 10);
 const ledgerFile = () => (process.env.DRAPE_RUN_ID ? join(tmpdir(), `drape-budget-${process.env.DRAPE_RUN_ID.replace(/[^\w.-]/g, "_")}.json`) : null);
 let runSpent = 0;
+const usd = (v: number) => `$${v < 0.1 ? v.toFixed(4) : v.toFixed(2)}`;   // small caps (0.002) must not print as $0.00
 const readRun = (): number => { const f = ledgerFile(); if (!f) return runSpent; try { return existsSync(f) ? Number(JSON.parse(readFileSync(f, "utf8")).spent) || 0 : 0; } catch { return 0; } };
 const writeRun = (v: number) => { runSpent = v; const f = ledgerFile(); if (f) writeFileSync(f, JSON.stringify({ spent: v, at: new Date().toISOString() })); };
 
@@ -31,7 +32,7 @@ function stop(why: string): never {
   console.error(`\nBUDGET STOP: ${why}\n${report()}`);
   process.exit(3);
 }
-export const report = () => `${steps.map((s) => `  step ${s.name}: spent $${s.spent.toFixed(4)} of cap $${s.cap.toFixed(2)} (${s.calls} paid calls)`).join("\n")}\n  run total $${readRun().toFixed(4)} of cap $${RUN_CAP_USD().toFixed(2)}`;
+export const report = () => `${steps.map((s) => `  step ${s.name}: spent ${usd(s.spent)} of cap ${usd(s.cap)} (${s.calls} paid calls)`).join("\n")}\n  run total ${usd(readRun())} of cap ${usd(RUN_CAP_USD())}`;
 
 function costOf(url: string, json: { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number; totalTokenCount?: number } }): number {
   const u = json.usageMetadata ?? {}, model = /models\/([^:/?]+)/.exec(url)?.[1] ?? "";
@@ -47,8 +48,8 @@ function install() {
     if (!url.includes(HOST) || !/:(generateContent|embedContent|batchEmbedContents|streamGenerateContent)/.test(url)) return real(input, init);   // free calls (model metadata) pass
     const s = active;
     if (!s) stop("a paid Gemini call was attempted without startStep() (no budget step is active)");
-    if (s.spent >= s.cap) stop(`step "${s.name}" reached its cap $${s.cap.toFixed(2)}`);
-    if (readRun() >= RUN_CAP_USD()) stop(`run total reached the run cap $${RUN_CAP_USD().toFixed(2)} (DRAPE_RUN_CAP_USD)`);
+    if (s.spent >= s.cap) stop(`step "${s.name}" reached its cap ${usd(s.cap)}`);
+    if (readRun() >= RUN_CAP_USD()) stop(`run total reached the run cap ${usd(RUN_CAP_USD())} (DRAPE_RUN_CAP_USD)`);
     const res = await real(input, init); s.calls++;
     if (res.ok) { try { const c = costOf(url, await res.clone().json()); s.spent += c; writeRun(readRun() + c); } catch { s.spent += 0.002; writeRun(readRun() + 0.002); } }
     return res;
@@ -59,9 +60,9 @@ function install() {
 export function startStep(o: StepOpts): Step {
   const cap = Number(o.cliCap ?? process.env[o.capEnv] ?? o.capDefault);
   const est = o.items != null ? `${o.items} items x $${o.unitUsd} = about $${(o.items * o.unitUsd).toFixed(2)}` : `about $${(o.unitUsd * 1000).toFixed(2)} per 1,000 items ($${o.unitUsd} each); the cap allows about ${Math.floor(cap / o.unitUsd)} items`;
-  console.log(`ESTIMATE [${o.name}]: ${est}; step cap $${cap.toFixed(2)} (${o.capEnv}${o.cliCap != null ? ", --cap" : ""}); run cap $${RUN_CAP_USD().toFixed(2)} (DRAPE_RUN_CAP_USD), run spent so far $${readRun().toFixed(4)}`);
+  console.log(`ESTIMATE [${o.name}]: ${est}; step cap ${usd(cap)} (${o.capEnv}${o.cliCap != null ? ", --cap" : ""}); run cap ${usd(RUN_CAP_USD())} (DRAPE_RUN_CAP_USD), run spent so far ${usd(readRun())}`);
   if (o.items != null && o.items * o.unitUsd > cap) console.log(`WARNING: the estimate is above the step cap; the step will stop at the cap`);
-  const s: Step = { name: o.name, cap, spent: 0, calls: 0, over: () => s.spent >= s.cap || readRun() >= RUN_CAP_USD(), summary: () => `${o.name}: $${s.spent.toFixed(4)} of cap $${cap.toFixed(2)}` };
+  const s: Step = { name: o.name, cap, spent: 0, calls: 0, over: () => s.spent >= s.cap || readRun() >= RUN_CAP_USD(), summary: () => `${o.name}: ${usd(s.spent)} of cap ${usd(cap)}` };
   steps.push(s); active = s; return s;
 }
 
