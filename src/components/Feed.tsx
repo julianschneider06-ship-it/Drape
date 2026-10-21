@@ -193,7 +193,7 @@ export default function Feed() {
         } else if (enterAt.current.has(i) && e.intersectionRatio < 0.3) {
           const dwell = Date.now() - (enterAt.current.get(i) ?? Date.now());
           enterAt.current.delete(i);
-          track({ event_type: "dwell_ms", outfit_id: o.id, product_ids: ids, feed_index: i, gender: genderRef.current, dwell_ms: dwell });
+          track({ event_type: "dwell_ms", outfit_id: o.id, product_ids: ids, feed_index: i, gender: genderRef.current, dwell_ms: dwell, ...(o.tags ? { ctx: { tags: compactTags(o.tags) } } : {}) });
           signal({ t: "dwell_ms", o: ids, d: dwell, tg: tg(o) });
           // swapped pieces that are on screen when the user leaves the outfit count as kept (stronger after a like / tap / long look)
           const sw = swapsRef.current[o.id];

@@ -68,3 +68,32 @@ export function applySignals(cat: Catalogue, t: Taste, signals: Signal[]): { tas
   for (const s of signals) { const e = signalToEvent(cat, s); if (!e) { skipped++; continue; } applyEvent(t, e); applied++; }
   return { taste: t, applied, skipped };
 }
+
+/** event-log rows (events_for_device) -> signals: the event log is the source of truth; replaying it rebuilds the client-held taste (login / new device / sync).
+ *  "keep" is derived like on the client: a piece that was swapped in and is still on screen when the user leaves the outfit (dwell event) counts as kept. */
+export interface EventRow { id: number; t: string; p: number | null; o: number[] | null; out: number | null; d: number | null; ctx: Record<string, unknown> | null; at: string }
+export function eventsToSignals(rows: EventRow[]): Signal[] {
+  const out: Signal[] = [], swappedIn = new Map<number, Set<number>>();
+  const tg = (c: Record<string, unknown> | null) => { const t = c?.tags as Record<string, unknown> | undefined; if (!t) return null; const { se, oc, pk, si, fo, w, ct } = t; return { se, oc, pk, si, fo, w, ct } as EventTags; };
+  for (const r of rows) {
+    const at = Date.parse(r.at), o = r.o ?? undefined, c = r.ctx ?? {};
+    switch (r.t) {
+      case "like": case "unlike": case "tap_product": case "view_product_click": if (r.p) out.push({ t: r.t, p: r.p, o, tg: tg(c), at }); break;
+      case "outfit_up": case "outfit_down": out.push({ t: r.t, o, tg: tg(c), at }); break;
+      case "outfit_clear": out.push({ t: "outfit_clear", o, pv: c.prev === "up" || c.prev === "down" ? c.prev : undefined, tg: tg(c), at }); break;
+      case "scroll_past": out.push({ t: "scroll_past", o, tg: tg(c), at }); break;
+      case "swap": {
+        out.push({ t: "swap", x: typeof c.out === "number" ? c.out : undefined, i: r.p ?? undefined, a: typeof c.alt === "number" ? c.alt : undefined, f: typeof c.from === "number" ? c.from : undefined, at });
+        if (r.out && r.p) { const s = swappedIn.get(r.out) ?? new Set<number>(); s.add(r.p); swappedIn.set(r.out, s); }
+        break;
+      }
+      case "dwell_ms": {
+        out.push({ t: "dwell_ms", o, d: r.d ?? 0, tg: tg(c), at });
+        const s = r.out ? swappedIn.get(r.out) : undefined;
+        if (s && o) for (const id of o) if (s.has(id)) out.push({ t: "keep", p: id, o, b: (r.d ?? 0) >= 8000 ? 2 : 1, at });
+        break;
+      }
+    }
+  }
+  return cleanSignals(out, 100000);
+}
