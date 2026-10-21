@@ -214,32 +214,36 @@ export default function Feed() {
     track({ event_type: "swap", outfit_id: o.id, feed_index: index, slot: trackSlot(slot), product_id: incoming.id, gender: genderRef.current, ctx: { out: out.id, dir, rank: nxt, alt: nxt, from: cur } });
   };
 
-  // Preload the alternatives' images once the outfit is fully shown: idle time, low priority, visible outfit first, then the next one;
-  // cancelled when the user scrolls on; skipped with data saver on.
+  // Preload the alternatives' images once the outfit is fully shown: idle time, low priority, cancelled when the user scrolls on,
+  // skipped with data saver / 2g. Order (data budget): 1) the visible outfit's top / bottom / shoes alternatives, 2) its accessory
+  // alternatives, 3) the NEXT outfit's first alternative per main piece.
   useEffect(() => {
-    const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-    if (conn?.saveData || !dbg.preload || !shown.length) return;
+    const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (conn?.saveData || /2g/.test(conn?.effectiveType ?? "") || !dbg.preload || !shown.length) return;
     let cancelled = false; const inflight: HTMLImageElement[] = [];
     const idle = (fn: () => void) => ("requestIdleCallback" in window ? (window as unknown as { requestIdleCallback: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback(fn, { timeout: 1500 }) : setTimeout(fn, 60));
-    const urlsOf = (o?: FeedOutfit) => {
+    const urls = (o: FeedOutfit | undefined, keys: (k: string) => boolean, maxAlts: number) => {
       const out: string[] = [];
-      for (const [key, list] of Object.entries(o?.alts ?? {})) for (const a of list) {
-        const cls = key === "top" && o!.kind === "full" ? "full" : key.startsWith("acc") ? "top" : (key as "top" | "bottom" | "shoes");
-        out.push(feedSrc(viewCard(a.card, dbg.cut), pieceClass(cls, a.card)));
-      }
-      return out.filter((u) => !prefetched.current.has(u));
-    };
-    const run = async () => {
-      for (const o of [shown[current], shown[current + 1]]) {
-        for (const u of urlsOf(o)) {
-          if (cancelled) return;
-          await new Promise<void>((res) => idle(() => {
-            if (cancelled) return res();
-            prefetched.current.add(u);
-            const img = new Image(); img.referrerPolicy = "no-referrer"; img.decoding = "async"; (img as HTMLImageElement & { fetchPriority?: string }).fetchPriority = "low";
-            img.onload = img.onerror = () => res(); inflight.push(img); img.src = u;
-          }));
+      for (const [key, list] of Object.entries(o?.alts ?? {})) {
+        if (!keys(key)) continue;
+        for (const a of list.slice(0, maxAlts)) {
+          const cls = key === "top" && o!.kind === "full" ? "full" : key.startsWith("acc") ? "top" : (key as "top" | "bottom" | "shoes");
+          out.push(feedSrc(viewCard(a.card, dbg.cut), pieceClass(cls, a.card)));
         }
+      }
+      return out;
+    };
+    const main = (k: string) => !k.startsWith("acc"), acc = (k: string) => k.startsWith("acc");
+    const queue = [...urls(shown[current], main, 2), ...urls(shown[current], acc, 2), ...urls(shown[current + 1], main, 1)].filter((u) => !prefetched.current.has(u));
+    const run = async () => {
+      for (const u of queue) {
+        if (cancelled) return;
+        await new Promise<void>((res) => idle(() => {
+          if (cancelled) return res();
+          prefetched.current.add(u);
+          const img = new Image(); img.referrerPolicy = "no-referrer"; img.decoding = "async"; (img as HTMLImageElement & { fetchPriority?: string }).fetchPriority = "low";
+          img.onload = img.onerror = () => res(); inflight.push(img); img.src = u;
+        }));
       }
     };
     const t = setTimeout(run, 700);   // the outfit counts as "fully shown" after a short pause
