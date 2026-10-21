@@ -6,6 +6,7 @@ import { getCatalogue, type Catalogue } from "@/outfits/catalogue";
 import { compose, newSession, type ComposedOutfit, type Session } from "@/outfits/compose";
 import { alternativesFor } from "@/outfits/compose-alts";
 import { subGroup } from "@/outfits/compose-polish";
+import { outfitTags } from "@/outfits/tags";
 import { makeRnd } from "@/outfits/pool-shared";
 import { gatewayRpc } from "@/lib/gateway";
 import type { FeedAccessory, FeedAlt, FeedCard, FeedOutfit } from "@/lib/types";
@@ -48,7 +49,8 @@ export async function toFeedOutfits(cat: Catalogue, g: "women" | "men", outs: Co
       if (a.length) altOut[key] = a;
     }
     const first = cat.byId.get(o.ids[0])!;
-    res.push({ id: o.hash, kind: o.kind, score: o.score, order: orderBase + i, top: mains[0]!, bottom: full ? null : mains[1]!, shoes: mains[mains.length - 1]!, accessories, alts: altOut,
+    const tags = outfitTags(cat, { pieces: o.ids.map((id) => cat.byId.get(id)!), accs: o.acc.map((a) => cat.accById.get(a.id)!).filter(Boolean), bucket: o.bucket, pattern: o.pattern });
+    res.push({ tags, id: o.hash, kind: o.kind, score: o.score, order: orderBase + i, top: mains[0]!, bottom: full ? null : mains[1]!, shoes: mains[mains.length - 1]!, accessories, alts: altOut,
       dyn: { style: o.style, store: first.store, season: o.season.season, fit: o.season.fit, bucket: o.bucket, pattern: o.pattern, ids: [...o.ids, ...o.acc.map((a) => a.id)] } });
   });
   return res;

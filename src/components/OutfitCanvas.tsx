@@ -7,6 +7,7 @@ import { garmentClass, RULES, SALE_LABEL } from "@/lib/layout/config";
 import { isOnSale, saleMarkerOn } from "@/lib/client/sale";
 import { computeLayout, hash32, pickTemplate, type AccIn, type AccSlot, type PieceIn, type SlotName } from "@/lib/layout/engine";
 import FeedImage from "./FeedImage";
+import { tagLine } from "@/outfits/tags";
 
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
@@ -115,6 +116,7 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
       {debug && <>
         <div className="absolute border border-dashed border-sky-400 bg-sky-50/60" style={{ left: pct(layout.marginRect.x, W), top: 0, width: pct(layout.marginRect.w, W), height: "100%" }} />
         <span className="absolute left-1 top-0 z-50 rounded bg-black px-1 text-[10px] text-white">{layout.template}{layout.debug ? ` ${layout.debug.binding.join("+")}` : ""}</span>
+        {outfit.tags && <span className="absolute bottom-0 left-1 right-1 z-50 rounded bg-black/80 px-1 py-0.5 text-[9px] leading-tight text-white" data-tags>{tagLine(outfit.tags)}</span>}
         {layout.debug && <>
           <div className="absolute z-40 border-l border-dashed border-blue-600" style={{ left: pct(layout.debug.axisX, W), top: 0, height: "100%" }} title="left axis" />
           <div className="absolute z-40 border-l border-dashed border-green-600" style={{ left: pct(layout.debug.centreX, W), top: 0, height: "100%" }} title="canvas centre axis" />

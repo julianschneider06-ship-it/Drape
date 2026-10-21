@@ -1,3 +1,4 @@
+import { cleanCompactTags } from "@/outfits/tags";
 import { NextRequest, NextResponse } from "next/server";
 import { gatewayRpc } from "@/lib/gateway";
 import { clientIp, isUuid, limited } from "@/lib/ratelimit";
@@ -17,6 +18,7 @@ function cleanCtx(c: unknown) {
   const prevId = int(o.out), rank = int(o.rank, 100), alt = int(o.alt, 2), from = int(o.from, 2);
   if (prevId !== null) out.out = prevId; if (rank !== null) out.rank = rank; if (alt !== null) out.alt = alt; if (from !== null) out.from = from;   // alt / from = loop position after / before the swap (0 = original) if (o.dir === "next" || o.dir === "prev") out.dir = o.dir;   // swap: product that left, direction, alternative rank (0 = the original)
   if (Array.isArray(o.canvas) && o.canvas.length === 2) { const a = int(o.canvas[0], 5000), b = int(o.canvas[1], 5000); if (a !== null && b !== null) out.canvas = [a, b]; }
+  const tg = cleanCompactTags(o.tags); if (tg) out.tags = tg;   // compact outfit tags (payload only, no schema change)
   return Object.keys(out).length ? out : null;
 }
 

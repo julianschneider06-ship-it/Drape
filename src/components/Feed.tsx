@@ -11,6 +11,7 @@ import ProductSheet from "./ProductSheet";
 import OutfitButtons, { type Reaction } from "./OutfitButtons";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { SaleInkDefs } from "@/lib/client/sale";
+import { compactTags } from "@/outfits/tags";
 import { applySwaps, loopSize, slotKeyOf, type SwapEvt, type SwapState } from "@/lib/client/swap";
 import type { SlotName } from "@/lib/layout/engine";
 
@@ -195,7 +196,7 @@ export default function Feed() {
     if (outfit) interacted.current.add(index);
     fetch("/api/likes", {
       method: "POST",
-      body: JSON.stringify({ device_id: device.current, product_id: card.id, liked: want, outfit_id: outfit?.id, feed_index: index, slot: slot === "sheet" ? "sheet" : slot, gender: genderRef.current }),
+      body: JSON.stringify({ device_id: device.current, product_id: card.id, liked: want, outfit_id: outfit?.id, feed_index: index, slot: slot === "sheet" ? "sheet" : slot, gender: genderRef.current, tags: outfit?.tags ? compactTags(outfit.tags) : undefined }),
     }).then((r) => { if (!r.ok) throw new Error(); }).catch(() => {
       setLiked((prev) => { const n = new Set(prev); if (want) n.delete(card.id); else n.add(card.id); return n; }); // revert
     });
@@ -211,7 +212,7 @@ export default function Feed() {
     track({
       event_type: next ? (next === "up" ? "outfit_up" : "outfit_down") : "outfit_clear", outfit_id: o.id, feed_index: index, gender: genderRef.current,
       product_ids: [o.top.id, ...(o.bottom ? [o.bottom.id] : []), o.shoes.id],
-      ctx: { layout: info?.layout, mode: info?.mode, canvas: canvas ? [canvas.w, canvas.h] : undefined, v: "v3.1", ...(prev && next !== prev ? { prev } : {}) },
+      ctx: { layout: info?.layout, mode: info?.mode, canvas: canvas ? [canvas.w, canvas.h] : undefined, v: "v3.1", ...(prev && next !== prev ? { prev } : {}), ...(o.tags ? { tags: compactTags(o.tags) } : {}) },
     });
   };
 
@@ -235,7 +236,7 @@ export default function Feed() {
     setSwaps((p) => ({ ...p, [o.id]: { ...(p[o.id] ?? {}), [key]: nxt } }));
     setSwapEvts((p) => ({ ...p, [o.id]: { slot, dir: dir === "next" ? "prev" : "next", seq, kind: "swap", newId: incoming.id } }));   // swipe right: the content moves right
     interacted.current.add(index);
-    track({ event_type: "swap", outfit_id: o.id, feed_index: index, slot: trackSlot(slot), product_id: incoming.id, gender: genderRef.current, ctx: { out: out.id, dir, rank: nxt, alt: nxt, from: cur } });
+    track({ event_type: "swap", outfit_id: o.id, feed_index: index, slot: trackSlot(slot), product_id: incoming.id, gender: genderRef.current, ctx: { out: out.id, dir, rank: nxt, alt: nxt, from: cur, ...(o.tags ? { tags: compactTags(o.tags) } : {}) } });
   };
 
   // Preload the alternatives' images once the outfit is fully shown: idle time, low priority, cancelled when the user scrolls on,
@@ -276,7 +277,7 @@ export default function Feed() {
 
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
-    track({ event_type: "tap_product", product_id: card.id, outfit_id: outfit.id, feed_index: index, slot: trackSlot(slot), gender: genderRef.current });
+    track({ event_type: "tap_product", product_id: card.id, outfit_id: outfit.id, feed_index: index, slot: trackSlot(slot), gender: genderRef.current, ...(outfit.tags ? { ctx: { tags: compactTags(outfit.tags) } } : {}) });
     setSheet({ card, outfit, index, slot });
   };
 
