@@ -19,6 +19,8 @@ export const ACC = {
   minStyleSim: 0.15,                    // accessory style vector vs the outfit's (cosine); below = rejected
   formalityTol: 0.45,                   // |accessory formality - outfit formality| beyond this = rejected
   tailoredFormality: 0.68,              // outfit formality (mean) at or above this = tailored / formal: no hat, no backpack
+  quietMaxN: 2,                         // soft rule: formal / tailored or quiet minimal outfits (no accent colour, no pattern, no statement piece, formality >= quietFormality) take at most this many
+  quietFormality: 0.5,
   statementMin: 0.7,                    // a "statement piece"
   reusePenalty: 0.28,                   // score x 1/(1 + penalty * uses so far)
   recentWindow: 14,                     // same accessory or same store within the last N outfits of the feed order = penalised
@@ -51,7 +53,7 @@ export function toAcc(r: RawAcc): Acc {
 
 export interface OutfitCtx {
   gender: "women" | "men"; vec: Float32Array; mask: number; formality: number; accents: Set<string>; statements: number;
-  warm: boolean; cold: boolean; tailored: boolean; hasBottom: boolean; full: boolean; outerTop: boolean;
+  warm: boolean; cold: boolean; tailored: boolean; hasBottom: boolean; full: boolean; outerTop: boolean; maxN: number;
 }
 
 /** Summary of an outfit (its 2-3 main pieces) for the accessory rules. */
@@ -71,7 +73,7 @@ export function outfitCtx(gender: "women" | "men", pieces: Piece[], names: strin
   const cold = pieces.some((x) => x.cold) || winterOnly || (mask & 7) === 0 && (mask & 8) !== 0;
   const tailored = formality >= ACC.tailoredFormality || names.some((n) => /\b(blazer|suit|tuxedo|tailored|dress shirt|waistcoat)\b/i.test(n));
   const top = pieces.find((x) => x.slot === "top"), bottom = pieces.find((x) => x.slot === "bottom");
-  return { gender, vec, mask, formality, accents, statements, warm, cold, tailored, hasBottom: !!bottom, outerTop: names.some((n) => /\b(coat|jacket|parka|blazer|overshirt|trench|puffer|anorak|bomber|cardigan|vest|gilet)\b/i.test(n)), full: pieces.some((x) => x.slot === "full_body") && !top };
+  return { gender, vec, mask, formality, accents, statements, warm, cold, tailored, hasBottom: !!bottom, maxN: tailored || (accents.size === 0 && statements === 0 && !pieces.some((x) => x.patterned) && formality >= ACC.quietFormality) ? ACC.quietMaxN : 3, outerTop: names.some((n) => /\b(coat|jacket|parka|blazer|overshirt|trench|puffer|anorak|bomber|cardigan|vest|gilet)\b/i.test(n)), full: pieces.some((x) => x.slot === "full_body") && !top };
 }
 
 /** Hard rules for a single accessory against an outfit; null = fine, string = the reason it is rejected. */
@@ -136,7 +138,7 @@ export function chooseAccessories(o: OutfitCtx, cands: Acc[], usage: Usage): Pic
   const picks: Pick[] = [];
   const types = new Set<string>(); let head = false, bag = false, neck = false, statement = o.statements > 0, accent: string | null = o.accents.size ? [...o.accents][0] : null;
   for (const { a, s } of scored) {
-    if (picks.length >= 3) break;
+    if (picks.length >= o.maxN) break;
     if (s < ACC.minScore[picks.length]) break;
     if (types.has(a.type)) continue;
     if (HEAD.has(a.type) && head) continue;
@@ -144,6 +146,7 @@ export function chooseAccessories(o: OutfitCtx, cands: Acc[], usage: Usage): Pic
     if (NECK.has(a.type) && neck) continue;
     if (a.statement >= ACC.statementMin && statement) continue;
     if (a.accent && accent && a.accent !== accent) continue;
+    if (picks.length === 2 && [...picks.map((p) => p.acc.type), a.type].includes("sunglasses") && [...picks.map((p) => p.acc.type), a.type].some((t) => HEAD.has(t)) && [...picks.map((p) => p.acc.type), a.type].some((t) => NECK.has(t))) continue;   // cap + sunglasses + scarf/necklace/tie together looks overloaded
     types.add(a.type); if (HEAD.has(a.type)) head = true; if (BAG.has(a.type)) bag = true; if (NECK.has(a.type)) neck = true;
     if (a.statement >= ACC.statementMin) statement = true; if (a.accent) accent = a.accent;
     picks.push({ acc: a, score: s, ...placementFor(a, o) });
