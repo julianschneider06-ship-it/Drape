@@ -207,6 +207,14 @@ export default function Feed() {
       const cur = swaps[o.id]?.[key] ?? -1, nxt = dir === "next" ? cur + 1 : cur - 1;
       const seq = ++swapSeq.current;
       if (nxt >= list.length || nxt < -1) { setSwapEvts((p) => ({ ...p, [o.id]: { slot, dir, seq, kind: "bounce" } })); return; }   // end of the list: bounce, nothing else
+      // the new piece's image is loaded BEFORE the swap starts (no blank piece); the following alternatives are prefetched
+      const warm = (a?: Alt) => new Promise<void>((resolve) => {
+        if (!a) return resolve();
+        const img = new Image(); img.referrerPolicy = "no-referrer"; img.onload = img.onerror = () => resolve();
+        img.src = feedSrc(viewCard(a.card, dbg.cut), pieceClass(slot, a.card)); setTimeout(resolve, 1500);
+      });
+      if (nxt >= 0) await warm(list[nxt]);
+      for (const k of [nxt + 1, nxt + 2, nxt - 1]) if (list[k]) void warm(list[k]);
       const shownNow = itemsRef.current.find((x) => x.id === o.id)!;
       const accIdx = key.startsWith("acc") ? Number(key.slice(3)) - 1 : -1;
       const out = key === "top" ? shownNow.top : key === "bottom" ? shownNow.bottom! : key === "shoes" ? shownNow.shoes : shownNow.accessories![accIdx].card;
@@ -215,8 +223,6 @@ export default function Feed() {
       setSwapEvts((p) => ({ ...p, [o.id]: { slot, dir, seq, kind: "swap", newId: incoming.id } }));
       interacted.current.add(index);
       track({ event_type: "swap", outfit_id: o.id, feed_index: index, slot: trackSlot(slot), product_id: incoming.id, gender: genderRef.current, ctx: { out: out.id, dir, rank: nxt + 1 } });
-      const ahead = list[dir === "next" ? nxt + 1 : nxt - 1];   // prefetch the image of the alternative after this one
-      if (ahead) { const img = new Image(); img.referrerPolicy = "no-referrer"; img.src = feedSrc(viewCard(ahead.card, dbg.cut), pieceClass(slot, ahead.card)); }
     } finally { setTimeout(() => swapBusy.current.delete(lk), 380); }
   };
 
