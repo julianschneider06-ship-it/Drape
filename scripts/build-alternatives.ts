@@ -9,7 +9,7 @@ import { scoreOutfit, toPiece, type Piece, type RawPiece, type Slot } from "../s
 import { BAG, HEAD, NECK, ACC, outfitCtx, reject, scoreAcc, toAcc, type Acc, type OutfitCtx, type RawAcc } from "../src/outfits/accessories";
 import { RULES } from "../src/lib/layout/config";
 
-const VERSION = "alt1";
+const VERSION = "alt2";   // alt2: a bottom is replaced by a bottom of the same length class (shorts / short skirt stay short, long stays long)
 const args = process.argv.slice(2);
 const FORCE = args.includes("--force"), DRY = args.includes("--dry");
 const LIMIT = Number(args[args.indexOf("--limit") + 1] || Infinity);
@@ -24,6 +24,8 @@ async function paged<T extends { id: number }>(fn: string, limit: number): Promi
   for (;;) { const page = await rpc<T[]>(fn, { p_after: after, p_limit: limit }); if (!page.length) break; out.push(...page); after = page[page.length - 1].id; }
   return out;
 }
+const SHORT = /\b(shorts?|skort|mini|bermuda)\b/i;
+const shortish = (name: string | undefined) => SHORT.test(name ?? "");
 const folded = (slot: string, info: Info | undefined) => slot === "shoes" || slot === "full_body" ? false : !!info && ((info.presentation != null && !RULES.stackedPresentations.includes(info.presentation)) || (slot === "top" && (info.fill ?? 0) >= RULES.foldedFillMin));
 
 /** Best first, at most MAX_ALTS, no two alternatives from the same brand in a row where possible. */
@@ -88,6 +90,7 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
       for (const c of cand[`${g}:${ms.slot}`] ?? []) {
         if (c.id === cur.id || ps.some((p) => p.id === c.id)) continue;
         if (folded(ms.slot, info.get(c.id)) !== curFold) continue;               // same presentation: the layout type must not jump
+        if (ms.slot === "bottom" && shortish(names.get(c.id)) !== shortish(names.get(cur.id))) continue;   // same length class: shorts stay shorts, long trousers stay long (shoes size follows the bottom)
         const next = ps.map((p, i) => (i === ms.idx ? c : p));
         const s = scoreOutfit(next);
         if (!s || s.score < MIN_SCORE) continue;
