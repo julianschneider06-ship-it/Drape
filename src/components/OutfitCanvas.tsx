@@ -100,12 +100,13 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
       // (never over another piece). A sale product always gets its label unless there is truly no free spot.
       const ys = [y, ...[0.2, 0.4, 0.6, 0.8].flatMap((f) => [p.rect.y + f * p.rect.h - lh / 2, p.rect.y + p.rect.h * (1 - f) - lh / 2])].map((v) => Math.min(H - 2 - lh, Math.max(2, v)));
       let placed = false;
-      for (const edge of [pad, 2]) {
+      const mainSlots = new Set(["top", "bottom", "shoes", "full"]);
+      for (const [edge, blockers] of [[pad, others], [2, others], [2, others.filter((q) => mainSlots.has(q.slot))]] as const) {   // last tier: may touch other accessories, never a main piece
         for (const yy of ys) for (const side of order) {
           const x = side === "right" ? p.rect.x + p.rect.w + gap : p.rect.x - gap - lw;
           const r = { x, y: yy, w: lw, h: lh };
           if (x < edge || x + lw > W - edge) continue;
-          if (others.some((q) => r.x < q.rect.x + q.rect.w + 2 && r.x + r.w + 2 > q.rect.x && r.y < q.rect.y + q.rect.h + 2 && r.y + r.h + 2 > q.rect.y)) continue;
+          if (blockers.some((q) => r.x < q.rect.x + q.rect.w + 2 && r.x + r.w + 2 > q.rect.x && r.y < q.rect.y + q.rect.h + 2 && r.y + r.h + 2 > q.rect.y)) continue;
           out[p.slot] = { side, dy: yy - p.rect.y }; placed = true; break;
         }
         if (placed) break;
