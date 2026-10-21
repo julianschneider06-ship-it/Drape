@@ -133,33 +133,38 @@ export const RULES = {
   shortMaxCover: 0.25,        // short bottoms: shoes cover at most this share of the bottom's height
   foldedShoesCy: 0.76,        // folded case: vertical centre of the shoes (fraction of canvas height), lower half
   foldedFillMin: 0.90,        // geometry override for TOPS: a compact rectangular mask (area/bbox >= this) is a folded shirt even if the model said spread_front
+  stackSlackShare: 0.75,      // spare vertical space is split: this share goes ABOVE the stack (0.5 = centred), so trousers sit a bit lower
   stackedPresentations: ["spread_front"], // anything else (folded, other) goes to the side-by-side layout; null/unknown = stacked
 };
 
 // --- Accessories (layout): all numbers here. Sizes are fractions of the canvas width (W) / height (H) unless stated otherwise. ---
+// Real-world size of the LONGEST side of each accessory as it is photographed (cm), by size_class. Accessories are drawn with the same
+// pixels-per-cm as the top (a top is REF_CM.topW wide, about REF_CM.topH tall; shoes are about REF_CM.shoeL long but stay drawn larger, SCALE_SHOES).
+export const REF_CM = { topW: 52, topH: 70, shoeL: 30, fullW: 50 };
+export const REAL_CM: Record<string, { small: number; medium: number; large: number }> = {
+  cap: { small: 21, medium: 23, large: 25 }, hat: { small: 28, medium: 32, large: 38 }, beanie: { small: 19, medium: 21, large: 24 },
+  sunglasses: { small: 13, medium: 14, large: 15.5 }, watch: { small: 18, medium: 20, large: 24 }, bracelet: { small: 7, medium: 8, large: 10 },
+  necklace: { small: 16, medium: 22, large: 30 }, earrings: { small: 3, medium: 4, large: 6 }, ring: { small: 2.5, medium: 3, large: 3.5 },
+  scarf: { small: 35, medium: 45, large: 60 }, bag: { small: 24, medium: 32, large: 42 }, backpack: { small: 32, medium: 42, large: 50 },
+  belt: { small: 90, medium: 105, large: 115 }, gloves: { small: 22, medium: 25, large: 28 }, other_wearable: { small: 10, medium: 14, large: 20 },
+  tie: { small: 55, medium: 60, large: 65 },   // folded / short view; a straight tie (tall, thin) uses tieStraightCm
+};
 export const ACCESSORIES = {
   enabled: true,
-  headMaxShrink: 0.12,        // head zone (hat / inline glasses above the top): if it would shrink the main stack by more than this, the item goes to the side column
-  hat:     { widthOfTop: 0.55, maxH: 0.17, overlap: 0.08 },   // hat/cap/beanie: width as share of the top's width, max height (of H), overlap onto the element below (share of its own height)
-  glasses: { widthOfTop: 0.50, maxH: 0.07, overlap: 0.25 },   // inline sunglasses directly below the hat, slightly over the top's upper edge
+  headMaxShrink: 0.18,        // head zone (hat above the top): if it would shrink the main stack by more than this, the item goes to the side column
+  head:    { collarMul: 1.15, mulRange: [1.0, 1.3] as [number, number], fallbackWidthOfTop: 0.55, maxH: 0.17, overlap: 0.08 }, // head item width = collar width x collarMul (clamped); without a collar measurement at most fallbackWidthOfTop x the top's width
   necklace: { widthOfTop: 0.50, neckline: 0.04, maxHOfTop: 0.3 }, // overlay on the top, centred on its axis, starting this share of the top's height below its upper edge
   belt:    { widthOfSeam: 1.0, maxH: 0.045 },                  // drawn across the seam, as wide as the waist/seam, no extra height
-  sleeve:  { gap: 0.015, at: 0.35, maxW: 0.13 },               // watch / bracelet right of the top at sleeve height (at = share of the top's height from its upper edge), gap in W
+  sleeve:  { gap: 0.015, at: 0.35, maxW: 0.17 },               // watch / bracelet right of the top at sleeve height (at = share of the top's height from its upper edge), gap in W
+  tieStraightCm: 150, tieAspectStraight: 3, tieMaxOfTopH: 0.95, // a straight tie is drawn at most this share of the top's height long
+  beltCoiledCm: 40,           // belts that are not a straight strip are shown coiled
+  minLongest: { sunglasses: 0.11, ring: 0.045, earrings: 0.05, watch: 0.08, bracelet: 0.07, necklace: 0.08, default: 0.08 } as Record<string, number>, // minimum visible size: longest side as share of W
   side: {
-    gapX: 0.02,                                               // gap between a side item and the main pieces
-    minScale: 0.7,                                            // shrink factor tried before the lowest-priority item is dropped
-    sizeClass: { small: 0.85, medium: 1.0, large: 1.15 } as Record<string, number>,
-    // width (of W) and max height (of H) per accessory type; bags are the largest, watches / glasses / jewelry the smallest
-    size: {
-      bag: { w: 0.20, h: 0.13 }, backpack: { w: 0.18, h: 0.16 }, hat: { w: 0.17, h: 0.09 }, cap: { w: 0.17, h: 0.08 }, beanie: { w: 0.14, h: 0.08 },
-      scarf: { w: 0.15, h: 0.14 }, gloves: { w: 0.12, h: 0.09 }, tie: { w: 0.07, h: 0.14 }, belt: { w: 0.17, h: 0.07 }, watch: { w: 0.10, h: 0.07 },
-      bracelet: { w: 0.09, h: 0.06 }, necklace: { w: 0.13, h: 0.08 }, sunglasses: { w: 0.14, h: 0.045 }, earrings: { w: 0.06, h: 0.05 }, ring: { w: 0.05, h: 0.04 },
-      other_wearable: { w: 0.08, h: 0.06 },
-    } as Record<string, { w: number; h: number }>,
-    // vertical zone centres (share of H); hip is placed from the bottom piece, sleeve from the top piece
-    zoneY: { head: 0.08, upper: 0.24, mid: 0.42, hip: 0.58, ground: 0.84 } as Record<string, number>,
-    // drop order when nothing fits: lowest number goes first
-    priority: { bag: 9, backpack: 8, hat: 8, cap: 8, beanie: 8, sunglasses: 7, watch: 7, scarf: 6, necklace: 6, tie: 6, belt: 6, bracelet: 5, gloves: 5, earrings: 4, ring: 3, other_wearable: 2 } as Record<string, number>,
+    gapX: 0.02,               // gap between a side item and the main pieces
+    maxColW: 0.38,            // side items are at most this share of the canvas width wide
+    minScale: 0.7,            // shrink factor tried before the lowest-priority item is dropped
+    zoneY: { head: 0.08, upper: 0.24, mid: 0.42, hip: 0.58, ground: 0.84 } as Record<string, number>, // vertical zone centres (share of H); hip from the bottom piece, upper from the top piece
+    priority: { bag: 9, backpack: 8, hat: 8, cap: 8, beanie: 8, sunglasses: 7, watch: 7, scarf: 6, necklace: 6, tie: 6, belt: 6, bracelet: 5, gloves: 5, earrings: 4, ring: 3, other_wearable: 2 } as Record<string, number>, // drop order: lowest goes first
   },
-  z: { side: 2, inline: 4 },  // z-order: inline overlays (necklace, belt, glasses, hat) above the main pieces, side items beside them
+  z: { side: 2, inline: 4 },  // z-order: inline overlays (necklace, belt, hat) above the main pieces, side items beside them
 };

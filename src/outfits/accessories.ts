@@ -105,7 +105,7 @@ export function scoreAcc(a: Acc, o: OutfitCtx): number {
 export function placementFor(a: Acc, o?: OutfitCtx): { placement: Placement; zone: string } {
   switch (a.type) {
     case "cap": case "hat": case "beanie": return { placement: "head", zone: "head" };
-    case "sunglasses": return a.frontFlat ? { placement: "inline", zone: "glasses" } : { placement: "side", zone: "upper" };
+    case "sunglasses": return { placement: "side", zone: "upper" };   // always the right column
     case "necklace": return a.frontFlat && !o?.outerTop ? { placement: "inline", zone: "neck" } : { placement: "side", zone: "mid" };
     case "belt": return a.frontFlat && a.beltShape === "straight_strip" ? { placement: "inline", zone: "seam" } : { placement: "side", zone: "hip" };
     case "watch": case "bracelet": return { placement: "side", zone: "sleeve" };

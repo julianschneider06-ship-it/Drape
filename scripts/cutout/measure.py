@@ -18,7 +18,7 @@ def one(t):
     r = requests.get(t["url"], timeout=30)
     r.raise_for_status()
     m = M.measure(t["slot"], r.content)
-    return dict(id=t["id"], src=t["url"], status=m["status"], reason=m["reason"], hem=m["hem"], waist=m["waist"], fill=m["fill"])
+    return dict(id=t["id"], src=t["url"], status=m["status"], reason=m["reason"], hem=m["hem"], waist=m["waist"], fill=m["fill"], collar=m.get("collar"))
 
 
 def main():
@@ -38,7 +38,7 @@ def main():
             try:
                 res.append(f.result())
             except Exception as e:
-                res.append(dict(id=t["id"], src=t["url"], status="failed", reason="error:" + type(e).__name__, hem=None, waist=None, fill=None))
+                res.append(dict(id=t["id"], src=t["url"], status="failed", reason="error:" + type(e).__name__, hem=None, waist=None, fill=None, collar=None))
         W.rpc("measure_apply", p_items=res)
         for r in res:
             done += 1

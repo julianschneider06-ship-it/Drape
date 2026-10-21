@@ -52,6 +52,44 @@ def _band(mask: np.ndarray, slot: str):
     return y0, y1, [_central_run_width(mask[y], cx) for y in range(y0, y1)]
 
 
+COLLAR_RANGE = (0.12, 0.50)
+COLLAR_MIN_DIP = 0.02    # neckline depth (share of the bbox height) from which the opening width counts as the neck
+COLLAR_BAND = (0.02, 0.08)
+
+
+def _gap_width(row: np.ndarray, cx: int) -> int:
+    """Width of the background gap around the centre column between the two nearest foreground runs (0 if none on a side)."""
+    left = np.where(row[:cx])[0]
+    right = np.where(row[cx:])[0]
+    if not len(left) or not len(right):
+        return 0
+    return int(cx + right[0] - left[-1] - 1)
+
+
+def collar_width(m: np.ndarray):
+    """Neck width in pixels of a top / dress mask (cropped to its bbox), or None.
+    - neckline dip (the centre column is empty for the first rows): median width of the opening over those rows;
+    - hood / stand collar (the centre column is garment from the top): median width of the central run in a band just below the top edge."""
+    h, w = m.shape
+    cx = w // 2
+    col = m[:, max(0, cx - 1):cx + 2].any(axis=1)
+    rows = np.where(col)[0]
+    if not len(rows):
+        return None
+    yc = int(rows.min())
+    dip = yc - 0
+    if dip >= COLLAR_MIN_DIP * h:
+        gaps = [_gap_width(m[y], cx) for y in range(int(0.2 * dip), yc)]
+        gaps = [g for g in gaps if g > 0]
+        if len(gaps) < 3:
+            return None
+        return float(np.median(gaps))
+    y0, y1 = yc + int(round(COLLAR_BAND[0] * h)), yc + max(int(round(COLLAR_BAND[1] * h)), 2)
+    widths = [_central_run_width(m[y], cx) for y in range(y0, min(h, y1))]
+    widths = [x for x in widths if x > 0]
+    return float(np.median(widths)) if len(widths) >= 2 else None
+
+
 def measure(slot: str, data: bytes):
     """-> dict(status, reason, hem, waist, fill, lines) ; lines = debug geometry in bbox-relative coordinates."""
     im = Image.open(io.BytesIO(data)).convert("RGBA")
@@ -61,7 +99,13 @@ def measure(slot: str, data: bytes):
         return dict(status="failed", reason="empty", hem=None, waist=None, fill=None, lines=None)
     m = a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
     h, w = m.shape
-    out = dict(status="ok", reason=None, hem=None, waist=None, fill=round(float(m.mean()), 4), lines={})
+    out = dict(status="ok", reason=None, hem=None, waist=None, fill=round(float(m.mean()), 4), lines={}, collar=None)
+    if slot in ("top", "full_body"):
+        cw = collar_width(m)
+        if cw:
+            r = cw / im.width
+            if COLLAR_RANGE[0] <= r <= COLLAR_RANGE[1]:
+                out["collar"] = round(r, 4)
     if slot == "full_body":
         return out
     y0, y1, widths = _band(m, slot)
