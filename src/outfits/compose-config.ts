@@ -23,8 +23,8 @@ export const COMPOSE = {
   session: { products: 12, styles: 3, stores: 2 },        // no repeats in a row (StreakGuard, same numbers as the pool ordering)
   accessories: true,
   ban: {
-    fraction: 0.4,                // at most this share of a group (slot / accessory type) is banned at the same time ...
-    overall: 1000,                // ... and at most this many ids are remembered per device
+    fraction: 0.25,               // at most this share of a group (slot / accessory type) is banned at the same time ...
+    overall: 300,                 // ... and at most this many ids are remembered per device (300 ids = 1.2 KB; it is fine if a product shows up twice)
     minPool: 12,                  // soft fallback: if fewer allowed candidates are left, the oldest bans are released first
     minPoolAcc: 4,
   },

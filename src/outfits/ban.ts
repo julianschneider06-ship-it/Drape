@@ -15,10 +15,10 @@ export class BanState {
   }
   toBase64(): string { const buf = Buffer.alloc(this.ids.length * 4); this.ids.forEach((v, i) => buf.writeInt32LE(v, i * 4)); return buf.toString("base64"); }
   /** record served products (re-served ones move to the newest end) */
-  push(ids: number[]) {
+  push(ids: number[], overall: number = COMPOSE.ban.overall) {
     const set = new Set(ids);
     this.ids = this.ids.filter((x) => !set.has(x)); this.ids.push(...ids);
-    const over = this.ids.length - COMPOSE.ban.overall; if (over > 0) this.ids.splice(0, over);
+    const over = this.ids.length - overall; if (over > 0) this.ids.splice(0, over);
   }
   /** group of a product for the limits: slot for main pieces, "acc:<type>" for accessories */
   static group(cat: Catalogue, id: number): string | null {

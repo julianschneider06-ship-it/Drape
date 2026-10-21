@@ -14,7 +14,7 @@ import { outfitStyle, scoreOutfit, type Piece } from "./score";
 import { outfitSeason, seasonRole, type SeasonResult, type SeasonPiece } from "./season";
 import { connBonus, tasteMatch, type Taste } from "./taste";
 
-export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number }
+export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number; banOverall?: number }
 export interface ComposedAcc { id: number; type: string; placement: string; zone: string; score: number }
 export interface ComposedOutfit {
   kind: "three" | "full"; ids: number[]; acc: ComposedAcc[]; score: number; style: string; season: SeasonResult; bucket: Bucket; pattern?: string; hash: number;
@@ -191,7 +191,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
       session.acc.recentIds.push(acc.map((a) => a.id)); session.acc.recentStores.push(acc.map((a) => cat.accById.get(a.id)!.store));
       if (session.acc.recentIds.length > 14) { session.acc.recentIds.shift(); session.acc.recentStores.shift(); }
       for (const a of acc) session.acc.uses.set(a.id, (session.acc.uses.get(a.id) ?? 0) + 1);
-      const served = [...ids, ...acc.map((a) => a.id)]; ban.push(served);
+      const served = [...ids, ...acc.map((a) => a.id)]; ban.push(served, profile.banOverall);
       for (const id of served) { eff.banned.add(id); eff.age.set(id, 0); }
       session.served++;
       stats.buckets[bucket] = (stats.buckets[bucket] ?? 0) + 1;

@@ -7,13 +7,13 @@ import { STYLE_KEYS } from "../../src/classify/styles";
 
 (async () => {
   const { cat } = await loadCat(process.env.SNAP_CACHE);
-  const configs: { name: string; fraction: number }[] = [{ name: "naive: one global limit of 1000, no group limit", fraction: 1 }, { name: "per group, max 40%", fraction: 0.4 }, { name: "per group, max 25%", fraction: 0.25 }];
+  const configs: { name: string; fraction: number; overall: number }[] = [{ name: "OLD: per group max 40%, 1000 overall", fraction: 0.4, overall: 1000 }, { name: "NEW: per group max 25%, 300 overall", fraction: 0.25, overall: 300 }];
   for (const g of ["men", "women"] as const) for (const cfg of configs) {
     const rnd = makeRnd(5), ses = newSession(); let ban = new BanState(); banStats.calls = banStats.releases = 0;
     const rows: string[] = []; const all: { score: number; style: string; ids: number[]; acc: number[] }[] = [];
     let released0 = 0;
     for (let page = 0; page < 84; page++) {                     // 84 pages x 6 = 504 outfits
-      const r = compose(cat, { gender: g, taste: null, banFraction: cfg.fraction }, ban, 6, ses, rnd); ban = r.ban;
+      const r = compose(cat, { gender: g, taste: null, banFraction: cfg.fraction, banOverall: cfg.overall }, ban, 6, ses, rnd); ban = r.ban;
       for (const o of r.outfits) all.push({ score: o.score, style: o.style, ids: o.ids, acc: o.acc.map((a) => a.id) });
       if ((page + 1) % 14 === 0) {   // every ~84 outfits
         const eff = ban.effective(cat, g, cfg.fraction); const share = (grp: string) => { const sz = cat.groupSize.get(`${g}:${grp}`) ?? 1; let c = 0; for (const id of eff.banned) if (BanState.group(cat, id) === grp) c++; return Math.round((100 * c) / sz); };
@@ -23,7 +23,7 @@ import { STYLE_KEYS } from "../../src/classify/styles";
       }
     }
     const first = all.slice(0, 84).map((x) => x.score).sort((a, b) => a - b), last = all.slice(-84).map((x) => x.score).sort((a, b) => a - b);
-    console.log(`${g} / ${cfg.name}: ${all.length} outfits, ban list ${ban.ids.length} ids (${(ban.ids.length * 4 / 1024).toFixed(1)} KB), fallback releases ${banStats.releases} of ${banStats.calls} slot lookups, score median first 84 ${first[42].toFixed(3)} -> last 84 ${last[42].toFixed(3)}, repeats of a product within 100 outfits: ${(() => { let rep = 0; const seen = new Map<number, number>(); all.forEach((x, i) => { for (const id of x.ids) { const j = seen.get(id); if (j !== undefined && i - j < 100) rep++; seen.set(id, i); } }); return rep; })()}`);
+    console.log(`${g} / ${cfg.name}: ${all.length} outfits, ban list ${ban.ids.length} ids (${(ban.ids.length * 4 / 1024).toFixed(2)} KB binary, ${(ban.toBase64().length / 1024).toFixed(2)} KB as base64 text in the request), fallback releases ${banStats.releases} of ${banStats.calls} slot lookups, score median first 84 ${first[42].toFixed(3)} -> last 84 ${last[42].toFixed(3)}, repeats of a product within 100 outfits: ${(() => { let rep = 0; const seen = new Map<number, number>(); all.forEach((x, i) => { for (const id of x.ids) { const j = seen.get(id); if (j !== undefined && i - j < 100) rep++; seen.set(id, i); } }); return rep; })()}`);
     for (const r of rows) console.log(r);
   }
   void STYLE_KEYS;
