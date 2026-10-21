@@ -1,22 +1,29 @@
 "use client";
 import { useEffect, useMemo } from "react";
-import type { FeedCard, FeedOutfit } from "@/lib/types";
+import type { FeedAccessory, FeedCard, FeedOutfit } from "@/lib/types";
 import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/format";
 import { garmentClass } from "@/lib/layout/config";
-import { computeLayout, hash32, pickTemplate, type PieceIn, type SlotName } from "@/lib/layout/engine";
+import { computeLayout, hash32, pickTemplate, type AccIn, type AccSlot, type PieceIn, type SlotName } from "@/lib/layout/engine";
 import FeedImage from "./FeedImage";
 
-export const pieceClass = (slot: SlotName, c: FeedCard) => garmentClass(slot, c.name);
+export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", priority, onOpen, onLayout }: {
-  outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; priority: boolean;
+export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout }: {
+  outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string) => void;
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
     return (outfit.kind === "full" ? { full: v(outfit.top), shoes: v(outfit.shoes) } : { top: v(outfit.top), bottom: outfit.bottom ? v(outfit.bottom) : undefined, shoes: v(outfit.shoes) }) as Partial<Record<SlotName, ReturnType<typeof v>>>;
   }, [outfit, cut]);
+  // accessories: up to three, each with its cutout card; slot names acc1..acc3 follow the cached order
+  const accs = useMemo(() => {
+    const out: { slot: AccSlot; acc: FeedAccessory; card: ReturnType<typeof viewCard> }[] = [];
+    if (!showAcc) return out;
+    (outfit.accessories ?? []).slice(0, 3).forEach((a, i) => { if (a.card && a.card.cutout) out.push({ slot: `acc${i + 1}` as AccSlot, acc: a, card: viewCard(a.card, cut) }); });
+    return out;
+  }, [outfit, cut, showAcc]);
   const layout = useMemo(() => {
     const pieces: Partial<Record<SlotName, PieceIn>> = {};
     for (const [slot, c] of Object.entries(cards) as [SlotName, FeedCard][]) {
@@ -24,17 +31,18 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
       pieces[slot] = { slot, cls: pieceClass(slot, c), aspect: g ? g.cw / g.ch : null, presentation: c.presentation ?? null, hem: c.hem ?? null, waist: c.waist ?? null, fill: c.fill ?? null };
     }
     const seed = hash32(String(outfit.id));
+    const accessories: AccIn[] = accs.map(({ slot, acc, card }) => { const g = cropGeometry(card); return { slot, type: acc.type, size: acc.size, aspect: g ? g.cw / g.ch : null, placement: acc.placement, zone: acc.zone ?? "mid", frontFlat: !!acc.front_flat, beltShape: acc.belt_shape }; });
     // rule layout by default; ?layout=A,FB forces one of the old random templates (debug)
-    return computeLayout({ kind: outfit.kind, pieces, seed, canvas, template: override?.length ? pickTemplate(outfit.kind, seed, override) : undefined });
-  }, [cards, outfit, canvas, override]);
+    return computeLayout({ kind: outfit.kind, pieces, seed, canvas, accessories, template: override?.length ? pickTemplate(outfit.kind, seed, override) : undefined });
+  }, [cards, outfit, canvas, override, accs]);
 
   useEffect(() => { onLayout?.(layout.template, layout.debug?.mode ?? "template"); }, [layout, onLayout]);
 
-  const orig = (c: FeedCard): FeedCard => (c.id === outfit.top.id ? outfit.top : c.id === outfit.shoes.id ? outfit.shoes : outfit.bottom ?? c);
+  const orig = (c: FeedCard, slot: SlotName): FeedCard => (slot.startsWith("acc") ? (accs.find((a) => a.slot === slot)?.acc.card ?? c) : c.id === outfit.top.id ? outfit.top : c.id === outfit.shoes.id ? outfit.shoes : outfit.bottom ?? c);
   const { w: W, h: H } = canvas;
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
   return (
-    <div className="relative" style={{ width: W, height: H }} data-layout={layout.template} data-cuts={layout.pieces.map((p) => (cards[p.slot]!.cut ? "1" : "0")).join("")}>
+    <div className="relative" style={{ width: W, height: H }} data-layout={layout.template} data-cuts={layout.pieces.map((p) => ((cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)?.cut ? "1" : "0")).join("")} data-acc={layout.debug?.acc ? layout.debug.acc.placed.map((a) => `${a.type}:${a.kind}`).join(",") : ""}>
       {debug && <>
         <div className="absolute border border-dashed border-sky-400 bg-sky-50/60" style={{ left: pct(layout.marginRect.x, W), top: 0, width: pct(layout.marginRect.w, W), height: "100%" }} />
         <span className="absolute left-1 top-0 z-50 rounded bg-black px-1 text-[10px] text-white">{layout.template}{layout.debug ? ` ${layout.debug.binding.join("+")}` : ""}</span>
@@ -47,10 +55,10 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
         </>}
       </>}
       {layout.pieces.map((p) => {
-        const c = cards[p.slot]!;
+        const c = (cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)!;
         return (
           <div key={p.slot} className="absolute" style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined }}>
-            <button type="button" onClick={() => onOpen(orig(c), p.slot)} aria-label={`${c.brand} ${c.name}`} className={`absolute inset-0 ${debug ? "outline outline-1 outline-red-400" : ""}`}>
+            <button type="button" onClick={() => onOpen(orig(c, p.slot), p.slot)} aria-label={`${c.brand} ${c.name}`} className={`absolute inset-0 ${debug ? "outline outline-1 outline-red-400" : ""}`}>
               <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} />
             </button>
           </div>

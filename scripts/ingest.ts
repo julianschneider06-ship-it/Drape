@@ -11,11 +11,13 @@ const values = (n: string) => args.flatMap((a, i) => (a === `--${n}` ? [args[i +
 const defaultMax = Number(values("max")[0] ?? 200); // max kept products per source (a source can override with options.max)
 const only = values("source");
 const dry = flag("dry-run");
+const accPass = flag("accessories"); // accessory pass: keep only accessories (also for stores that excluded them), default max 60 per store
 
 type Cursor = Record<string, unknown>;
 
 async function run(slug: string) {
-  const cfg = SOURCES.find((s) => s.slug === slug)!;
+  let cfg = SOURCES.find((s) => s.slug === slug)!;
+  if (accPass) { const { exclude: _x, ...o } = (cfg.options ?? {}) as Record<string, unknown>; cfg = { ...cfg, options: { ...o, only: ["accessories"], max: (cfg.options as { accMax?: number } | undefined)?.accMax ?? Number(values("max")[0] ?? 60) } }; }
   const adapter = createAdapter(cfg);
   const feeds = adapter.feedCount ?? 1;
   const max = Number((cfg.options as { max?: number } | undefined)?.max ?? defaultMax);

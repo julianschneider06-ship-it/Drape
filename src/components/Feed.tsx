@@ -14,6 +14,7 @@ import type { SlotName } from "@/lib/layout/engine";
 
 type Gender = "women" | "men";
 interface SheetState { card: FeedCard; outfit: FeedOutfit; index: number; slot: SlotName }
+const trackSlot = (s: SlotName) => (s.startsWith("acc") ? "accessory" : s) as "top" | "bottom" | "shoes" | "full" | "accessory";
 
 const store = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -31,7 +32,7 @@ export default function Feed() {
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
   const [reactions, setReactions] = useState<Record<number, Reaction>>({});
   const layoutInfo = useRef(new Map<number, { layout: string; mode: string }>());
-  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode }>({ debug: false, cut: "auto" });
+  const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean }>({ debug: false, cut: "auto", acc: true });
 
   const device = useRef("");
   const scroller = useRef<HTMLDivElement>(null);
@@ -51,7 +52,7 @@ export default function Feed() {
   // debug options: ?layout=A,FB forces templates (3-piece, full-body), ?debug=1 shows boxes + margin zone
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto" });
+    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto", acc: q.get("acc") !== "off" });
   }, []);
 
   // canvas size follows the scroller (phones, rotation, desktop)
@@ -147,7 +148,8 @@ export default function Feed() {
     for (let k = 1; k <= 3; k++) {
       const o = items[current + k];
       if (!o) continue;
-      for (const [c, slot] of [[o.top, o.kind === "full" ? "full" : "top"], [o.bottom, "bottom"], [o.shoes, "shoes"]] as const) {
+      const list: [FeedCard | null | undefined, "top" | "bottom" | "shoes" | "full"][] = [[o.top, o.kind === "full" ? "full" : "top"], [o.bottom, "bottom"], [o.shoes, "shoes"], ...(o.accessories ?? []).map((a) => [a.card, "top"] as [FeedCard, "top"])];
+      for (const [c, slot] of list) {
         if (!c) continue;
         const u = feedSrc(viewCard(c, dbg.cut), pieceClass(slot, c));
         if (!prefetched.current.has(u)) { prefetched.current.add(u); const img = new Image(); img.referrerPolicy = "no-referrer"; img.src = u; }
@@ -184,7 +186,7 @@ export default function Feed() {
 
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
-    track({ event_type: "tap_product", product_id: card.id, outfit_id: outfit.id, feed_index: index, slot, gender: genderRef.current });
+    track({ event_type: "tap_product", product_id: card.id, outfit_id: outfit.id, feed_index: index, slot: trackSlot(slot), gender: genderRef.current });
     setSheet({ card, outfit, index, slot });
   };
 
@@ -208,7 +210,7 @@ export default function Feed() {
       <div ref={scroller} className="no-scrollbar h-dvh snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
         {items.map((o, i) => (
           <section key={o.id} data-i={i} className="relative flex h-dvh snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + env(safe-area-inset-bottom))` }}>
-            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)}
+            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)}
               onLayout={(layout, mode) => layoutInfo.current.set(o.id, { layout, mode })} />}
             <OutfitButtons value={reactions[o.id] ?? null} onPress={(d) => pressOutfit(o, i, d)} />
           </section>

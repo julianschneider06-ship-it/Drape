@@ -5,19 +5,23 @@ import {
   type GarmentClass, type Place, type Template,
 } from "./config";
 
-export type SlotName = "top" | "bottom" | "shoes" | "full";
+export type AccSlot = "acc1" | "acc2" | "acc3";
+export type SlotName = "top" | "bottom" | "shoes" | "full" | AccSlot;
 export interface PieceIn {
   slot: SlotName; cls: GarmentClass; aspect: number | null; // aspect = content width / height
   presentation?: string | null;                              // spread_front | folded | other (null = unknown, treated as spread)
   fill?: number | null;                                      // mask area / bbox area (geometry hint: >= RULES.foldedFillMin on a top = folded)
   hem?: number | null; waist?: number | null;                // seam widths as ratios of the piece's bbox width (tops: hem, bottoms: waist)
 }
+/** An accessory to place: what it is, how it looks (aspect of its cutout) and where the pool prefers it. */
+export interface AccIn { slot: AccSlot; type: string; size: string | null; aspect: number | null; placement: "head" | "inline" | "side"; zone: string; frontFlat: boolean; beltShape: string | null }
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface Placed { slot: SlotName; rect: Rect; rot: number; z: number }
 export interface LayoutDebug {
   mode: "stacked" | "folded" | "full"; axisX: number; centreX: number;
   hemLine?: { y: number; x0: number; x1: number }; waistLine?: { y: number; x0: number; x1: number };
-  seamMatched?: boolean; ratio?: number; binding: string[]; // which constraints limited the size (class-cap, axis-width, height-fit, ...)
+  seamMatched?: boolean; ratio?: number; binding: string[];
+  acc?: { headZone: boolean; headShrink: number; placed: { slot: string; type: string; kind: string; zone: string }[]; demoted: string[]; dropped: string[]; shrunkTo: number }; // which constraints limited the size (class-cap, axis-width, height-fit, ...)
 }
 export interface Layout {
   fit: number; template: string; margin: "left" | "right"; pieces: Placed[]; frame: Rect; marginRect: Rect; canvas: { w: number; h: number };
@@ -43,7 +47,7 @@ export function pickTemplate(kind: "three" | "full", seed: number, override?: st
   return forced ?? ofKind[seed % ofKind.length];
 }
 
-export function computeLayout(opts: { kind: "three" | "full"; pieces: Partial<Record<SlotName, PieceIn>>; seed: number; canvas: { w: number; h: number }; template?: Template }): Layout {
+export function computeLayout(opts: { kind: "three" | "full"; pieces: Partial<Record<SlotName, PieceIn>>; seed: number; canvas: { w: number; h: number }; template?: Template; accessories?: AccIn[] }): Layout {
   // Rule-based layout (v3) for standard outfits; the random templates only when a template is forced (?layout=A) or RULES.enabled is false.
   if (RULES.enabled && !opts.template) return computeRuleLayout(opts);
   const { canvas } = opts, W = canvas.w, H = canvas.h;
@@ -110,7 +114,7 @@ export function computeLayout(opts: { kind: "three" | "full"; pieces: Partial<Re
     dx = Math.max(frame.x + pad - u.x0, Math.min(frame.x + frame.w - pad - u.x1, dx)); dy = Math.max(-u.y0 + 2, Math.min(H - 2 - u.y1, dy));
   for (const [, r] of entries) { r.x += dx; r.y += dy; }
 
-  const placed: Placed[] = entries.map(([slot, r]) => ({ slot, rect: r, rot: slot === "shoes" ? sym(JITTER.shoeRotDeg) : 0, z: t.z[slot] }));
+  const placed: Placed[] = entries.map(([slot, r]) => ({ slot, rect: r, rot: slot === "shoes" ? sym(JITTER.shoeRotDeg) : 0, z: (t.z as Record<string, number>)[slot] ?? 2 }));
   placed.sort((a, b) => a.z - b.z);
   return { fit: s, template: t.id, margin: t.margin, pieces: placed, frame, marginRect, canvas };
 }

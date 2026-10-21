@@ -5,7 +5,7 @@ import { clientIp, isUuid, limited } from "@/lib/ratelimit";
 export const dynamic = "force-dynamic";
 
 const TYPES = new Set(["impression", "dwell_ms", "like", "unlike", "tap_product", "view_product_click", "scroll_past", "outfit_up", "outfit_down", "outfit_clear"]);
-const SLOTS = new Set(["top", "bottom", "shoes", "full", "sheet"]);
+const SLOTS = new Set(["top", "bottom", "shoes", "full", "sheet", "accessory"]);
 const int = (v: unknown, max = 2_000_000_000) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? Math.round(v) : null);
 
 // Layout context of outfit-level events: only short whitelisted fields are kept.

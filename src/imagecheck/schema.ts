@@ -21,7 +21,7 @@ export const IMAGE_CHECK_SCHEMA = {
 } as const;
 
 export const PROMPT = (p: { slot: string }) => `You check a product image for a fashion feed that cuts products out and arranges them in a collage.
-The product should be a single ${p.slot === "full_body" ? "dress, jumpsuit or one-piece" : p.slot === "top" ? "top or outerwear" : p.slot === "bottom" ? "trousers, shorts or skirt" : "pair of shoes"}.
+The product should be a single ${p.slot === "accessory" ? "single wearable accessory (a hat, bag, belt, scarf, piece of jewelry, watch or pair of sunglasses; a pair of earrings or gloves counts as ONE item)" : p.slot === "full_body" ? "dress, jumpsuit or one-piece" : p.slot === "top" ? "top or outerwear" : p.slot === "bottom" ? "trousers, shorts or skirt" : "pair of shoes"}.
 Answer about THE IMAGE:
 - item_count: how many separate sellable items are visible. A pair of shoes = 1. A matching set clearly sold as one product (e.g. bra + shorts, suit jacket + trousers shown together as one set) = 1. A row/stack/pile of several garments (three tees, two trousers, several colours of the same item) = the number of garments. Items from a different category used only for styling still count.
 - is_single_product: true only if the image shows exactly one product (see rules above).

@@ -15,7 +15,8 @@ async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
 
 (async () => {
   // New products only carry the images the ingest normalizer kept; pull all of them (with alt text) from the raw payloads first.
-  await rpc("backfill_product_images");
+  // new products only, in small batches (the full backfill scans every raw item and times out on a big catalogue)
+  for (let n = 1; n > 0;) n = await rpc<number>("backfill_product_images_new", { p_products: 300 });
   let after = 0, products = 0, images = 0;
   const t0 = Date.now();
   while (products < limit) {

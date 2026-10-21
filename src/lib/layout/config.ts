@@ -135,3 +135,31 @@ export const RULES = {
   foldedFillMin: 0.90,        // geometry override for TOPS: a compact rectangular mask (area/bbox >= this) is a folded shirt even if the model said spread_front
   stackedPresentations: ["spread_front"], // anything else (folded, other) goes to the side-by-side layout; null/unknown = stacked
 };
+
+// --- Accessories (layout): all numbers here. Sizes are fractions of the canvas width (W) / height (H) unless stated otherwise. ---
+export const ACCESSORIES = {
+  enabled: true,
+  headMaxShrink: 0.12,        // head zone (hat / inline glasses above the top): if it would shrink the main stack by more than this, the item goes to the side column
+  hat:     { widthOfTop: 0.55, maxH: 0.17, overlap: 0.08 },   // hat/cap/beanie: width as share of the top's width, max height (of H), overlap onto the element below (share of its own height)
+  glasses: { widthOfTop: 0.50, maxH: 0.07, overlap: 0.25 },   // inline sunglasses directly below the hat, slightly over the top's upper edge
+  necklace: { widthOfTop: 0.50, neckline: 0.04, maxHOfTop: 0.5 }, // overlay on the top, centred on its axis, starting this share of the top's height below its upper edge
+  belt:    { widthOfSeam: 1.0, maxH: 0.045 },                  // drawn across the seam, as wide as the waist/seam, no extra height
+  sleeve:  { gap: 0.015, at: 0.35, maxW: 0.13 },               // watch / bracelet right of the top at sleeve height (at = share of the top's height from its upper edge), gap in W
+  side: {
+    gapX: 0.02,                                               // gap between a side item and the main pieces
+    minScale: 0.7,                                            // shrink factor tried before the lowest-priority item is dropped
+    sizeClass: { small: 0.85, medium: 1.0, large: 1.15 } as Record<string, number>,
+    // width (of W) and max height (of H) per accessory type; bags are the largest, watches / glasses / jewelry the smallest
+    size: {
+      bag: { w: 0.20, h: 0.13 }, backpack: { w: 0.18, h: 0.16 }, hat: { w: 0.17, h: 0.09 }, cap: { w: 0.17, h: 0.08 }, beanie: { w: 0.14, h: 0.08 },
+      scarf: { w: 0.15, h: 0.14 }, gloves: { w: 0.12, h: 0.09 }, tie: { w: 0.07, h: 0.14 }, belt: { w: 0.17, h: 0.07 }, watch: { w: 0.10, h: 0.07 },
+      bracelet: { w: 0.09, h: 0.06 }, necklace: { w: 0.13, h: 0.08 }, sunglasses: { w: 0.14, h: 0.045 }, earrings: { w: 0.06, h: 0.05 }, ring: { w: 0.05, h: 0.04 },
+      other_wearable: { w: 0.08, h: 0.06 },
+    } as Record<string, { w: number; h: number }>,
+    // vertical zone centres (share of H); hip is placed from the bottom piece, sleeve from the top piece
+    zoneY: { head: 0.08, upper: 0.24, mid: 0.42, hip: 0.58, ground: 0.84 } as Record<string, number>,
+    // drop order when nothing fits: lowest number goes first
+    priority: { bag: 9, backpack: 8, hat: 8, cap: 8, beanie: 8, sunglasses: 7, watch: 7, scarf: 6, necklace: 6, tie: 6, belt: 6, bracelet: 5, gloves: 5, earrings: 4, ring: 3, other_wearable: 2 } as Record<string, number>,
+  },
+  z: { side: 2, inline: 4 },  // z-order: inline overlays (necklace, belt, glasses, hat) above the main pieces, side items beside them
+};

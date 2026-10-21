@@ -19,7 +19,7 @@ const CAP = Number(opt("cap") ?? process.env.DRAPE_IMAGE_CHECK_CAP_USD ?? 6);
 const CONCURRENCY = Number(opt("concurrency") ?? 8);
 const LIMIT = Number(opt("limit") ?? Infinity);
 const BATCH = 40;
-const SLOTS = many("slot").length ? many("slot") : ["shoes", "bottom", "top", "full_body"];
+const SLOTS = many("slot").length ? many("slot") : ["shoes", "bottom", "top", "full_body", "accessory"];
 const price = PRICES[MODEL];
 if (!KEY) throw new Error("GEMINI_API_KEY is not set");
 if (!price) throw new Error(`No price known for model ${MODEL}; add it to PRICES in src/config/models.ts`);
@@ -83,7 +83,7 @@ async function check(t: Todo) {
   else if (out.confidence < MIN_CONFIDENCE) reason = "low_confidence";
   return {
     id: t.id, src: t.url, checked_url: t.checked_url, model: MODEL, model_version: modelVersion ?? null,
-    item_count: out.item_count, is_single: out.is_single_product && out.item_count === 1, defects: out.defects, confidence: out.confidence, presentation: t.slot === "shoes" ? null : out.presentation,
+    item_count: out.item_count, is_single: out.is_single_product && out.item_count === 1, defects: out.defects, confidence: out.confidence, presentation: t.slot === "shoes" || t.slot === "accessory" ? null : out.presentation,
     verdict: reason ? "fail" : "pass", reason, usage: { ...usage, rev: IMAGE_CHECK_REV, resolution: "low" }, cost,
   };
 }

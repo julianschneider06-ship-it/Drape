@@ -3,7 +3,7 @@ import { getDeviceId } from "./device";
 
 export interface TrackEvent {
   event_type: "impression" | "dwell_ms" | "tap_product" | "view_product_click" | "scroll_past" | "outfit_up" | "outfit_down" | "outfit_clear";
-  product_id?: number; product_ids?: number[]; outfit_id?: number; slot?: "top" | "bottom" | "shoes" | "full" | "sheet";
+  product_id?: number; product_ids?: number[]; outfit_id?: number; slot?: "top" | "bottom" | "shoes" | "full" | "sheet" | "accessory";
   feed_index?: number; gender?: "women" | "men"; dwell_ms?: number;
   ctx?: { layout?: string; mode?: string; prev?: "up" | "down"; canvas?: [number, number]; v?: string }; // layout context of outfit-level events
 }

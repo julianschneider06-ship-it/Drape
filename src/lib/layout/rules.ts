@@ -1,64 +1,70 @@
-// Rule-based outfit layout (v3). Pure: pieces + canvas -> rectangles. Numbers live in config.ts (RULES, SIZE, ...).
+// Rule-based outfit layout (v3). Pure: pieces + accessories + canvas -> rectangles. Numbers live in config.ts (RULES, ACCESSORIES, SIZE, ...).
 //  stacked: top above bottom, same vertical axis (left of the canvas centre), hem width = waist width, small gap; shoes on the canvas centre axis
-//           overlapping the trouser hem, on top. folded: top upper-left, bottom upper-right, equal height; shoes lower middle.
+//           overlapping the trouser hem, on top. folded: top upper-left, bottom upper-right, equal visual area; shoes lower middle.
 //  full_body: the item on the left axis, shoes on the centre axis overlapping its hem.
-import { DEFAULT_ASPECT, JITTER, MARGIN_ZONE, RULES, SIZE, SCALE_SHOES, SCALE_TOP_BOTTOM } from "./config";
-import type { Layout, LayoutDebug, Placed, PieceIn, Rect, SlotName } from "./engine";
+//  accessories: head zone above the top (hat, inline glasses), inline overlays (necklace, belt at the seam), watch/bracelet beside the sleeve,
+//           everything else in a side column on the right (vertical zones, collisions resolved, shrink then drop the lowest priority).
+import { ACCESSORIES as A, DEFAULT_ASPECT, JITTER, MARGIN_ZONE, RULES, SIZE, SCALE_SHOES, SCALE_TOP_BOTTOM } from "./config";
+import type { AccIn, Layout, LayoutDebug, Placed, PieceIn, Rect, SlotName } from "./engine";
 
 const mulberry32 = (a: number) => () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const HEAD_TYPES = new Set(["cap", "hat", "beanie"]);
 
-export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partial<Record<SlotName, PieceIn>>; seed: number; canvas: { w: number; h: number } }): Layout {
+interface Main { rects: Partial<Record<SlotName, Rect>>; fit: number; binding: string[]; ratio?: number; seamMatched?: boolean;
+  hemLine?: LayoutDebug["hemLine"]; waistLine?: LayoutDebug["waistLine"]; seam?: { y: number; w: number } }
+
+export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partial<Record<SlotName, PieceIn>>; seed: number; canvas: { w: number; h: number }; accessories?: AccIn[] }): Layout {
   const { w: W, h: H } = opts.canvas;
   const P = opts.pieces, R = RULES;
   const padX = R.edgePad * W, padY = R.edgePadY * H;
-  const frameRight = W - MARGIN_ZONE * W;                      // the right margin zone stays free
+  const frameRight = W - MARGIN_ZONE * W;                      // the right margin zone stays free of main pieces
   const axis = R.axisX * W, centre = R.centreX * W;
   const aspect = (p: PieceIn) => (p.aspect && p.aspect > 0.05 ? p.aspect : DEFAULT_ASPECT[p.cls]);
   const sc = (p: PieceIn) => (p.slot === "shoes" ? SCALE_SHOES : SCALE_TOP_BOTTOM);
   const capW = (p: PieceIn) => SIZE[p.cls].maxW * W * sc(p), capH = (p: PieceIn) => SIZE[p.cls].maxH * H * sc(p);
-  const binding: string[] = [];
-  const dbg: LayoutDebug = { mode: "stacked", axisX: axis, centreX: centre, binding };
-  const rects: Partial<Record<SlotName, Rect>> = {};
   const availH = H - 2 * padY;
-  let fitF = 1;
-
-  // shoes size (current shoe caps x enlargement)
   const shoe = P.shoes!, sa = aspect(shoe);
-  let sw = Math.min(capW(shoe), capH(shoe) * sa), sh = sw / sa;
   const ov = R.shoeOverlap;
   const shoeMaxW = 2 * Math.min(centre - padX, frameRight - padX - centre);   // shoes stay left of the margin zone and inside the canvas
-  if (sw > shoeMaxW) { sw = shoeMaxW; sh = sw / sa; binding.push("shoe-width"); }
-  const axisMaxW = 2 * Math.min(axis - padX, frameRight - padX - axis);   // widest piece that keeps the axis and both edges
-
-  const full = P.full;
-  const top = P.top, bottom = P.bottom;
+  const axisMaxW = 2 * Math.min(axis - padX, frameRight - padX - axis);        // widest piece that keeps the axis and both edges
+  const full = P.full, top = P.top, bottom = P.bottom;
   const isTopLike = (p: PieceIn) => p.cls === "top" || p.cls === "outer" || p.cls === "longcoat";
   const spread = (p: PieceIn) => R.stackedPresentations.includes(p.presentation ?? "spread_front") && !(isTopLike(p) && (p.fill ?? 0) >= R.foldedFillMin);
   const isShort = (p: PieceIn) => p.cls === "shorts" || p.cls === "skirt" || aspect(p) >= R.shortAspectMin;
   const folded = !full && !!top && !!bottom && (!spread(top) || !spread(bottom));
 
-  if (full) {
-    dbg.mode = "full";
-    const a = aspect(full);
-    let w = Math.min(capW(full), capH(full) * a);
-    if (w >= capW(full) - 0.5) binding.push("class-cap-width"); else binding.push("class-cap-height");
-    if (w > axisMaxW) { w = axisMaxW; binding.push("axis-width"); }
-    let h = w / a;
-    // short one-piece (mini dress, wide set): same shoe balance as for short bottoms
-    let ovPx = ov * sh;
-    if (isShort(full)) {
-      if (sh > R.shortShoeMaxH * h) { sh = R.shortShoeMaxH * h; sw = sh * sa; binding.push("short-shoe-cap"); }
-      ovPx = Math.min(ov * sh, R.shortMaxCover * h);
+  const baseShoe = () => {
+    const binding: string[] = [];
+    let sw = Math.min(capW(shoe), capH(shoe) * sa), sh = sw / sa;
+    if (sw > shoeMaxW) { sw = shoeMaxW; sh = sw / sa; binding.push("shoe-width"); }
+    return { sw, sh, binding };
+  };
+
+  // ---- main stack (stacked / full), with `reserve` px of canvas height kept free above it for the head zone ----
+  const layMain = (reserve: number): Main => {
+    let { sw, sh, binding } = baseShoe();
+    const rects: Main["rects"] = {};
+    const aH = availH - reserve;
+    if (full) {
+      const a = aspect(full);
+      let w = Math.min(capW(full), capH(full) * a);
+      binding.push(w >= capW(full) - 0.5 ? "class-cap-width" : "class-cap-height");
+      if (w > axisMaxW) { w = axisMaxW; binding.push("axis-width"); }
+      let h = w / a;
+      let ovPx = ov * sh;
+      if (isShort(full)) {
+        if (sh > R.shortShoeMaxH * h) { sh = R.shortShoeMaxH * h; sw = sh * sa; binding.push("short-shoe-cap"); }
+        ovPx = Math.min(ov * sh, R.shortMaxCover * h);
+      }
+      const T = h + sh - ovPx;
+      const f = Math.min(1, aH / T);
+      if (f < 1) binding.push("height-fit");
+      w *= f; h *= f; sw *= f; sh *= f; ovPx *= f;
+      const y0 = padY + reserve + (aH - (h + sh - ovPx)) / 2;
+      rects.full = { x: axis - w / 2, y: y0, w, h };
+      rects.shoes = { x: centre - sw / 2, y: y0 + h - ovPx, w: sw, h: sh };
+      return { rects, fit: f, binding };
     }
-    const T = h + sh - ovPx;
-    const f = Math.min(1, availH / T);
-    if (f < 1) binding.push("height-fit");
-    fitF = f;
-    w *= f; h *= f; sw *= f; sh *= f; ovPx *= f;
-    const y0 = padY + (availH - (h + sh - ovPx)) / 2;
-    rects.full = { x: axis - w / 2, y: y0, w, h };
-    rects.shoes = { x: centre - sw / 2, y: y0 + h - ovPx, w: sw, h: sh };
-  } else if (!folded) {
     const t = top!, b = bottom!, at = aspect(t), ab = aspect(b);
     // seam match: hem_top * w_top = waist_bottom * w_bottom  ->  w_top / w_bottom = waist / hem (equal widths when a measurement is missing)
     const measured = !!t.hem && !!b.waist;
@@ -66,40 +72,128 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     // allowed width ratio: seam clamp, narrowed by the soft height rule (h_top / h_bottom = r * a_bottom / a_top stays in heightRatioRange)
     let lo = R.ratioClamp[0], hi = R.ratioClamp[1];
     const hLo = (R.heightRatioRange[0] * at) / ab, hHi = (R.heightRatioRange[1] * at) / ab;
-    const softMin = hLo > lo && want < hLo, softMax = hHi < hi && want > hHi;   // only reported when the soft rule actually changes the width
+    const softMin = hLo > lo && want < hLo, softMax = hHi < hi && want > hHi;
     if (hLo > lo) lo = hLo;
     if (hHi < hi) hi = hHi;
     if (softMin) binding.push("soft-height-min");
     if (softMax) binding.push("soft-height-max");
     if (lo > hi) { lo = hi = hLo > R.ratioClamp[1] ? hLo : hHi; }   // rules disagree: the visual size rule wins
     const r = Math.min(hi, Math.max(lo, want));
-    dbg.ratio = r; dbg.seamMatched = measured && Math.abs(r - want) < 1e-6;
     // largest bottom width k such that every cap holds: bottom caps, top caps (top width = r * k), axis width
     const lim = { "class-cap-bottom": Math.min(capW(b), capH(b) * ab), "class-cap-top": Math.min(capW(t), capH(t) * at) / r, "axis-width": axisMaxW / Math.max(1, r) };
-    const [bk, k0] = Object.entries(lim).sort((x, y) => x[1] - y[1])[0];
+    const [bk, k] = Object.entries(lim).sort((x, y) => x[1] - y[1])[0];
     binding.push(bk);
-    const k = k0;
     let wt = r * k, wb = k, ht = wt / at, hb = wb / ab;
     const gap = R.seamGap * H;
-    // short bottoms (shorts, knee-length skirts, anything wider than tall): shoes at most shortShoeMaxH x the bottom's height and
-    // covering at most shortMaxCover of it, so they never swallow the garment
+    // short bottoms: shoes at most shortShoeMaxH x the bottom's height and covering at most shortMaxCover of it
     let ovPx = ov * sh;
     if (isShort(b)) {
       if (sh > R.shortShoeMaxH * hb) { sh = R.shortShoeMaxH * hb; sw = sh * sa; binding.push("short-shoe-cap"); }
       ovPx = Math.min(ov * sh, R.shortMaxCover * hb);
     }
     const T = ht + gap + hb + sh - ovPx;
-    const f = Math.min(1, availH / T);
+    const f = Math.min(1, aH / T);
     if (f < 1) binding.push("height-fit");
-    fitF = f;
     wt *= f; wb *= f; ht *= f; hb *= f; sw *= f; sh *= f; ovPx *= f;
-    const gapPx = gap;
-    const y0 = padY + (availH - (ht + gapPx + hb + sh - ovPx)) / 2;
+    const gapPx = gap * f;
+    const y0 = padY + reserve + (aH - (ht + gapPx + hb + sh - ovPx)) / 2;
     rects.top = { x: axis - wt / 2, y: y0, w: wt, h: ht };
     rects.bottom = { x: axis - wb / 2, y: y0 + ht + gapPx, w: wb, h: hb };
     rects.shoes = { x: centre - sw / 2, y: rects.bottom.y + hb - ovPx, w: sw, h: sh };
-    if (t.hem) dbg.hemLine = { y: rects.top.y + ht, x0: axis - (t.hem * wt) / 2, x1: axis + (t.hem * wt) / 2 };
-    if (b.waist) dbg.waistLine = { y: rects.bottom.y, x0: axis - (b.waist * wb) / 2, x1: axis + (b.waist * wb) / 2 };
+    const out: Main = { rects, fit: f, binding, ratio: r, seamMatched: measured && Math.abs(r - want) < 1e-6 };
+    if (t.hem) out.hemLine = { y: rects.top.y + ht, x0: axis - (t.hem * wt) / 2, x1: axis + (t.hem * wt) / 2 };
+    if (b.waist) out.waistLine = { y: rects.bottom.y, x0: axis - (b.waist * wb) / 2, x1: axis + (b.waist * wb) / 2 };
+    out.seam = { y: rects.top.y + ht + gapPx / 2, w: (b.waist ? b.waist * wb : Math.min(wt, wb) * 0.9) };
+    return out;
+  };
+
+  const dbg: LayoutDebug = { mode: "stacked", axisX: axis, centreX: centre, binding: [] };
+  let rects: Partial<Record<SlotName, Rect>> = {};
+  let fitF = 1;
+  const placedExtra: Placed[] = [];
+  const accs = A.enabled ? (opts.accessories ?? []) : [];
+  const accInfo = { headZone: false, headShrink: 0, placed: [] as { slot: string; type: string; kind: string; zone: string }[], demoted: [] as string[], dropped: [] as string[], shrunkTo: 1 };
+
+  if (!folded) {
+    dbg.mode = full ? "full" : "stacked";
+    let m = layMain(0);
+    // ---- head zone: hat above the top, inline glasses directly below it; only if the main stack does not shrink by more than headMaxShrink ----
+    const mainTop = (full ?? top)!;
+    const hat = accs.find((a) => a.placement === "head" && HEAD_TYPES.has(a.type));
+    const glasses = accs.find((a) => a.placement === "inline" && a.zone === "glasses" && a.frontFlat);
+    const taken = new Set<string>();
+    const headItems = [hat, glasses].filter(Boolean) as AccIn[];
+    let headRects: { hat?: Rect; glasses?: Rect } = {};
+    if (headItems.length) {
+      // item sizes depend on the top's width, which depends on the reserve: iterate twice (reserve -> stack -> sizes -> reserve)
+      let reserve = 0, m1 = m;
+      for (let it = 0; it < 3; it++) {
+        const topW = (m1.rects.top ?? m1.rects.full)!.w;
+        const hs = hat ? headSize(hat, topW, aspect, W, H) : null, gs = glasses ? glassSize(glasses, topW, aspect, W, H) : null;
+        reserve = (gs ? gs.h * (1 - A.glasses.overlap) : 0) + (hs ? hs.h * (1 - A.hat.overlap) : 0);
+        m1 = layMain(reserve);
+        headRects = { hat: hs ? { x: 0, y: 0, ...hs } : undefined, glasses: gs ? { x: 0, y: 0, ...gs } : undefined };
+      }
+      const shrink = 1 - m1.fit / Math.max(1e-9, m.fit);
+      if (shrink <= A.headMaxShrink) {
+        accInfo.headZone = true; accInfo.headShrink = shrink; m = m1;
+        const t0 = (m.rects.top ?? m.rects.full)!;
+        const cx = axis;
+        let yBelow = t0.y;                                             // upper edge of the element below the next one
+        if (headRects.glasses) {
+          const g = headRects.glasses; g.x = cx - g.w / 2; g.y = yBelow - g.h * (1 - A.glasses.overlap); yBelow = g.y;
+          placedExtra.push({ slot: glasses!.slot, rect: g, rot: 0, z: A.z.inline }); taken.add(glasses!.slot);
+          accInfo.placed.push({ slot: glasses!.slot, type: glasses!.type, kind: "inline", zone: "glasses" });
+        }
+        if (headRects.hat) {
+          const h = headRects.hat; h.x = cx - h.w / 2; h.y = yBelow - h.h * (1 - A.hat.overlap);
+          placedExtra.push({ slot: hat!.slot, rect: h, rot: 0, z: A.z.inline }); taken.add(hat!.slot);
+          accInfo.placed.push({ slot: hat!.slot, type: hat!.type, kind: "head", zone: "head" });
+        }
+      } else {
+        for (const it of headItems) accInfo.demoted.push(`${it.type}:head-zone-too-costly(${(shrink * 100).toFixed(0)}%)`);
+      }
+    }
+    rects = m.rects; fitF = m.fit; dbg.binding = m.binding; dbg.ratio = m.ratio; dbg.seamMatched = m.seamMatched; dbg.hemLine = m.hemLine; dbg.waistLine = m.waistLine;
+
+    // ---- inline overlays: necklace on the top (front_flat), belt across the seam (straight strip, front_flat, stacked only) ----
+    const topRect = (rects.top ?? rects.full)!;
+    for (const a of accs) {
+      if (taken.has(a.slot) || a.placement !== "inline") continue;
+      const ar = a.aspect && a.aspect > 0.05 ? a.aspect : 1;
+      if (a.zone === "neck" && a.frontFlat) {
+        let w = A.necklace.widthOfTop * topRect.w, h = w / ar;
+        const hMax = A.necklace.maxHOfTop * topRect.h;
+        if (h > hMax) { h = hMax; w = h * ar; }
+        const rect = { x: axis - w / 2, y: topRect.y + A.necklace.neckline * topRect.h, w, h };
+        placedExtra.push({ slot: a.slot, rect, rot: 0, z: A.z.inline }); taken.add(a.slot);
+        accInfo.placed.push({ slot: a.slot, type: a.type, kind: "inline", zone: "neck" });
+      } else if (a.zone === "seam" && a.frontFlat && a.beltShape === "straight_strip" && m.seam && !full) {
+        let w = A.belt.widthOfSeam * m.seam.w, h = w / ar;
+        const hMax = A.belt.maxH * H;
+        if (h > hMax) { h = hMax; }                        // keeps the strip thin: no extra height
+        const rect = { x: axis - w / 2, y: m.seam.y - h / 2, w, h };
+        placedExtra.push({ slot: a.slot, rect, rot: 0, z: A.z.inline }); taken.add(a.slot);
+        accInfo.placed.push({ slot: a.slot, type: a.type, kind: "inline", zone: "seam" });
+      }
+    }
+    // ---- watch / bracelet right of the top at sleeve height, no overlap with the top ----
+    for (const a of accs) {
+      if (taken.has(a.slot) || a.placement !== "side" || a.zone !== "sleeve") continue;
+      const ar = a.aspect && a.aspect > 0.05 ? a.aspect : 1;
+      const sz = sideSize(a, W, H, ar);
+      const x = topRect.x + topRect.w + A.sleeve.gap * W;
+      const w = Math.min(sz.w, A.sleeve.maxW * W);
+      const h = w / ar;
+      const rect = { x, y: topRect.y + A.sleeve.at * topRect.h - h / 2, w, h };
+      if (rect.x + rect.w <= W - padX && !collides(rect, [...Object.values(rects), ...placedExtra.map((p) => p.rect)], 2)) {
+        placedExtra.push({ slot: a.slot, rect, rot: 0, z: A.z.side }); taken.add(a.slot);
+        accInfo.placed.push({ slot: a.slot, type: a.type, kind: "side", zone: "sleeve" });
+      } else accInfo.demoted.push(`${a.type}:sleeve->column`);
+    }
+    // ---- side column for everything else ----
+    const rest = accs.filter((a) => !taken.has(a.slot));
+    placeSide(rest, rects, placedExtra, accInfo, { W, H, padX, padY, topRect, bottomRect: rects.bottom, aspectOf: (a) => (a.aspect && a.aspect > 0.05 ? a.aspect : 1) });
   } else {
     dbg.mode = "folded";
     const t = top!, b = bottom!, at = aspect(t), ab = aspect(b);
@@ -114,16 +208,21 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
       "upper-height": upperH / Math.max(1 / Math.sqrt(at), 1 / Math.sqrt(ab)),
     };
     const [fk, q] = Object.entries(lim).sort((x, y) => x[1] - y[1])[0];
-    binding.push(fk);
+    dbg.binding.push(fk);
     const wt = q * Math.sqrt(at), ht = q / Math.sqrt(at), wb = q * Math.sqrt(ab), hb = q / Math.sqrt(ab);
     const cy = padY + upperH / 2;
     rects.top = { x: padX, y: cy - ht / 2, w: wt, h: ht };
     rects.bottom = { x: frameRight - padX - wb, y: cy - hb / 2, w: wb, h: hb };
     // shoes: centred on the centre axis, lower half (no overlap needed), at most foldedShoeMaxH x the pair's height
+    let { sw, sh } = baseShoe();
     const pairH = Math.max(ht, hb);
-    if (sh > pairH * R.foldedShoeMaxH) { sh = pairH * R.foldedShoeMaxH; sw = sh * sa; binding.push("folded-shoe-cap"); }
+    if (sh > pairH * R.foldedShoeMaxH) { sh = pairH * R.foldedShoeMaxH; sw = sh * sa; dbg.binding.push("folded-shoe-cap"); }
     rects.shoes = { x: centre - sw / 2, y: R.foldedShoesCy * H - sh / 2, w: sw, h: sh };
+    // folded outfits: every accessory goes to the side column (no head zone, no overlays)
+    for (const a of accs) if (a.placement !== "side") accInfo.demoted.push(`${a.type}:${a.placement}->column(folded)`);
+    placeSide(accs, rects, placedExtra, accInfo, { W, H, padX, padY, topRect: rects.top, bottomRect: rects.bottom, aspectOf: (a) => (a.aspect && a.aspect > 0.05 ? a.aspect : 1) });
   }
+  if (accs.length) dbg.acc = accInfo;
 
   // optional randomness (off by default): whole composition shift + shoe tilt
   let rotShoe = 0;
@@ -134,10 +233,90 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     rotShoe = sym(JITTER.shoeRotDeg);
   }
 
-  const z = { top: 2, bottom: 1, shoes: 3, full: 1 };
-  const placed: Placed[] = (Object.entries(rects) as [SlotName, Rect][]).map(([slot, rect]) => ({ slot, rect, rot: slot === "shoes" ? rotShoe : 0, z: z[slot] }));
+  const z: Record<string, number> = { top: 2, bottom: 1, shoes: 3, full: 1 };
+  const placed: Placed[] = (Object.entries(rects) as [SlotName, Rect][]).map(([slot, rect]) => ({ slot, rect, rot: slot === "shoes" ? rotShoe : 0, z: z[slot] ?? 2 }));
+  placed.push(...placedExtra);
   placed.sort((a, b) => a.z - b.z);
   const frame: Rect = { x: 0, y: padY, w: frameRight, h: availH };
   return { fit: fitF, template: dbg.mode === "folded" ? "R-folded" : dbg.mode === "full" ? "R-full" : "R-stacked", margin: "right", pieces: placed, frame,
     marginRect: { x: frameRight, y: 0, w: W - frameRight, h: H }, canvas: opts.canvas, debug: dbg };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+function headSize(a: AccIn, topW: number, _aspect: unknown, W: number, H: number) {
+  const ar = a.aspect && a.aspect > 0.05 ? a.aspect : 1.4;
+  let w = A.hat.widthOfTop * topW, h = w / ar;
+  if (h > A.hat.maxH * H) { h = A.hat.maxH * H; w = h * ar; }
+  return { w: Math.min(w, 0.6 * W), h };
+}
+function glassSize(a: AccIn, topW: number, _aspect: unknown, W: number, H: number) {
+  const ar = a.aspect && a.aspect > 0.05 ? a.aspect : 3;
+  let w = A.glasses.widthOfTop * topW, h = w / ar;
+  if (h > A.glasses.maxH * H) { h = A.glasses.maxH * H; w = h * ar; }
+  return { w: Math.min(w, 0.6 * W), h };
+}
+function sideSize(a: AccIn, W: number, H: number, ar: number) {
+  const base = A.side.size[a.type] ?? A.side.size.other_wearable;
+  const k = A.side.sizeClass[a.size ?? "medium"] ?? 1;
+  let w = base.w * W * k, h = w / ar;
+  if (h > base.h * H * k) { h = base.h * H * k; w = h * ar; }
+  return { w, h };
+}
+const overlapsRect = (a: Rect, b: Rect, pad = 0) => a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
+const collides = (r: Rect, others: Rect[], pad = 0) => others.some((o) => overlapsRect(r, o, pad));
+
+/** Side column: items sit right-aligned at the canvas edge in vertical zones; collisions are resolved by moving up/down;
+ *  if something does not fit, all side items shrink (down to minScale), then the lowest-priority item is dropped. Main pieces are never touched. */
+function placeSide(items: AccIn[], main: Partial<Record<SlotName, Rect>>, out: Placed[], info: { placed: { slot: string; type: string; kind: string; zone: string }[]; dropped: string[]; shrunkTo: number },
+  c: { W: number; H: number; padX: number; padY: number; topRect?: Rect; bottomRect?: Rect; aspectOf: (a: AccIn) => number }) {
+  if (!items.length) return;
+  const fixed = [...Object.values(main), ...out.map((p) => p.rect)] as Rect[];
+  const zoneCy = (a: AccIn) => {
+    if (a.zone === "hip" && c.bottomRect) return c.bottomRect.y + 0.18 * c.bottomRect.h;
+    if (a.zone === "upper" && c.topRect) return c.topRect.y + 0.2 * c.topRect.h;
+    if (a.zone === "mid" && c.topRect && c.bottomRect) return c.topRect.y + c.topRect.h;
+    return (A.side.zoneY[a.zone] ?? A.side.zoneY.mid) * c.H;
+  };
+  const gap = A.side.gapX * c.W;
+  const tryPlace = (list: AccIn[], scale: number) => {
+    const placedHere: { slot: string; rect: Rect; a: AccIn }[] = [];
+    const order = [...list].sort((x, y) => (A.side.priority[y.type] ?? 1) - (A.side.priority[x.type] ?? 1));
+    for (const a of order) {
+      const sz = sideSize(a, c.W, c.H, c.aspectOf(a));
+      const w = sz.w * scale, h = sz.h * scale;
+      const cy0 = zoneCy(a);
+      let ok: Rect | null = null;
+      // candidate vertical positions: the zone centre, then alternately up and down in steps of 40% of the item's height
+      for (let k = 0; k < 40 && !ok; k++) {
+        const off = k === 0 ? 0 : (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.4 * h;
+        const y = cy0 + off - h / 2;
+        if (y < c.padY || y + h > c.H - c.padY) continue;
+        // free x range at this height: right of everything that overlaps the band, left of the screen edge margin
+        let left = c.padX;
+        const band: Rect = { x: 0, y: y - 2, w: c.W, h: h + 4 };
+        for (const r of [...fixed, ...placedHere.map((p) => p.rect)]) if (r.y < band.y + band.h && r.y + r.h > band.y) left = Math.max(left, r.x + r.w + gap);
+        const x = c.W - c.padX - w;
+        if (x >= left) ok = { x, y, w, h };
+      }
+      if (!ok) return null;
+      placedHere.push({ slot: a.slot, rect: ok, a });
+    }
+    return placedHere;
+  };
+  let list = [...items], scale = 1;
+  for (;;) {
+    let res: ReturnType<typeof tryPlace> = null;
+    for (const s of [1, 0.85, A.side.minScale]) { res = tryPlace(list, s); if (res) { scale = s; break; } }
+    if (res) {
+      info.shrunkTo = Math.min(info.shrunkTo, scale);
+      for (const p of res) { out.push({ slot: p.slot as SlotName, rect: p.rect, rot: 0, z: A.z.side }); info.placed.push({ slot: p.slot, type: p.a.type, kind: "side", zone: p.a.zone }); }
+      return;
+    }
+    // nothing fits even at the smallest size: drop the lowest-priority item and try again
+    const drop = [...list].sort((x, y) => (A.side.priority[x.type] ?? 1) - (A.side.priority[y.type] ?? 1))[0];
+    info.dropped.push(`${drop.type}`);
+    list = list.filter((x) => x !== drop);
+    if (!list.length) return;
+  }
 }

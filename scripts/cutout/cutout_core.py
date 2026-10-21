@@ -18,6 +18,8 @@ LIMITS = {
     "bottom":    dict(min_area=0.02, max_area=0.90, max_frag=2, min_recall=0.88),
     "top":       dict(min_area=0.02, max_area=0.90, max_frag=2, min_recall=0.88),
     "full_body": dict(min_area=0.02, max_area=0.90, max_frag=2, min_recall=0.88),
+    # accessories: small items, jewelry and chains have thin parts and several pieces (a pair of earrings), so looser fragment/recall limits
+    "accessory": dict(min_area=0.005, max_area=0.90, max_frag=6, min_recall=0.80),
 }
 
 
