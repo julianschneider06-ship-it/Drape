@@ -187,3 +187,10 @@ Some product photos show several items (three tees in a row, stacked garments). 
 - **Necklace overlay** only on tops that are not outerwear, never on dresses (those go to the column); at most 30% of the top's height.
 - **Soft busy-ness rule.** Tailored / formal outfits and quiet minimal ones (no accent colour, no pattern, no statement piece, formality >= 0.5) take at most 2 accessories; head item + sunglasses + a neck item together is not allowed.
 - **Tokens expire.** `pipeline_tokens.expires_at` (default 24h, null only for the web token), checked in the gateway.
+
+## Accessory polish (hoods, sizes, accent rule)
+- **Hoods.** `scripts/detect-hoods.ts` sets `products.has_hood` (+ `hood_src`, `hood_model`, `hood_version`, `hood_cost`), once per feed image: name keywords (hood, hoodie, parka, anorak ...) = hood; neck narrower than 0.30 without keyword = no hood (both free); unclear tops go to the cheap vision model at low resolution (cap $0.50, spent $0.19). `product_card` returns `hood`; a hooded top never gets a head item above it (the item goes to the side column).
+- **Sizes.** `ACCESSORIES.boost` on top of `REAL_CM`: sunglasses x2.0, cap x1.2 (also in the head zone), backpack x1.2, hat / beanie x1.0, all other types x1.15. The side column is limited to 38% of the canvas width; items shrink to the free width (never below 70%). `data-lim` in the debug view lists the types that hit the limit.
+- **Stack lower.** `stackSlackShare = 1.0` (spare height goes above the stack), `edgePadTop = 0.005`; the bottom keeps the 1.5% safe gap above the buttons.
+- **Folded outfits** can carry a head item above the folded top when there is room.
+- **Accent rule.** A second accessory with a strong (non-neutral) colour in the same outfit has its score multiplied by `accentPenalty` (0.5) and is skipped if it then falls below the threshold (`DRAPE_ACC_ACCENT_PENALTY=1` switches it off).
