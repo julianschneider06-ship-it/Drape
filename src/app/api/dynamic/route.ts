@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const recent = Array.isArray(b.recent) ? (b.recent as { ids?: unknown; style?: unknown; store?: unknown }[]).slice(-12).flatMap((r) => Array.isArray(r.ids) && typeof r.style === "string" && typeof r.store === "string" ? [{ ids: (r.ids as unknown[]).filter((x): x is number => Number.isInteger(x)).slice(0, 8), style: r.style.slice(0, 24), store: r.store.slice(0, 40) }] : []) : [];
   const startersServed = Number.isInteger(b.startersServed) ? Math.max(0, Math.min(200, b.startersServed as number)) : 0;
   try {
-    const banB64 = typeof b.ban === "string" && b.ban.length <= 6000 && /^[A-Za-z0-9+/=]*$/.test(b.ban) ? b.ban : b.ban === "db" ? null : undefined;   // ban list held by the client (default) or "db" = the database copy
+    const banB64 = b.ban === "db" ? null : typeof b.ban === "string" && b.ban.length <= 6000 && /^[A-Za-z0-9+/=]*$/.test(b.ban) ? b.ban : undefined;   // ban list held by the client (default) or "db" = the database copy
     const { items, ms, ban } = await dynamicPage({ device: b.device_id, gender: b.gender, recent, startersServed, banB64: banB64 === undefined ? "" : banB64 });
     return NextResponse.json({ items, ms, ban: banB64 === null ? undefined : ban }, { headers: { "cache-control": "no-store" } });
   } catch (e) { return NextResponse.json({ error: "unavailable", detail: String(e).slice(0, 120) }, { status: 502 }); }
