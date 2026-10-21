@@ -206,9 +206,25 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     const pairH = Math.max(ht, hb);
     if (sh > pairH * R.foldedShoeMaxH) { sh = pairH * R.foldedShoeMaxH; sw = sh * sa; dbg.binding.push("folded-shoe-cap"); }
     rects.shoes = { x: centre - sw / 2, y: R.foldedShoesCy * H - sh / 2, w: sw, h: sh };
-    // folded outfits: every accessory goes to the side column (no head zone, no overlays)
-    for (const a of accs) if (a.placement !== "side") accInfo.demoted.push(`${a.type}:${a.placement}->column(folded)`);
-    placeSide(accs, rects, placedExtra, accInfo, { W, H, padX, padY, ppc: rects.top.w / REF_CM.topW, topRect: rects.top, bottomRect: rects.bottom, aspectOf: (a) => (a.aspect && a.aspect > 0.05 ? a.aspect : 1) });
+    // folded outfits: a head item sits above the folded top if there is room (the pair may move down, never into the shoes); everything else goes to the side column
+    const takenF = new Set<string>();
+    const hatF = accs.find((a) => a.placement === "head" && HEAD_TYPES.has(a.type));
+    if (hatF && t.hood) accInfo.demoted.push(`${hatF.type}:hooded-top`);
+    else if (hatF) {
+      const hs = headSize(hatF, rects.top.w, t.collar, W, H);
+      const need = hs.h * (1 - A.head.overlap);
+      const pairTop = Math.min(rects.top.y, rects.bottom.y), pairBottom = Math.max(rects.top.y + rects.top.h, rects.bottom.y + rects.bottom.h);
+      const room = rects.shoes.y - 0.02 * H - pairBottom;
+      const shift = Math.max(0, padTop + need - pairTop);
+      if (shift <= room) {
+        rects.top.y += shift; rects.bottom.y += shift;
+        const rect = { x: Math.max(padX, rects.top.x + rects.top.w / 2 - hs.w / 2), y: rects.top.y - need, w: hs.w, h: hs.h };
+        placedExtra.push({ slot: hatF.slot, rect, rot: 0, z: A.z.inline }); takenF.add(hatF.slot);
+        accInfo.headZone = true; accInfo.placed.push({ slot: hatF.slot, type: hatF.type, kind: "head", zone: "head" });
+      } else accInfo.demoted.push(`${hatF.type}:head->column(folded-no-room)`);
+    }
+    for (const a of accs) if (!takenF.has(a.slot) && a.placement !== "side" && !(a === hatF)) accInfo.demoted.push(`${a.type}:${a.placement}->column(folded)`);
+    placeSide(accs.filter((a) => !takenF.has(a.slot)), rects, placedExtra, accInfo, { W, H, padX, padY, ppc: rects.top.w / REF_CM.topW, topRect: rects.top, bottomRect: rects.bottom, aspectOf: (a) => (a.aspect && a.aspect > 0.05 ? a.aspect : 1) });
   }
   if (accs.length) dbg.acc = accInfo;
 
