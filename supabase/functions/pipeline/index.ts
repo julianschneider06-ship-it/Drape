@@ -43,7 +43,8 @@ Deno.serve(async (req) => {
   if (!info) return json({ error: "unauthorized" }, 401);
   const { action, ...a } = await req.json();
   if (info.allowed) {
-    const ok = (action === "sample" && info.allowed.includes("sample")) || (action === "sign_upload" && info.allowed.includes("sign_upload")) || (action === "rpc" && info.allowed.includes(a.fn));
+    // restricted tokens list what they may do: "sample", "sign_upload", any other action by name (source_upsert, run_start, ingest, classification_store ...) and rpc function names
+    const ok = (action === "rpc" ? info.allowed.includes(a.fn) : info.allowed.includes(action));
     if (!ok) return json({ error: "forbidden for this token" }, 403);
   }
 
