@@ -194,3 +194,19 @@ grant execute on function public.acc_prefilter(), public.acc_todo(bigint, intege
   to service_role;
 insert into public.pipeline_rpc_allowlist (fn) values ('acc_prefilter'), ('acc_todo'), ('acc_store'), ('acc_cost'), ('acc_stats'), ('outfit_pool_list'), ('acc_inputs'),
   ('outfit_acc_run_next'), ('outfit_acc_upsert'), ('outfit_acc_finish') on conflict do nothing;
+
+-- Same work list, newest products first (used when the cost cap may stop the job: the accessory stores added last come first).
+create function public.acc_todo_desc(p_before bigint, p_limit integer, p_tax text)
+returns table (id bigint, brand text, name text, subcategory text, images jsonb) language sql stable set search_path = public as $$
+  select p.id, p.brand, p.name, p.subcategory,
+         (select coalesce(jsonb_agg(jsonb_build_object('url', i.url, 'rank', i.feed_rank) order by i.feed_rank), '[]'::jsonb)
+            from product_images i where i.product_id = p.id and i.feed_rank <= 2)
+    from products p
+   where p.status = 'active' and p.category = 'accessories' and p.id < p_before and p.accessory_type is null
+     and exists (select 1 from product_images i where i.product_id = p.id and i.selected)
+     and not exists (select 1 from product_classifications c where c.product_id = p.id and c.taxonomy_version = p_tax)
+   order by p.id desc limit least(p_limit, 500);
+$$;
+revoke all on function public.acc_todo_desc(bigint, integer, text) from public, anon, authenticated;
+grant execute on function public.acc_todo_desc(bigint, integer, text) to service_role;
+insert into public.pipeline_rpc_allowlist (fn) values ('acc_todo_desc') on conflict do nothing;

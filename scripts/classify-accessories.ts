@@ -15,6 +15,7 @@ const MODEL = opt("model") ?? MODELS.classifier;
 const CAP = Number(opt("cap") ?? 3);
 const CONCURRENCY = Number(opt("concurrency") ?? 8);
 const LIMIT = Number(opt("limit") ?? Infinity);
+const DESC = args.includes("--desc"); // newest products first (the accessory stores added last); default oldest first
 const price = PRICES[MODEL];
 if (!KEY) throw new Error("GEMINI_API_KEY is not set");
 if (!price) throw new Error(`No price known for model ${MODEL}`);
@@ -52,7 +53,7 @@ async function classify(t: Todo) {
   for (let tries = 0; tries < 2 && !valid; tries++) {
     const gen = await gemini({
       contents: [{ parts: [{ text: PROMPT({ brand: t.brand, name: t.name, subcategory: t.subcategory }) }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }],
-      generationConfig: { responseMimeType: "application/json", responseJsonSchema: ACC_SCHEMA, temperature: 0.2, mediaResolution: "MEDIA_RESOLUTION_LOW" },
+      generationConfig: { responseMimeType: "application/json", responseJsonSchema: ACC_SCHEMA, temperature: 0.2, mediaResolution: "MEDIA_RESOLUTION_LOW", thinkingConfig: { thinkingLevel: "minimal" } },
     });
     const u = gen.usageMetadata ?? {};
     cost += ((u.promptTokenCount ?? 0) * price.in + ((u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0)) * price.out) / 1e6;
@@ -65,10 +66,10 @@ async function classify(t: Todo) {
 (async () => {
   const parked = await rpc<number>("acc_prefilter");
   let spent = Number(await rpc<string>("acc_cost", { p_tax: TAXONOMY_VERSION }));
-  const t0 = Date.now(); let after = 0, done = 0, invalid = 0, errors = 0; const types: Record<string, number> = {};
+  const t0 = Date.now(); let after = DESC ? Number.MAX_SAFE_INTEGER : 0, done = 0, invalid = 0, errors = 0; const types: Record<string, number> = {};
   console.log(`accessory classification ${TAXONOMY_VERSION}: model ${MODEL}, cap $${CAP}, spent so far $${spent.toFixed(4)}, parked by prefilter ${parked}`);
   while (done < LIMIT && spent < CAP) {
-    const todo = await rpc<Todo[]>("acc_todo", { p_after: after, p_limit: Math.min(40, LIMIT - done), p_tax: TAXONOMY_VERSION });
+    const todo = DESC ? await rpc<Todo[]>("acc_todo_desc", { p_before: after, p_limit: Math.min(40, LIMIT - done), p_tax: TAXONOMY_VERSION }) : await rpc<Todo[]>("acc_todo", { p_after: after, p_limit: Math.min(40, LIMIT - done), p_tax: TAXONOMY_VERSION });
     if (!todo.length) break;
     after = todo[todo.length - 1].id;
     const out: Awaited<ReturnType<typeof classify>>[] = []; let i = 0;
