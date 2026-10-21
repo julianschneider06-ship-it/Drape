@@ -10,10 +10,10 @@ import FeedImage from "./FeedImage";
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, onTouchPiece, swapEvt }: {
+export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string) => void;
-  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; onTouchPiece?: (slot: SlotName) => void; swapEvt?: SwapEvt;
+  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt;
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
@@ -23,7 +23,7 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
   const accs = useMemo(() => {
     const out: { slot: AccSlot; acc: FeedAccessory; card: ReturnType<typeof viewCard> }[] = [];
     if (!showAcc) return out;
-    (outfit.accessories ?? []).slice(0, 3).forEach((a, i) => { if (a.card && a.card.cutout) out.push({ slot: `acc${i + 1}` as AccSlot, acc: a, card: viewCard(a.card, cut) }); });
+    (outfit.accessories ?? []).slice(0, 3).forEach((a, i) => { if (a.card && a.card.cutout) out.push({ slot: `acc${a.slot_no ?? i + 1}` as AccSlot, acc: a, card: viewCard(a.card, cut) }); });
     return out;
   }, [outfit, cut, showAcc]);
   const layout = useMemo(() => {
@@ -47,7 +47,6 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
     if (!onSwipe || (e.pointerType === "mouse" && e.button !== 0)) return;
     const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-slot]");   // topmost piece under the finger (shoes / overlays win)
     gest.current = { x: e.clientX, y: e.clientY, slot: el?.getAttribute("data-slot") ?? null, mode: "idle" };
-    if (gest.current.slot) onTouchPiece?.(gest.current.slot as SlotName);   // start the lazy lookup of this piece's alternatives
   };
   const move = (e: React.PointerEvent) => {
     const g = gest.current; if (!g || g.mode === "scroll") return;
@@ -62,13 +61,13 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
     if (!g || g.mode !== "swipe") return;
     const dx = e.clientX - g.x;
     suppressUntil.current = Date.now() + 350;   // the tap that would follow a drag must not open the sheet
-    if (Math.abs(dx) >= 44 && g.slot) onSwipe?.(g.slot as SlotName, dx < 0 ? "next" : "prev");
+    if (Math.abs(dx) >= 44 && g.slot) onSwipe?.(g.slot as SlotName, dx > 0 ? "next" : "prev")   // swipe right = next, swipe left = previous (both loop);
   };
   // ghosts: the piece that was swapped out slides away while the new one slides in
   const prevPieces = useRef<Record<string, { card: ReturnType<typeof viewCard>; rect: { x: number; y: number; w: number; h: number } }>>({});
   const [ghosts, setGhosts] = useState<{ id: string; card: ReturnType<typeof viewCard>; rect: { x: number; y: number; w: number; h: number }; dir: "next" | "prev"; slot: string }[]>([]);
   useEffect(() => {
-    if (!swapEvt || swapEvt.kind !== "swap") return;
+    if (!swapEvt) return;
     const old = prevPieces.current[swapEvt.slot];
     if (!old || old.card.id === swapEvt.newId) return;
     const gid = `${swapEvt.seq}`;
@@ -106,7 +105,7 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
       {layout.pieces.map((p) => {
         const c = (cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)!;
         const isNew = swapEvt?.kind === "swap" && swapEvt.slot === p.slot && swapEvt.newId === c.id;
-        const bounce = swapEvt?.kind === "bounce" && swapEvt.slot === p.slot ? `swap-bounce-${swapEvt.dir}` : "";
+        const bounce = "";
         return (
           <div key={p.slot} data-slot={p.slot} className={`absolute ${bounce}`} style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined, transition: "left .32s ease, top .32s ease, width .32s ease, height .32s ease", touchAction: "pan-y" }}>
             <button key={`${p.slot}-${c.id}-${isNew ? swapEvt!.seq : 0}`} type="button" onClickCapture={(e) => { if (Date.now() < suppressUntil.current) { e.stopPropagation(); e.preventDefault(); } }} onClick={() => onOpen(orig(c, p.slot), p.slot)} aria-label={`${c.brand} ${c.name}`}

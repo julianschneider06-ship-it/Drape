@@ -14,8 +14,8 @@ function cleanCtx(c: unknown) {
   const o = c as Record<string, unknown>, out: Record<string, unknown> = {};
   for (const k of ["layout", "mode", "v"]) if (typeof o[k] === "string" && (o[k] as string).length <= 24) out[k] = o[k];
   if (o.prev === "up" || o.prev === "down") out.prev = o.prev;
-  const prevId = int(o.out), rank = int(o.rank, 100);
-  if (prevId !== null) out.out = prevId; if (rank !== null) out.rank = rank; if (o.dir === "next" || o.dir === "prev") out.dir = o.dir;   // swap: product that left, direction, alternative rank (0 = the original)
+  const prevId = int(o.out), rank = int(o.rank, 100), alt = int(o.alt, 2), from = int(o.from, 2);
+  if (prevId !== null) out.out = prevId; if (rank !== null) out.rank = rank; if (alt !== null) out.alt = alt; if (from !== null) out.from = from;   // alt / from = loop position after / before the swap (0 = original) if (o.dir === "next" || o.dir === "prev") out.dir = o.dir;   // swap: product that left, direction, alternative rank (0 = the original)
   if (Array.isArray(o.canvas) && o.canvas.length === 2) { const a = int(o.canvas[0], 5000), b = int(o.canvas[1], 5000); if (a !== null && b !== null) out.canvas = [a, b]; }
   return Object.keys(out).length ? out : null;
 }

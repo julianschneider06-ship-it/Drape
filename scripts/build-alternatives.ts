@@ -9,7 +9,8 @@ import { scoreOutfit, toPiece, type Piece, type RawPiece, type Slot } from "../s
 import { BAG, HEAD, NECK, ACC, outfitCtx, reject, scoreAcc, toAcc, type Acc, type OutfitCtx, type RawAcc } from "../src/outfits/accessories";
 import { RULES } from "../src/lib/layout/config";
 
-const VERSION = "alt2";   // alt2: a bottom is replaced by a bottom of the same length class (shorts / short skirt stay short, long stays long)
+const VERSION = "alt3";   // alt3: ranks 1 and 2 are the swap-loop pair (visibly different from each other)
+// alt2:   // alt2: a bottom is replaced by a bottom of the same length class (shorts / short skirt stay short, long stays long)
 const args = process.argv.slice(2);
 const FORCE = args.includes("--force"), DRY = args.includes("--dry");
 const LIMIT = Number(args[args.indexOf("--limit") + 1] || Infinity);
@@ -28,6 +29,22 @@ const SHORT = /\b(shorts?|skort|mini|bermuda)\b/i;
 const shortish = (name: string | undefined) => SHORT.test(name ?? "");
 const folded = (slot: string, info: Info | undefined) => slot === "shoes" || slot === "full_body" ? false : !!info && ((info.presentation != null && !RULES.stackedPresentations.includes(info.presentation)) || (slot === "top" && (info.fill ?? 0) >= RULES.foldedFillMin));
 
+interface Cnd { product_id: number; brand: string; score: number; main: string; vec: Float32Array }
+const dotv = (a: Float32Array, b: Float32Array) => { let x = 0; for (let i = 0; i < a.length; i++) x += a[i] * b[i]; return x; };
+/** The swap loop shows the original + 2 alternatives: the best one, and the best other one that is visibly different from it
+ *  (other brand, other main colour, not a near-duplicate in style); conditions are relaxed step by step if nothing qualifies. */
+function pickPair<T extends Cnd>(sorted: T[]): T[] {
+  if (sorted.length < 2) return sorted.slice(0, 2);
+  const a = sorted[0]; const pool = sorted.slice(1, 14);
+  const tests: ((b: T) => boolean)[] = [
+    (b) => b.brand !== a.brand && b.main !== a.main && dotv(a.vec, b.vec) < 0.96,
+    (b) => b.main !== a.main && dotv(a.vec, b.vec) < 0.96,
+    (b) => b.brand !== a.brand && dotv(a.vec, b.vec) < 0.96,
+    (b) => dotv(a.vec, b.vec) < 0.96, () => true,
+  ];
+  for (const t of tests) { const b = pool.find(t); if (b) return [a, b]; }
+  return [a];
+}
 /** Best first, at most MAX_ALTS, no two alternatives from the same brand in a row where possible. */
 function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[] {
   const out: T[] = []; const rest = [...sorted];
@@ -86,7 +103,7 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
     mainSlots.push({ key: "shoes", slot: "shoes", idx: ps.length - 1, id: o.shoes });
     for (const ms of mainSlots) {
       const cur = ps[ms.idx]; const curFold = folded(ms.slot, info.get(cur.id));
-      const sc: { product_id: number; brand: string; score: number }[] = [];
+      const sc: Cnd[] = [];
       for (const c of cand[`${g}:${ms.slot}`] ?? []) {
         if (c.id === cur.id || ps.some((p) => p.id === c.id)) continue;
         if (folded(ms.slot, info.get(c.id)) !== curFold) continue;               // same presentation: the layout type must not jump
@@ -97,10 +114,11 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
         if (c.statement >= ACC.statementMin && accObjs.some((a) => a.statement >= ACC.statementMin)) continue;   // at most one statement piece overall
         const ctx = ctxOf(next);
         if (accObjs.some((a) => reject(a, ctx))) continue;                        // the accessories must still suit the changed outfit
-        sc.push({ product_id: c.id, brand: info.get(c.id)?.brand ?? c.store, score: s.score });
+        sc.push({ product_id: c.id, brand: info.get(c.id)?.brand ?? c.store, score: s.score, main: c.main, vec: c.vec });
       }
       sc.sort((a, b) => b.score - a.score);
-      slots.push({ slot_key: ms.key, alts: diversify(sc).map((x) => ({ product_id: x.product_id, score: +x.score.toFixed(4) })) });
+      const pair = pickPair(sc), rest = diversify(sc.filter((x) => !pair.includes(x)));
+      slots.push({ slot_key: ms.key, alts: [...pair, ...rest].slice(0, MAX_ALTS).map((x) => ({ product_id: x.product_id, score: +x.score.toFixed(4) })) });
     }
 
     // ---- accessories ----
@@ -112,18 +130,21 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
       const head = others.some((a) => HEAD.has(a.type)), bag = others.some((a) => BAG.has(a.type)), neck = others.some((a) => NECK.has(a.type));
       const statement = ctx.statements > 0 || others.some((a) => a.statement >= ACC.statementMin);
       const accents = new Set([...ctx.accents, ...others.map((a) => a.accent).filter((x): x is string => !!x)]);
-      const sameType: { product_id: number; brand: string; score: number }[] = [], otherType: typeof sameType = [];
+      const sameType: Cnd[] = [], otherType: Cnd[] = [];
       for (const c of accs) {
         if (c.id === cur.id || accObjs.some((a) => a.id === c.id) || reject(c, ctx)) continue;
         if (types.has(c.type)) continue;
         if (HEAD.has(c.type) && head || BAG.has(c.type) && bag || NECK.has(c.type) && neck) continue;
         if (c.statement >= ACC.statementMin && statement) continue;
         if (c.accent && accents.size && ![...accents].every((x) => x === c.accent) && others.some((a) => a.accent)) continue;   // no second strong accent colour
-        (c.type === cur.type ? sameType : otherType).push({ product_id: c.id, brand: c.store, score: scoreAcc(c, ctx) });
+        (c.type === cur.type ? sameType : otherType).push({ product_id: c.id, brand: c.store, score: scoreAcc(c, ctx), main: c.main, vec: c.vec });
       }
       sameType.sort((a, b) => b.score - a.score); otherType.sort((a, b) => b.score - a.score);
-      let list = diversify(sameType);
-      if (list.length < 3) list = [...list, ...diversify(otherType).filter((x) => !list.some((y) => y.product_id === x.product_id))].slice(0, MAX_ALTS);
+      const ordered = sameType.length >= 2 ? sameType : [...sameType, ...otherType];
+      const pair = pickPair(ordered), restSame = diversify(sameType.filter((x) => !pair.includes(x)));
+      let list: Cnd[] = [...pair, ...restSame];
+      if (list.length < 3) list = [...list, ...diversify(otherType).filter((x) => !list.some((y) => y.product_id === x.product_id))];
+      list = list.slice(0, MAX_ALTS);
       slots.push({ slot_key: `acc${r.slot_no}`, alts: list.map((x) => ({ product_id: x.product_id, score: +x.score.toFixed(4) })) });
       void i;
     });
