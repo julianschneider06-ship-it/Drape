@@ -15,7 +15,7 @@ const CONC = 2;
 
 interface Progress {
   phase: "main" | "retry" | "snapshot"; done: string[]; retry: string[]; retried: string[]; pass1_end?: string;
-  tot: Record<string, number>; skipped: Record<string, string>; started?: string; invocations: number; snapshot?: string; last_error?: string; force_prices?: boolean; only?: string[]; market?: boolean;
+  tot: Record<string, number>; skipped: Record<string, string>; started?: string; invocations: number; snapshot?: string; last_error?: string; force_prices?: boolean; only?: string[]; market?: boolean;   // false = no country parameter (tests only)
 }
 const ZERO = () => ({ shops_ok: 0, shops_skipped: 0, offers_checked: 0, became_sold_out: 0, back_in_stock: 0, price_changed: 0, sale_started: 0, sale_ended: 0, delisted: 0, feed_ready_changed: 0, changed: 0, retried_429: 0, recovered_429: 0 });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
