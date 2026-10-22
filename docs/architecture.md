@@ -423,3 +423,6 @@ Three interactive steps over two pinned outfits (`src/lib/onboarding.ts`): swipe
 - Tutorial outfits are hardcoded per gender (`src/lib/onboarding.ts`); `/api/onboarding?gender=` composes them from the in-memory catalogue (no DB write).
 - Style picker: rpc `style_counts(p_gender)` (read-only grouped count over active `outfit_pool`), allowlisted for the web token; `MIN_STYLE_OUTFITS` in `src/lib/welcome.ts`.
 - Style prior: added to a copy of the taste per request (`withPrior`), fades with events, not persisted; keeps the stored taste and the event-log replay pure.
+
+## Outfit icons (2026-10-22)
+Display only. Icons come from the existing per-outfit `tags` (computed on demand in the feed route / composer): style_primary -> family (`src/config/style-families.ts`), season_primary, then rain, occasion (evening, office, resort), contrast, boldness, palette kind (tonal, colourful), formality (formal). Generic values (everyday, neutral, regular) get no icon. Inline SVG, memoized, no requests. Setting `icons_enabled` in `app_settings`; `?icons=0` per link. Tapping an icon does nothing yet.
