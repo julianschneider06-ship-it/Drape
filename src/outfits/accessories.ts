@@ -57,6 +57,7 @@ export const WOMEN_ACC = {
   },
   belt: { max: 1 },                      // belts are not jewelry
   otherMax: 1,                           // watch / scarf / gloves / belt / tie: at most this many beyond the singles and jewelry, unless needed to reach minTotal
+  reusePenalty: 0.04,                    // women: gentler reuse penalty than ACC.reusePenalty (jewelry supply is small, 650 pieces for 4,000 outfits); the recent-window penalty still spreads repeats
   minScore: 0.5,                         // minimum accessory score (scoreAcc) for any pick
   fillMinScore: 0.42,                    // lower bar only for the "reach minTotal" fill
 };
@@ -187,7 +188,7 @@ export function chooseAccessories(o: OutfitCtx, cands: Acc[], usage: Usage): Pic
     if (reject(a, o)) continue;
     let s = scoreAcc(a, o);
     const u = usage.uses.get(a.id) ?? 0;
-    s /= 1 + ACC.reusePenalty * u;
+    s /= 1 + (o.gender === "women" ? WOMEN_ACC.reusePenalty : ACC.reusePenalty) * u;
     if (usage.recentIds.some((ids) => ids.includes(a.id))) s *= ACC.recentPenalty;
     else if (usage.recentStores.some((st) => st.includes(a.store))) s *= 0.9;
     scored.push({ a, s });
