@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeedCard, FeedOutfit, FeedResponse } from "@/lib/types";
 import { getDeviceId } from "@/lib/client/device";
@@ -14,6 +13,8 @@ import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
 import TutorialFeed from "./TutorialFeed";
 import Welcome from "./Welcome";
 import BottomNav, { NAV_PX, type Tab } from "./BottomNav";
+import LikesView from "./LikesView";
+import { navVisible } from "@/lib/nav-tabs";
 import Search from "./Search";
 import OutfitIcons from "./OutfitIcons";
 import { outfitIcons } from "@/lib/outfit-icons";
@@ -382,18 +383,20 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     return () => { cancelled = true; clearTimeout(t); for (const i of inflight) if (!i.complete) i.src = ""; };
   }, [current, shown.length, dbg.cut, dbg.preload]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const navOn = searchOn && navReady && obPhase === "off";   // the bar is hidden during the welcome flow and the tutorial
+  const navOn = navVisible(navReady, obPhase === "off");   // the bar is hidden during the welcome flow and the tutorial; with search off it shows For You + Likes
   const H = "calc(100dvh - var(--nav-h, 0px))";
   const goTab = useCallback((t: Tab) => {
     if (t === "search" && tabRef.current === "search") { setSearchTap((n) => n + 1); return; }   // Search tapped again: Search switches between results and configurator, no tab switch (nothing recorded)
-    if (t === "search") { awayAt.current = Date.now(); setSearchSeen(true); if (!searchStarted.current) { searchStarted.current = true; track({ event_type: "search_started", gender: genderRef.current }); } }
-    else if (awayAt.current) { const gone = Date.now() - awayAt.current; awayAt.current = 0; for (const [k, v] of enterAt.current) enterAt.current.set(k, v + gone); }   // time spent on the Search tab is not dwell time
+    if (t === "search" || t === "likes") {
+      if (!awayAt.current) awayAt.current = Date.now();
+      if (t === "search") { setSearchSeen(true); if (!searchStarted.current) { searchStarted.current = true; track({ event_type: "search_started", gender: genderRef.current }); } }
+    } else if (awayAt.current) { const gone = Date.now() - awayAt.current; awayAt.current = 0; for (const [k, v] of enterAt.current) enterAt.current.set(k, v + gone); }   // time spent on the Search tab is not dwell time
     tabRef.current = t; setTab(t);
   }, []);
   useEffect(() => { if (!navOn && tabRef.current !== "foryou") goTab("foryou"); }, [navOn, goTab]);
   const openFromSearch = useCallback((card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => setSheet({ card, outfit, index, slot }), []);   // no tap event: Search only shares the like path with the feed
   const backToForYou = useCallback(() => goTab("foryou"), [goTab]);
-  const hideFeed = tab === "search" ? ({ visibility: "hidden" } as const) : undefined;   // visibility keeps the scroll position
+  const hideFeed = tab !== "foryou" ? ({ visibility: "hidden" } as const) : undefined;   // visibility keeps the scroll position
   const obHeader = obPhase !== "off";   // header controls rest during the tutorial
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
@@ -413,11 +416,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
               className={`rounded-full px-4 py-1 capitalize transition-colors ${gender === g ? "bg-black text-white" : "text-neutral-600"}`}>{g === "women" ? "Women" : "Men"}</button>
           ))}
         </div>
-        <Link href="/likes" aria-label="My likes" className="flex w-16 justify-end" style={obHeader ? { pointerEvents: "none" } : undefined}>
-          <span className="rounded-full p-1.5 text-black">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7C19.5 15.9 12 20.5 12 20.5z" /></svg>
-          </span>
-        </Link>
+        <span className="w-16" aria-hidden />
       </header>
 
       <div ref={scroller} className="no-scrollbar snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ height: H, ...hideFeed }}>
@@ -437,12 +436,20 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         )}
       </div>
 
-      {navOn && searchSeen && (
+      {navOn && searchOn && searchSeen && (
         <div className="fixed inset-x-0 top-0 z-30" style={{ bottom: "var(--nav-h)", visibility: tab === "search" ? "visible" : "hidden" }}>
           <Search key={gender ?? "women"} gender={gender ?? "women"} tapKey={searchTap} canvas={canvas} onOpen={openFromSearch} onBack={backToForYou} />
         </div>
       )}
-      {navOn && <BottomNav tab={tab} onTab={goTab} />}
+      {navOn && tab === "likes" && (
+        <div className="fixed inset-x-0 top-0 z-30 overflow-y-auto bg-white px-3 pb-6" style={{ bottom: "var(--nav-h)" }}>
+          <div className="mx-auto max-w-5xl">
+            <h1 className="sticky top-0 z-10 bg-white/90 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-center text-base font-semibold backdrop-blur">My likes</h1>
+            <LikesView onUnlike={(id) => setLiked((prev) => { const n = new Set(prev); n.delete(id); return n; })} />
+          </div>
+        </div>
+      )}
+      {navOn && <BottomNav tab={tab} onTab={goTab} searchOn={searchOn} />}
 
       {obPhase === "welcome" && <Welcome onDone={finishWelcome} onGender={fetchOb} />}
       {obPhase === "on" && canvas && <TutorialFeed items={obItems} canvas={canvas} onFinish={finishOb} onSkip={skipOb} onWarm={warmFeed} />}
