@@ -38,7 +38,8 @@ function mulberry32(a: number) {
 }
 
 /** Canvas size from the scroller size: centred, max width, minus the header and the button bar (+ the phone's bottom safe area). */
-export const canvasSize = (viewW: number, viewH: number, safeBottom = 0) => ({ w: Math.round(Math.min(viewW, MAX_CANVAS_W)), h: Math.max(240, Math.round(viewH - HEADER_PX - BUTTON_BAR_PX - safeBottom)) });
+/** barPx: space kept free below the canvas (default = the old button bar); railPx: width kept free on the right (the feed's action rail) */
+export const canvasSize = (viewW: number, viewH: number, safeBottom = 0, opts: { barPx?: number; railPx?: number } = {}) => ({ w: Math.round(Math.min(viewW, MAX_CANVAS_W)) - (opts.railPx ?? 0), h: Math.max(240, Math.round(viewH - HEADER_PX - (opts.barPx ?? BUTTON_BAR_PX) - safeBottom)) });
 
 /** Deterministic template choice; `override` = list of ids from ?layout=A,FB (case-insensitive, "m" = mirrored). */
 export function pickTemplate(kind: "three" | "full", seed: number, override?: string[]): Template {

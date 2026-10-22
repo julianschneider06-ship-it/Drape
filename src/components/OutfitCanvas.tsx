@@ -19,7 +19,7 @@ export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
 function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, shine, reserveIcons }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
-  onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string) => void;
+  onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string, slots: string[]) => void;
   onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; shine?: { color: string | null }; animateLayout?: boolean; reserveIcons?: boolean;   // reserveIcons: the attribute icons sit top left (non-tappable), tap areas never extend into them;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
 }) {
   const cards = useMemo(() => {
@@ -50,7 +50,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
   const [hitDbg, setHitDbg] = useState(false);   // ?hit=1: draw every tap area (link parameter only, no effect on behaviour)
   useEffect(() => { try { setHitDbg(new URLSearchParams(location.search).get("hit") === "1"); } catch { /* ignore */ } }, []);
 
-  useEffect(() => { onLayout?.(layout.template, layout.debug?.mode ?? "template"); }, [layout, onLayout]);
+  useEffect(() => { onLayout?.(layout.template, layout.debug?.mode ?? "template", layout.pieces.map((p) => p.slot)); }, [layout, onLayout]);
 
   // ---- swipe on a piece = swap that piece (horizontal, mostly-horizontal drags only; vertical scrolling is never touched) ----
   const gest = useRef<{ x: number; y: number; slot: string | null; mode: "idle" | "swipe" | "scroll" } | null>(null);
