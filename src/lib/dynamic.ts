@@ -1,6 +1,7 @@
 // Server side of the dynamic feed prototype (?feed=dynamic): catalogue cache per instance, ban list store, starter set, page composition.
 // Nothing here touches outfit_pool or the default feed.
 import "server-only";
+import { after } from "next/server";
 import { BanState } from "@/outfits/ban";
 import { catalogueLoad, getCatalogue, type Catalogue } from "@/outfits/catalogue";
 import { compose, newSession, type ComposedOutfit, type Session } from "@/outfits/compose";
@@ -14,7 +15,8 @@ import { makeRnd } from "@/outfits/pool-shared";
 import { gatewayRpc } from "@/lib/gateway";
 import type { FeedAccessory, FeedAlt, FeedCard, FeedOutfit } from "@/lib/types";
 
-export const getCat = (): Promise<Catalogue> => getCatalogue((known) => gatewayRpc("snapshot_get", { p_known_version: known }));
+const defer = (p: Promise<unknown>) => { try { after(() => p); } catch { void p; } };   // background refresh after the response (outside a request the promise just runs)
+export const getCat = (): Promise<Catalogue> => getCatalogue((known) => gatewayRpc("snapshot_get", { p_known_version: known }), 5 * 60_000, defer);
 
 export async function readBan(device: string): Promise<BanState> { return BanState.fromBase64(await gatewayRpc<string | null>("ban_get", { p_device: device })); }
 export async function writeBan(device: string, ban: BanState) { await gatewayRpc("ban_put", { p_device: device, p_b64: ban.toBase64() }, { retry: false }); }
@@ -63,7 +65,7 @@ export interface PageInput { banB64?: string | null; device: string; gender: "wo
   /** hybrid: the client-held taste (base64) and the signals since the last page; null / undefined = plain composer without taste */
   taste?: string | null; signals?: Signal[]; hybrid?: boolean }
 export interface TasteOut { taste: string; n: number; personalized: boolean; applied: number; skipped: number; bytes: number; thin: string[]; mix: Record<string, number> }
-export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number; taste?: number; cat?: typeof catalogueLoad & { coldMs: number } }; taste?: TasteOut }> {
+export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number; taste?: number; cat?: typeof catalogueLoad & { coldMs: number }; up?: number }; taste?: TasteOut }> {
   const t0 = performance.now(); const countBefore = catalogueLoad.count; const cat = await getCat(); const tCat = performance.now() - t0;
   const tb = performance.now(); const ban = inp.banB64 !== undefined && inp.banB64 !== null ? BanState.fromBase64(inp.banB64) : await readBan(inp.device);   // client-held ban list (no storage round trip) or the database copy
   if (inp.startersServed && inp.startersServed > 0) {            // first dynamic page after the starter set: the starter pieces are banned too
@@ -93,7 +95,7 @@ export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items:
   const te = performance.now();
   const tw = performance.now();
   if (inp.banB64 === undefined || inp.banB64 === null) await writeBan(inp.device, ban2);
-  return { ban: ban2.toBase64(), items, ms: { total: performance.now() - t0, ban: tc - tb, compose: tk - tc, cards: te - tk, write: performance.now() - tw, taste: tt, cat: { ...catalogueLoad, coldMs: tCat, ...(catalogueLoad.count === countBefore ? { fetchMs: 0, unpackMs: 0, buildMs: 0 } : {}) } }, taste: tasteOut };
+  return { ban: ban2.toBase64(), items, ms: { total: performance.now() - t0, ban: tc - tb, compose: tk - tc, cards: te - tk, write: performance.now() - tw, taste: tt, up: process.uptime(), cat: { ...catalogueLoad, coldMs: tCat, ...(catalogueLoad.count === countBefore ? { fetchMs: 0, unpackMs: 0, buildMs: 0 } : {}) } }, taste: tasteOut };
 }
 
 export async function starterPage(g: "women" | "men", page: number): Promise<FeedOutfit[]> {

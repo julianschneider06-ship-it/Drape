@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/fetch-snapshot.mjs",
     "build": "next build",
     "start": "next start",
     "ingest": "tsx scripts/ingest.ts",
