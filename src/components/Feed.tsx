@@ -14,7 +14,7 @@ import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
 import TutorialFeed from "./TutorialFeed";
 import Welcome from "./Welcome";
 import BottomNav, { NAV_PX, type Tab } from "./BottomNav";
-import LikesView from "./LikesView";
+import WishlistView, { type WishTab } from "./WishlistView";
 import { navVisible } from "@/lib/nav-tabs";
 import Search from "./Search";
 import OutfitIcons from "./OutfitIcons";
@@ -61,6 +61,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [liked, setLiked] = useState<Set<number>>(new Set());
+  const [wishTab, setWishTab] = useState<WishTab>("products");   // Wishlist view (Products | Generate Outfits), kept while the app is open
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [current, setCurrent] = useState(0);
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
@@ -376,7 +377,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     return () => { cancelled = true; clearTimeout(t); for (const i of inflight) if (!i.complete) i.src = ""; };
   }, [current, shown.length, dbg.cut, dbg.preload]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const navOn = navVisible(navReady, obPhase === "off");   // the bar is hidden during the welcome flow and the tutorial; with search off it shows For You + Likes
+  const navOn = navVisible(navReady, obPhase === "off");   // the bar is hidden during the welcome flow and the tutorial; with search off it shows For You + Wishlist
   const H = "calc(100dvh - var(--nav-h, 0px))";
   const goTab = useCallback((t: Tab) => {
     if (t === "search" && tabRef.current === "search") { setSearchTap((n) => n + 1); return; }   // Search tapped again: Search switches between results and configurator, no tab switch (nothing recorded)
@@ -439,12 +440,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         </div>
       )}
       {navOn && tab === "likes" && (
-        <div className="fixed inset-x-0 top-0 z-30 overflow-y-auto bg-white px-3 pb-6" style={{ bottom: "var(--nav-h)" }}>
-          <div className="mx-auto max-w-5xl">
-            <h1 className="sticky top-0 z-10 bg-white/90 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-center text-base font-semibold backdrop-blur">My likes</h1>
-            <LikesView onUnlike={(id) => setLiked((prev) => { const n = new Set(prev); n.delete(id); return n; })} />
-          </div>
-        </div>
+        <WishlistView gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch}
+          onUnlike={(id) => setLiked((prev) => { const n = new Set(prev); n.delete(id); return n; })} />
       )}
       {navOn && <BottomNav tab={tab} onTab={goTab} searchOn={searchOn} />}
 

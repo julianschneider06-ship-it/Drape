@@ -7,7 +7,7 @@ import { formatPrice } from "@/lib/client/format";
 import FeedImage from "@/components/FeedImage";
 import { track } from "@/lib/client/track";
 
-/** Minimal "My likes" (the full "My collection" comes later): products this anonymous device liked. Used by the Likes tab and by the /likes page. */
+/** Minimal "Wishlist" products list (the full "My collection" comes later): products this anonymous device liked. Used by the Wishlist tab and by the /likes page. */
 export default function LikesView({ onUnlike }: { onUnlike?: (productId: number) => void }) {
   const [items, setItems] = useState<FeedCard[] | null>(null);
   const [error, setError] = useState(false);
@@ -29,7 +29,7 @@ export default function LikesView({ onUnlike }: { onUnlike?: (productId: number)
 
   return (
     <>
-      {error && <p className="py-10 text-center text-sm text-neutral-500">Could not load your likes.</p>}
+      {error && <p className="py-10 text-center text-sm text-neutral-500">Could not load your wishlist.</p>}
       {items && items.length === 0 && <p className="py-16 text-center text-sm text-neutral-500">Nothing liked yet. Tap the heart on a piece you like.</p>}
       <ul className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-4 lg:grid-cols-6">
         {(items ?? []).map((c) => (

@@ -183,7 +183,7 @@ export interface Usage { uses: Map<number, number>; recentIds: number[][]; recen
  * Choose 0-3 accessories: one per type, at most one head item, one bag, one neck item, at most one statement piece in the whole outfit,
  * at most one accent colour. Greedy by score with rising thresholds (prefer 2). `usage` implements diversity across the feed order.
  */
-export function chooseAccessories(o: OutfitCtx, cands: Acc[], usage: Usage): Pick[] {
+export function chooseAccessories(o: OutfitCtx, cands: Acc[], usage: Usage, boost?: (id: number) => number): Pick[] {
   const scored: { a: Acc; s: number }[] = [];
   for (const a of cands) {
     if (reject(a, o)) continue;
@@ -192,6 +192,7 @@ export function chooseAccessories(o: OutfitCtx, cands: Acc[], usage: Usage): Pic
     s /= 1 + (o.gender === "women" ? WOMEN_ACC.reusePenalty : ACC.reusePenalty) * u;
     if (usage.recentIds.some((ids) => ids.includes(a.id))) s *= ACC.recentPenalty;
     else if (usage.recentStores.some((st) => st.includes(a.store))) s *= 0.9;
+    if (boost) s *= boost(a.id);   // Wishlist: liked accessories first
     scored.push({ a, s });
   }
   scored.sort((x, y) => y.s - x.s);

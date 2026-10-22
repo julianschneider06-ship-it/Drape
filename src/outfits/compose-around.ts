@@ -11,7 +11,8 @@ import { outfitStyle, scoreOutfit, type Piece } from "./score";
 import { outfitSeason, seasonRole, type SeasonPiece } from "./season";
 
 type Gender = "women" | "men";
-export interface AroundState { uses: Map<number, number>; acc: Usage }
+export interface AroundState { uses: Map<number, number>; acc: Usage; liked?: Set<number>; avoid?: Set<number> }   // liked / avoid: Wishlist only (liked products are preferred as partners, avoided ids are left out while other pieces exist)
+const LIKED_BOOST = 40, LIKED_ACC_BOOST = 1.35;
 /** state shared by all outfits of one search: spreads partner pieces and accessories (like the session of the feed) */
 export const newAround = (): AroundState => ({ uses: new Map(), acc: { uses: new Map(), recentIds: [], recentStores: [] } });
 
@@ -44,20 +45,28 @@ function pickW<T>(items: T[], w: (x: T) => number, rnd: Rnd): T | null {
 interface Main { ps: CatPiece[]; kind: "three" | "full"; score: number }
 /** the main pieces (top + bottom + shoes, or one-piece + shoes) around one fixed main piece; same steps as the feed composer, anchor given instead of drawn */
 function completeFrom(cat: Catalogue, g: Gender, anchor: CatPiece, minS: number, wide: number, st: AroundState, rnd: Rnd, kinds: ("three" | "full")[]): Main | null {
-  const fresh = (p: CatPiece) => 1 / (1 + COMPOSE.freshnessPerUse * (st.uses.get(p.id) ?? 0));
-  const compat = (slot: string) => slotList(cat, g, slot).filter((p) => fits(p, anchor.mask));
+  const lb = (p: CatPiece) => (st.liked?.has(p.id) ? LIKED_BOOST : 1);
+  const fresh = (p: CatPiece) => lb(p) / (1 + COMPOSE.freshnessPerUse * (st.uses.get(p.id) ?? 0));
+  const byScore = (a: [CatPiece, number], b: [CatPiece, number]) => b[1] * lb(b[0]) - a[1] * lb(a[0]);
+  const compat = (slot: string) => {
+    const l = slotList(cat, g, slot).filter((p) => fits(p, anchor.mask));
+    const f = st.avoid?.size ? l.filter((p) => !st.avoid!.has(p.id)) : l;
+    return f.length ? f : l;
+  };
+  /** all liked candidates plus a random sample of the rest (Wishlist); the normal sample otherwise */
+  const smp = (l: CatPiece[], k: number) => (st.liked ? [...l.filter((p) => st.liked!.has(p.id)), ...sample(l.filter((p) => !st.liked!.has(p.id)), k, rnd)] : sample(l, k, rnd));
   const full = (): Main | null => {
     if (anchor.slot === "shoes") {   // one-piece garment + the searched shoes
       const sc: [CatPiece, number][] = [];
-      for (const f of sample(compat("full_body"), Math.round(SAMPLE * wide), rnd)) { const r = scoreOutfit([f, anchor]); if (r && r.score >= minS) sc.push([f, r.score]); }
-      sc.sort((a, b) => b[1] - a[1]);
+      for (const f of smp(compat("full_body"), Math.round(SAMPLE * wide))) { const r = scoreOutfit([f, anchor]); if (r && r.score >= minS) sc.push([f, r.score]); }
+      sc.sort(byScore);
       const ch = pickW(sc.slice(0, COMPOSE.topN), ([f, v]) => Math.pow(v, COMPOSE.scoreExponent) * fresh(f), rnd);
       return ch ? { ps: [ch[0], anchor], kind: "full", score: ch[1] } : null;
     }
     if (anchor.slot !== "full_body") return null;
     const sc: [CatPiece, number][] = [];
-    for (const s of sample(compat("shoes"), Math.round(SAMPLE * wide), rnd)) { const r = scoreOutfit([anchor, s]); if (r && r.score >= minS) sc.push([s, r.score]); }
-    sc.sort((a, b) => b[1] - a[1]);
+    for (const s of smp(compat("shoes"), Math.round(SAMPLE * wide))) { const r = scoreOutfit([anchor, s]); if (r && r.score >= minS) sc.push([s, r.score]); }
+    sc.sort(byScore);
     const ch = pickW(sc.slice(0, COMPOSE.topN), ([s, v]) => Math.pow(v, COMPOSE.scoreExponent) * fresh(s), rnd);
     return ch ? { ps: [anchor, ch[0]], kind: "full", score: ch[1] } : null;
   };
@@ -66,19 +75,19 @@ function completeFrom(cat: Catalogue, g: Gender, anchor: CatPiece, minS: number,
     const second = anchor.slot === "top" ? "bottom" : anchor.slot === "bottom" ? "top" : "bottom";
     const third = (["top", "bottom", "shoes"] as const).find((s) => s !== anchor.slot && s !== second)!;
     const sec: [CatPiece, number][] = [];
-    for (const y of sample(compat(second), Math.round(SAMPLE * wide), rnd)) { const s = pairScore(anchor, y, rnd); if (s > 0) sec.push([y, s]); }
-    sec.sort((a, b) => b[1] - a[1]);
+    for (const y of smp(compat(second), Math.round(SAMPLE * wide))) { const s = pairScore(anchor, y, rnd); if (s > 0) sec.push([y, s]); }
+    sec.sort(byScore);
     let secs = sec.slice(0, COMPOSE.pairK);
     for (let t = 0; t < 3; t++) {
       const sp = pickW(secs, ([y, v]) => Math.pow(v, COMPOSE.scoreExponent) * fresh(y), rnd); if (!sp) break;
       secs = secs.filter((x) => x !== sp);
       const y = sp[0], fin: [CatPiece, number][] = [];
       const trio = (z: CatPiece) => { const o = [anchor, y, z]; const by = (s: string) => o.find((p) => p.slot === s)!; return [by("top"), by("bottom"), by("shoes")]; };
-      for (const z of sample(compat(third), Math.round(SAMPLE * wide), rnd)) {
+      for (const z of smp(compat(third), Math.round(SAMPLE * wide))) {
         const ps = trio(z); if (!lengthShoeOk(ps[1], ps[2])) continue;
         const r = scoreOutfit(ps); if (r && r.score >= minS) fin.push([z, r.score]);
       }
-      fin.sort((a, b) => b[1] - a[1]);
+      fin.sort(byScore);
       const fp = pickW(fin.slice(0, COMPOSE.topN), ([z, v]) => Math.pow(v, COMPOSE.scoreExponent) * fresh(z), rnd);
       if (fp) return { ps: trio(fp[0]), kind: "three", score: fp[1] };
     }
@@ -91,11 +100,11 @@ function completeFrom(cat: Catalogue, g: Gender, anchor: CatPiece, minS: number,
 const SHARE_FULL = (cat: Catalogue, g: Gender) => Math.min(0.5, slotList(cat, g, "full_body").length / Math.max(1, slotList(cat, g, "top").length));
 
 /** the companions of a searched accessory: same rules as the feed, with the searched one fixed first and the slot limits counted for it */
-function companions(g: Gender, A: Acc, ctx: ReturnType<typeof outfitCtx>, pool: Acc[], usage: Usage): Pick[] {
+function companions(g: Gender, A: Acc, ctx: ReturnType<typeof outfitCtx>, pool: Acc[], usage: Usage, boost?: (id: number) => number): Pick[] {
   const sk = singleKind(A.type);
   const clash = (b: Acc) => b.id === A.id || b.type === A.type || (sk !== null && sk === singleKind(b.type)) || (HEAD.has(A.type) && HEAD.has(b.type)) || (BAG.has(A.type) && BAG.has(b.type)) || (NECK.has(A.type) && NECK.has(b.type));
   const c2 = { ...ctx, accents: new Set([...ctx.accents, ...(A.accent ? [A.accent] : [])]), statements: ctx.statements + (A.statement >= ACC.statementMin ? 1 : 0), maxN: Math.max(0, ctx.maxN - 1) };
-  const picks = chooseAccessories(c2, pool.filter((b) => !clash(b)), usage);
+  const picks = chooseAccessories(c2, pool.filter((b) => !clash(b)), usage, boost);
   if (g !== "women") return picks.slice(0, c2.maxN);
   const out: Pick[] = []; let jew = isJewelry(A.type) ? 1 : 0;
   for (const p of picks) {
@@ -114,7 +123,8 @@ export function composeAround(cat: Catalogue, g: Gender, anchorId: number, acces
   const rnd = makeRnd((Math.imul(anchorId + salt * 7919, 2654435761) + 0x9e3779b9) >>> 0);   // salt: another seed for a second try
   const fullShare = SHARE_FULL(cat, g);
   const kindsFor = (): ("three" | "full")[] => (rnd() < fullShare ? ["full", "three"] : ["three", "full"]);
-  const accs = accPool(cat, g);
+  const accAll = accPool(cat, g), accFree = st.avoid?.size ? accAll.filter((a) => !st.avoid!.has(a.id)) : accAll, accs = accFree.length >= 3 ? accFree : accAll;
+  const boost = st.liked ? (id: number) => (st.liked!.has(id) ? LIKED_ACC_BOOST : 1) : undefined;
   let main: Main | null = null, acc: ComposedAcc[] = [], attempts = 0;
   const finish = (m: Main, picks: Pick[]): boolean => {
     const a: ComposedAcc[] = picks.map((p) => ({ id: p.acc.id, type: p.acc.type, placement: p.placement, zone: p.zone, score: +p.score.toFixed(3) }));
@@ -127,7 +137,7 @@ export function composeAround(cat: Catalogue, g: Gender, anchorId: number, acces
       const m = completeFrom(cat, g, anchor, attempts < 3 ? COMPOSE.minScore : COMPOSE.contrastMinScore, attempts >= 2 ? 1.6 : 1, st, rnd, anchor.slot === "full_body" ? ["full"] : anchor.slot === "shoes" ? kindsFor() : ["three"]);
       if (!m) continue;
       const ctx = outfitCtx(g, m.ps as Piece[], m.ps.map((p) => `${p.name} ${p.sub}`));
-      if (finish(m, accs.length ? chooseAccessories(ctx, accs, st.acc) : [])) break;
+      if (finish(m, accs.length ? chooseAccessories(ctx, accs, st.acc, boost) : [])) break;
     }
   } else {
     const A = cat.accById.get(anchorId); if (!A || !A.card) return null;
@@ -139,7 +149,7 @@ export function composeAround(cat: Catalogue, g: Gender, anchorId: number, acces
       if (!m) continue;
       const ctx = outfitCtx(g, m.ps as Piece[], m.ps.map((p) => `${p.name} ${p.sub}`));
       if (reject(A, ctx)) continue;
-      finish(m, [{ acc: A, score: scoreAcc(A, ctx), ...placementFor(A, ctx) }, ...companions(g, A, ctx, accs, st.acc)]);
+      finish(m, [{ acc: A, score: scoreAcc(A, ctx), ...placementFor(A, ctx) }, ...companions(g, A, ctx, accs, st.acc, boost)]);
     }
   }
   const m = main as Main | null; if (!m) return null;
