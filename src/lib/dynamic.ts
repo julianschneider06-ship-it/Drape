@@ -11,7 +11,7 @@ import { alternativesFor } from "@/outfits/compose-alts";
 import { subGroup } from "@/outfits/compose-polish";
 import { outfitTags } from "@/outfits/tags";
 import { applySignals, decodeTaste, encodeTaste, type Signal } from "@/outfits/taste-codec";
-import { newTaste } from "@/outfits/taste";
+import { newTaste, seedStyles } from "@/outfits/taste";
 import { mixFor, TASTE } from "@/lib/personalization/config";
 import { makeRnd } from "@/outfits/pool-shared";
 import { gatewayRpc } from "@/lib/gateway";
@@ -72,7 +72,7 @@ export async function toFeedOutfits(cat: Catalogue, g: "women" | "men", outs: Co
 
 export interface PageInput { banB64?: string | null; device: string; gender: "women" | "men"; recent?: { ids: number[]; style: string; store: string }[]; startersServed?: number; persona?: string | null; contrast?: number;
   /** hybrid: the client-held taste (base64) and the signals since the last page; null / undefined = plain composer without taste */
-  taste?: string | null; signals?: Signal[]; hybrid?: boolean }
+  taste?: string | null; signals?: Signal[]; hybrid?: boolean; seed?: string[] }
 export interface TasteOut { taste: string; n: number; personalized: boolean; applied: number; skipped: number; bytes: number; thin: string[]; mix: Record<string, number> }
 export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number; taste?: number; cat?: typeof catalogueLoad & { coldMs: number }; up?: number }; taste?: TasteOut }> {
   const t0 = performance.now(); const countBefore = catalogueLoad.count; const cat = await getCat(inp.gender); const tCat = performance.now() - t0;
@@ -88,7 +88,7 @@ export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items:
   let taste = null as ReturnType<typeof decodeTaste>, tasteOut: TasteOut | undefined, tt = 0;
   if (inp.hybrid) {
     const t0t = performance.now();
-    taste = decodeTaste(inp.taste) ?? newTaste();
+    taste = decodeTaste(inp.taste) ?? seedStyles(newTaste(), inp.seed ?? []);   // a device without taste starts from the styles it picked on the welcome screen
     const r = applySignals(cat, taste, inp.signals ?? []);
     tt = performance.now() - t0t;
     tasteOut = { taste: "", n: taste.n, personalized: taste.n >= TASTE.personalizeFrom, applied: r.applied, skipped: r.skipped, bytes: 0, thin: [], mix: mixFor(taste.n) };

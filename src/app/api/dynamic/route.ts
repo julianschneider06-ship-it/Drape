@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { clientIp, isUuid, limited } from "@/lib/ratelimit";
 import { dynamicPage, starterPage, starterRows } from "@/lib/dynamic";
 import { cleanSignals } from "@/outfits/taste-codec";
+import { cleanStyles } from "@/lib/welcome";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  let b: { contrast?: unknown; ban?: unknown; device_id?: unknown; gender?: unknown; startersServed?: unknown; recent?: unknown; mode?: unknown; taste?: unknown; signals?: unknown };
+  let b: { contrast?: unknown; ban?: unknown; device_id?: unknown; gender?: unknown; startersServed?: unknown; recent?: unknown; mode?: unknown; taste?: unknown; signals?: unknown; seed?: unknown };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "json" }, { status: 400 }); }
   if (!isUuid(b.device_id) || (b.gender !== "women" && b.gender !== "men")) return NextResponse.json({ error: "params" }, { status: 400 });
   if (limited(`dynp:${clientIp(req)}`, 60, 60_000) || limited(`dynp:${b.device_id}`, 30, 60_000)) return NextResponse.json({ error: "slow down" }, { status: 429 });
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     // hybrid (?feed=hybrid): the client sends its taste (base64, a few KB) and the signals since the last page; the response carries the updated taste back
     const hybrid = b.mode === "hybrid", taste = hybrid && typeof b.taste === "string" ? b.taste : null;
     const { items, ms, ban, taste: t } = await dynamicPage({ device: b.device_id, gender: b.gender, recent, startersServed, contrast: typeof b.contrast === "number" && b.contrast > 0 && b.contrast <= 1 ? b.contrast : undefined, banB64: banB64 === undefined ? "" : banB64,
-      hybrid, taste, signals: hybrid ? cleanSignals(b.signals) : undefined });
+      hybrid, taste, signals: hybrid ? cleanSignals(b.signals) : undefined, seed: hybrid ? cleanStyles(b.seed) : undefined });
     return NextResponse.json({ items, ms, ban: banB64 === null ? undefined : ban, ...(t ? { taste: t } : {}) }, { headers: { "cache-control": "no-store" } });
   } catch (e) { return NextResponse.json({ error: "unavailable", detail: String(e).slice(0, 120) }, { status: 502 }); }
 }

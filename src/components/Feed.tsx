@@ -12,6 +12,8 @@ import OutfitButtons, { type Reaction } from "./OutfitButtons";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
 import TutorialFeed from "./TutorialFeed";
+import Welcome from "./Welcome";
+import { STYLES_KEY, cleanStyles } from "@/lib/welcome";
 import { ONBOARDING_KEY } from "@/lib/onboarding";
 import { compactTags } from "@/outfits/tags";
 import type { Signal } from "@/outfits/taste-codec";
@@ -47,8 +49,10 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean; preload: boolean; feed: "default" | "dynamic" | "hybrid" }>({ debug: false, cut: "auto", acc: true, preload: true, feed: "default" });
 
   // first-visit tutorial (3 steps): two pinned outfits instead of the feed. Nothing from it is recorded: no events, no likes, no taste signals.
-  const [obPhase, setObPhase] = useState<"off" | "loading" | "on">("off");
+  const [obPhase, setObPhase] = useState<"off" | "welcome" | "loading" | "on">("off");   // welcome (gender + styles) comes before the tutorial; its choice is only stored on the device
   const [obItems, setObItems] = useState<FeedOutfit[]>([]);
+  const [obWomen, setObWomen] = useState(false);                  // chose Women: the pinned tutorial outfits are menswear, so a neutral line says they are examples
+  const obFetch = useRef<"pending" | "ok" | "fail">("pending"), welcomeOpen = useRef(false);
   const obActive = useRef(false), pendingLoad = useRef(false), loadMoreRef = useRef<() => void>(() => undefined);   // while the tutorial runs, the real feed is not loaded yet (no competing requests / decoding)
 
   const device = useRef("");
@@ -76,10 +80,12 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   // onboarding: only on the first visit (flag in localStorage) or when forced with ?onboarding=1; any failure just skips it
   useEffect(() => {
     if (new URLSearchParams(location.search).get("onboarding") !== "1" && store.get(ONBOARDING_KEY) === "1") return;
-    obActive.current = true; setObPhase("loading");
+    obActive.current = true; welcomeOpen.current = true; setObPhase("welcome");
+    // the tutorial outfits load while the user answers the welcome screens
     fetch("/api/onboarding", { signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.json() : null)).then((j: { items: FeedOutfit[] } | null) => {
-      if (j?.items?.length === 2) { setObItems(j.items); setObPhase("on"); } else { setObPhase("off"); warmFeed(); }
-    }).catch(() => { setObPhase("off"); warmFeed(); });
+      if (j?.items?.length === 2) { setObItems(j.items); obFetch.current = "ok"; if (!welcomeOpen.current) setObPhase("on"); }
+      else { obFetch.current = "fail"; if (!welcomeOpen.current) { setObPhase("off"); warmFeed(); } }
+    }).catch(() => { obFetch.current = "fail"; if (!welcomeOpen.current) { setObPhase("off"); warmFeed(); } });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const warmFeed = useCallback(() => { obActive.current = false; if (pendingLoad.current) { pendingLoad.current = false; loadMoreRef.current(); } }, []);
   const finishOb = useCallback(() => {
@@ -88,6 +94,12 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     requestAnimationFrame(() => scroller.current?.scrollTo({ top: 0 }));
   }, [warmFeed]);
   const skipOb = useCallback(() => { setObPhase("off"); setObItems([]); warmFeed(); }, [warmFeed]);   // not marked as done: the next visit tries again
+  const finishWelcome = useCallback((g: Gender, styles: string[]) => {
+    welcomeOpen.current = false;
+    store.set(STYLES_KEY, JSON.stringify(cleanStyles(styles)));
+    setObWomen(g === "women"); setGender(g);   // the feed (loaded after the tutorial) starts with this gender; the header stays on Men while the tutorial runs
+    if (obFetch.current === "ok") setObPhase("on"); else if (obFetch.current === "fail") { setObPhase("off"); warmFeed(); } else setObPhase("loading");
+  }, [warmFeed]);
 
   // remembered outfit reactions (this device)
   useEffect(() => { try { const r = JSON.parse(store.get("drape.reactions") ?? "{}"); if (r && typeof r === "object") setReactions(r); } catch { /* ignore */ } }, []);
@@ -154,7 +166,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         if (!items.length) {
           const recent = itemsRef.current.slice(-12).filter((o) => o.dyn).map((o) => ({ ids: o.dyn!.ids, style: o.dyn!.style, store: o.dyn!.store }));
           const sent = hybridRef.current ? outbox.current.slice(0, OUTBOX_MAX) : [];
-          const hyb = hybridRef.current ? { mode: "hybrid", taste: store.get(`drape.taste.${g}`) ?? "", signals: sent } : {};
+          const hyb = hybridRef.current ? { mode: "hybrid", taste: store.get(`drape.taste.${g}`) ?? "", signals: sent, ...(store.get(`drape.taste.${g}`) ? {} : { seed: cleanStyles((() => { try { return JSON.parse(store.get(STYLES_KEY) ?? "[]"); } catch { return []; } })()) }) } : {};   // no taste yet: the styles from the welcome screen are the start preference
           const r = await fetch("/api/dynamic", { method: "POST", signal: AbortSignal.timeout(20000), body: JSON.stringify({ ...hyb, device_id: device.current, gender: g, recent, contrast: Number(new URLSearchParams(location.search).get("contrast")) || undefined, ban: new URLSearchParams(location.search).get("ban") === "db" ? "db" : (store.get(`drape.ban.${g}`) ?? ""), startersServed: dynState.current.startersSent ? 0 : dynState.current.servedStarters }) });
           if (!r.ok) throw new Error(String(r.status));
           dynState.current.startersSent = true;
@@ -378,6 +390,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         )}
       </div>
 
+      {obPhase === "welcome" && <Welcome onDone={finishWelcome} />}
+      {obPhase === "on" && obWomen && <p className="pointer-events-none fixed inset-x-0 top-[3.6rem] z-30 text-center text-xs text-neutral-400">Example looks</p>}
       {obPhase === "on" && canvas && <TutorialFeed items={obItems} canvas={canvas} onFinish={finishOb} onSkip={skipOb} onWarm={warmFeed} />}
 
       {dbg.debug && (
