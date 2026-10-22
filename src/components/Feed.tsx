@@ -7,8 +7,9 @@ import { track } from "@/lib/client/track";
 import OutfitCanvas, { pieceClass } from "./OutfitCanvas";
 import { canvasSize } from "@/lib/layout/engine";
 import ProductSheet from "./ProductSheet";
-import OutfitButtons, { type Reaction } from "./OutfitButtons";
-import { BUTTON_BAR_PX } from "@/lib/layout/config";
+import ActionRail, { heartAction } from "./ActionRail";
+import { ACTION_RAIL_WIDTH } from "@/config/action-rail";
+import { heartState, heartToggle, outfitPieces } from "@/lib/outfit-heart";
 import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
 import TutorialFeed from "./TutorialFeed";
 import Welcome from "./Welcome";
@@ -63,7 +64,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [current, setCurrent] = useState(0);
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
-  const [reactions, setReactions] = useState<Record<number, Reaction>>({});
+  const [feedCanvas, setFeedCanvas] = useState<{ w: number; h: number } | null>(null);   // the feed card: no button bar below, the action rail's width kept free on the right (Search keeps `canvas`)
+  const [placed, setPlaced] = useState<Record<number, string>>({});   // slots the layout placed per outfit (the heart only touches pieces that are visible)
   const layoutInfo = useRef(new Map<number, { layout: string; mode: string }>());
   const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean; preload: boolean; feed: "default" | "dynamic" | "hybrid" }>({ debug: false, cut: "auto", acc: true, preload: true, feed: "default" });
 
@@ -127,9 +129,6 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     if (obFetch.current === "ok") setObPhase("on"); else if (obFetch.current === "fail") { setObPhase("off"); warmFeed(); } else setObPhase("loading");
   }, [warmFeed, fetchOb]);
 
-  // remembered outfit reactions (this device)
-  useEffect(() => { try { const r = JSON.parse(store.get("drape.reactions") ?? "{}"); if (r && typeof r === "object") setReactions(r); } catch { /* ignore */ } }, []);
-
   // debug options: ?layout=A,FB forces templates (3-piece, full-body), ?debug=1 shows boxes + margin zone
   useEffect(() => {
     const q = new URLSearchParams(location.search);
@@ -149,6 +148,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     probe.style.cssText = "position:fixed;left:0;bottom:0;visibility:hidden;pointer-events:none;padding-bottom:var(--safe-b,env(safe-area-inset-bottom))";
     (el.parentElement ?? document.body).appendChild(probe);   // inside <main>: it sees --safe-b (0 while the bottom bar covers the safe area)
     const measure = () => setCanvas((p) => { const safe = parseFloat(getComputedStyle(probe).paddingBottom) || 0; const n = canvasSize(el.clientWidth, el.clientHeight, safe); return p && p.w === n.w && p.h === n.h ? p : n; });
+      setFeedCanvas((p) => { const safe = parseFloat(getComputedStyle(probe).paddingBottom) || 0; const n = canvasSize(el.clientWidth, el.clientHeight, safe, { barPx: 0, railPx: ACTION_RAIL_WIDTH }); return p && p.w === n.w && p.h === n.h ? p : n; });
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -308,19 +308,12 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     });
   }, [liked]);
 
-  // Outfit-level signal buttons (up = like this outfit, down = do not like it). Toggle: other button switches, same again clears.
-  // Only logged (append-only event log); nothing else changes and the feed does not move.
-  const pressOutfit = (o: FeedOutfit, index: number, dir: Reaction) => {
-    const prev = reactions[o.id];
-    const next = prev === dir ? null : dir;
-    setReactions((r) => { const n = { ...r }; if (next) n[o.id] = next; else delete n[o.id]; store.set("drape.reactions", JSON.stringify(Object.fromEntries(Object.entries(n).slice(-400)))); return n; });
-    const info = layoutInfo.current.get(o.id);
-    signal({ t: next ? (next === "up" ? "outfit_up" : "outfit_down") : "outfit_clear", o: shownIds(itemsRef.current[index] ?? o), pv: prev && next !== prev ? prev : undefined, tg: tg(o) });
-    track({
-      event_type: next ? (next === "up" ? "outfit_up" : "outfit_down") : "outfit_clear", outfit_id: o.id, feed_index: index, gender: genderRef.current,
-      product_ids: [o.top.id, ...(o.bottom ? [o.bottom.id] : []), o.shoes.id],
-      ctx: { layout: info?.layout, mode: info?.mode, canvas: canvas ? [canvas.w, canvas.h] : undefined, v: "v3.1", ...(prev && next !== prev ? { prev } : {}), ...(o.tags ? { tags: compactTags(o.tags) } : {}) },
-    });
+  // Heart on the action rail: likes (or unlikes) every visible piece of the outfit, each through the normal per-piece like path (same rows, outfit context and taste signal).
+  // All liked -> unlike all; otherwise like the missing ones. No new event type: the per-piece like rows are the events.
+  const heartOutfit = (o: FeedOutfit, index: number) => {
+    const cards = outfitPieces(o, placed[o.id]?.split(","));
+    const { ids } = heartToggle(cards.map((c) => c.id), liked);
+    for (const c of cards) if (ids.includes(c.id)) toggleLike(c, o, index, "sheet");
   };
 
   // Swipe on a piece: swap only that piece, in a loop of three (original -> alternative 1 -> alternative 2 -> original ...).
@@ -421,11 +414,15 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
 
       <div ref={scroller} className="no-scrollbar snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ height: H, ...hideFeed }}>
         {obPhase === "off" && shown.map((o, i) => (
-          <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: `calc(${BUTTON_BAR_PX}px + var(--safe-b))` }}>
-            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
-              onLayout={(layout, mode) => layoutInfo.current.set(o.id, { layout, mode })} />}
+          <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)" }}>
+            {feedCanvas && (
+              <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>
+                <OutfitCanvas outfit={o} canvas={feedCanvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
+                  onLayout={(layout, mode, slots) => { layoutInfo.current.set(o.id, { layout, mode }); const k = slots.join(","); setPlaced((p) => (p[o.id] === k ? p : { ...p, [o.id]: k })); }} />
+                <ActionRail actions={[heartAction(heartState(outfitPieces(o, placed[o.id]?.split(",")).map((c) => c.id), liked) === "all", () => heartOutfit(o, i))]} />
+              </div>
+            )}
             {iconsOn && <OutfitIcons icons={outfitIcons(o.tags)} />}
-            <OutfitButtons value={reactions[o.id] ?? null} onPress={(d) => pressOutfit(o, i, d)} />
           </section>
         ))}
         {obPhase === "loading" && <section style={{ height: H }} className="flex items-center justify-center text-sm text-neutral-400">Loading…</section>}
