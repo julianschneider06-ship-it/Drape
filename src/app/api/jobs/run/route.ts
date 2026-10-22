@@ -9,6 +9,8 @@ import { runRefreshChunk, JOB_LEASE_S } from "@/lib/jobs/refresh-stock";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+// Shops price by visitor country (Shopify Markets) and the offers were ingested from the US: the runner must also look from the US, not from the app's Dublin region.
+export const preferredRegion = "iad1";
 
 export async function POST(req: Request) {
   const secret = req.headers.get("x-runner-secret");

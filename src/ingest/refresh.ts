@@ -15,7 +15,7 @@ export interface ShopResult {
 interface Item { external_id: string; availability: string; price_cents: number | null; compare_at_cents: number | null }
 const SKIP_CODES = new Set([401, 403, 404, 410, 429, 503]);
 
-export async function refreshShop(cfg: SourceConfig, o: { dry?: boolean; minDelayMs?: number } = {}): Promise<ShopResult> {
+export async function refreshShop(cfg: SourceConfig, o: { dry?: boolean; minDelayMs?: number; force?: boolean } = {}): Promise<ShopResult> {
   const { exclude: _e, only: _o, ...opts } = (cfg.options ?? {}) as Record<string, unknown>;       // every category: availability and price do not depend on it
   if (o.minDelayMs) opts.minDelayMs = Math.max(Number(opts.minDelayMs ?? 0), o.minDelayMs);
   const adapter = createAdapter({ ...cfg, options: opts });
@@ -35,7 +35,9 @@ export async function refreshShop(cfg: SourceConfig, o: { dry?: boolean; minDela
   }
   if (o.dry) return { slug: cfg.slug, status: "ok", http: 200, seen: items.size, reason: complete ? null : "partial feed (dry run)", counts: {}, changed: 0 };
   const id = (await sink.upsertSource({ slug: cfg.slug, name: cfg.name, kind: cfg.kind, base_url: cfg.baseUrl, config: cfg.options ?? {} })).id;
-  const r = await rpc<Record<string, number>>("offers_refresh", { p_source_id: id, p_items: [...items.values()], p_complete: complete });
+  const r = await rpc<Record<string, number>>("offers_refresh", { p_source_id: id, p_items: [...items.values()], p_complete: complete, p_guard: !o.force });
+  // guard in the database: more than 30% price changes in one shop = probably another market / currency (Shopify Markets), nothing was applied
+  if ((r as unknown as { suspicious?: boolean }).suspicious) return { slug: cfg.slug, status: "skipped", http: null, seen: items.size, reason: `price shift ${r.price_changed}/${r.checked} offers: other market? nothing applied`, counts: {}, changed: 0 };
   const changed = r.became_sold_out + r.back_in_stock + r.price_changed + r.sale_started + r.sale_ended + r.delisted;
   return { slug: cfg.slug, status: "ok", http: 200, seen: items.size, reason: null, counts: r, changed };
 }
