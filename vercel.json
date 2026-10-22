@@ -1,3 +1,4 @@
 {
-  "regions": ["dub1"]
+  "regions": ["dub1"],
+  "functions": { "src/app/api/dynamic/route.ts": { "memory": 3009 } }
 }
