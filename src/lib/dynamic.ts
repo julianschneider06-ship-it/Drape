@@ -11,7 +11,7 @@ import { alternativesFor } from "@/outfits/compose-alts";
 import { subGroup } from "@/outfits/compose-polish";
 import { outfitTags } from "@/outfits/tags";
 import { applySignals, decodeTaste, encodeTaste, type Signal } from "@/outfits/taste-codec";
-import { newTaste } from "@/outfits/taste";
+import { newTaste, withPrior } from "@/outfits/taste";
 import { mixFor, TASTE } from "@/lib/personalization/config";
 import { makeRnd } from "@/outfits/pool-shared";
 import { gatewayRpc } from "@/lib/gateway";
@@ -72,7 +72,7 @@ export async function toFeedOutfits(cat: Catalogue, g: "women" | "men", outs: Co
 
 export interface PageInput { banB64?: string | null; device: string; gender: "women" | "men"; recent?: { ids: number[]; style: string; store: string }[]; startersServed?: number; persona?: string | null; contrast?: number;
   /** hybrid: the client-held taste (base64) and the signals since the last page; null / undefined = plain composer without taste */
-  taste?: string | null; signals?: Signal[]; hybrid?: boolean }
+  taste?: string | null; signals?: Signal[]; hybrid?: boolean; seed?: string[] }
 export interface TasteOut { taste: string; n: number; personalized: boolean; applied: number; skipped: number; bytes: number; thin: string[]; mix: Record<string, number> }
 export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number; taste?: number; cat?: typeof catalogueLoad & { coldMs: number }; up?: number }; taste?: TasteOut }> {
   const t0 = performance.now(); const countBefore = catalogueLoad.count; const cat = await getCat(inp.gender); const tCat = performance.now() - t0;
@@ -85,19 +85,20 @@ export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items:
   for (const r of inp.recent ?? []) for (const id of r.ids) session.uses.set(id, (session.uses.get(id) ?? 0) + 1);
   for (const r of inp.recent ?? []) for (const id of r.ids) { const p = cat.byId.get(id); if (p && (p.slot === "top" || p.slot === "bottom")) session.subs[p.slot].push(subGroup(p)); }
   // hybrid: decode the client-held taste, apply the signals collected since the last page with the shared pure update, compose with it
-  let taste = null as ReturnType<typeof decodeTaste>, tasteOut: TasteOut | undefined, tt = 0;
+  let taste = null as ReturnType<typeof decodeTaste>, prior = null as ReturnType<typeof withPrior>, tasteOut: TasteOut | undefined, tt = 0;
   if (inp.hybrid) {
     const t0t = performance.now();
     taste = decodeTaste(inp.taste) ?? newTaste();
     const r = applySignals(cat, taste, inp.signals ?? []);
+    prior = withPrior(taste, inp.seed ?? []);   // the welcome style picks steer from the first card and fade with real events; the stored taste stays pure
     tt = performance.now() - t0t;
     tasteOut = { taste: "", n: taste.n, personalized: taste.n >= TASTE.personalizeFrom, applied: r.applied, skipped: r.skipped, bytes: 0, thin: [], mix: mixFor(taste.n) };
   }
   const tc = performance.now();
   const seed = Math.floor(Math.random() * 2 ** 31);
-  const { outfits, ban: ban2, stats } = compose(cat, { gender: inp.gender, taste, ...(inp.contrast ? { mix: { match: 0, near: 0, new: 1 - inp.contrast, contrast: inp.contrast } } : {}) }, ban, 6, session, makeRnd(seed));
+  const { outfits, ban: ban2, stats } = compose(cat, { gender: inp.gender, taste: prior ?? taste, prior: !!prior, ...(inp.contrast ? { mix: { match: 0, near: 0, new: 1 - inp.contrast, contrast: inp.contrast } } : {}) }, ban, 6, session, makeRnd(seed));
   const eff = ban2.effective(cat, inp.gender);
-  const alts = outfits.map((o) => alternativesFor(cat, inp.gender, o, eff, taste));
+  const alts = outfits.map((o) => alternativesFor(cat, inp.gender, o, eff, prior ?? taste));
   if (tasteOut && taste) { const t1 = performance.now(); tasteOut.taste = encodeTaste(taste); tasteOut.bytes = tasteOut.taste.length; tasteOut.thin = stats.thin ?? []; tt += performance.now() - t1; }
   const tk = performance.now();
   const items = await toFeedOutfits(cat, inp.gender, outfits, alts, 0);

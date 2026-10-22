@@ -5,7 +5,7 @@ import {
   type GarmentClass, type Place, type Template,
 } from "./config";
 
-export type AccSlot = "acc1" | "acc2" | "acc3";
+export type AccSlot = "acc1" | "acc2" | "acc3" | "acc4" | "acc5" | "acc6" | "acc7" | "acc8";
 export type SlotName = "top" | "bottom" | "shoes" | "full" | AccSlot;
 export interface PieceIn {
   slot: SlotName; cls: GarmentClass; aspect: number | null; // aspect = content width / height

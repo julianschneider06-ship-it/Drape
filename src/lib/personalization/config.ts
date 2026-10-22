@@ -50,8 +50,20 @@ export const STEER = {
   connectionWeight: 1.0,     // x (1 + connectionWeight x connection bonus -1..1)
 };
 
+/** Starting prior from the welcome style picks (hybrid feed only): each picked style counts PRIOR.strength liked pieces per slot at 0 events and
+ *  fades linearly to nothing at PRIOR.fadeN events, so real likes / events take over. Until personalizeFrom the mix leans on the picks (PRIOR.mix)
+ *  and blends into the normal personal mix. Never stored in the taste (added per request), so the persisted taste stays pure. */
+export const PRIOR = { strength: 3, fadeN: 40, mix: { match: 0.7, near: 0.2, new: 0.1, contrast: 0 } };
+export const priorWeight = (n: number) => Math.max(0, 1 - n / PRIOR.fadeN);
+
 export function mixFor(n: number): Record<"match" | "near" | "new" | "contrast", number> {
   if (n < TASTE.personalizeFrom) return MIX.neutral;
   const m = { ...MIX.personal }; if (m.new < MIX.minExploration) { const d = MIX.minExploration - m.new; m.new = MIX.minExploration; m.match = Math.max(0, m.match - d); }
   return m;
+}
+
+/** mix for a device that has a style prior but fewer than personalizeFrom events: PRIOR.mix at 0 events, the personal mix at personalizeFrom */
+export function priorMixFor(n: number): Record<"match" | "near" | "new" | "contrast", number> {
+  const w = Math.min(1, Math.max(0, n / TASTE.personalizeFrom)), b = mixFor(TASTE.personalizeFrom), a = PRIOR.mix;
+  return { match: a.match + (b.match - a.match) * w, near: a.near + (b.near - a.near) * w, new: a.new + (b.new - a.new) * w, contrast: a.contrast + (b.contrast - a.contrast) * w };
 }
