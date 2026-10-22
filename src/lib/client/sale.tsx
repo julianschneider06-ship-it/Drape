@@ -16,7 +16,7 @@ export const isOnSale = (c: FeedCard) => !!c.compare_at_cents && c.compare_at_ce
 export const saleSize = (wShare: number): "s" | "m" | "l" => (wShare >= 0.3 ? "l" : wShare >= 0.15 ? "m" : "s");
 
 /** SVG filters (defined once): dilate the silhouette, wobble it with noise, keep only the ring and paint it red under the image. */
-const RING: Record<"s" | "m" | "l", { grow: number; core: number; wobble: number }> = {
+export const RING: Record<"s" | "m" | "l", { grow: number; core: number; wobble: number }> = {
   l: { grow: 2.6, core: 0.5, wobble: 3.2 },   // ~2px line + wobble
   m: { grow: 2.3, core: 0.6, wobble: 2.8 },
   s: { grow: 2.1, core: 0.6, wobble: 2.4 },   // ~1.5px line

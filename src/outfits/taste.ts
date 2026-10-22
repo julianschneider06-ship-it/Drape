@@ -157,3 +157,9 @@ export const topStyles = (t: Taste, slot: "top" | "bottom" | "shoes", n = 5) => 
 /** styles with the most negative evidence of a slot */
 export const lessStyles = (t: Taste, slot: "top" | "bottom" | "shoes", n = 3) => Array.from(t.neg[slot], (v, i) => [STYLE_KEYS[i], v] as [string, number]).sort((a, b) => b[1] - a[1]).slice(0, n);
 export { STYLE_KEYS };
+
+/** start preference from the welcome screen: each picked style counts like one liked piece (SIGNAL.like) in every slot; n stays 0 (no events happened) */
+export function seedStyles(t: Taste, keys: string[]): Taste {
+  for (const k of keys) { const i = STYLE_KEYS.indexOf(k as never); if (i < 0) continue; for (const sl of ["top", "bottom", "shoes"] as const) t.styles[sl][i] += SIGNAL.like; }
+  return t;
+}
