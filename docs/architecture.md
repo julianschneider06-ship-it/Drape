@@ -470,3 +470,39 @@ Read-only probe of the Awin feed (2026-10-22, script `scripts/probe-awin.ts`, UR
 **Matching strategy:** product URL first (`merchant_deep_link` normalised: https, no www, no query/fragment, trailing slash trimmed, compared with `offers.url`), then EAN/GTIN once we store it (add from the Shopify `variants[].barcode` at ingest), then brand_norm + name. Duplicates are acceptable.
 
 **Proposed next steps:** (a) table `affiliate_links` (offer_id, network, merchant_id, aw_product_id, tracking_url, rrp/price/in_stock snapshot, updated_at; unique on offer_id; tracking_url never exposed to the client); (b) daily feed job next to the stock refresh in `job_requests` (new allowlisted `refresh_affiliate`, read-only towards Awin, one request per day, batched upserts, no AI); (c) `/out/[productId]` route: looks up the best in-stock offer, writes a click row into an append-only `click_events` log (product id, offer id, device, ts), then 302 to the tracking link; products without an affiliate link redirect to the plain offer URL. Needs a decision: which Awin merchants to join (ones matching our shops).
+
+### Usability check (2026-10-22, read-only)
+
+Feed downloaded once to a temp folder (deleted afterwards), nothing written to the database or repo. Image test = `scripts/probe-awin-usable.ts`: 20 random products per merchant (>= 50 fashion rows), feed image (`merchant_image_url`), the shop-gate prompt `ic2` (single product, no hanger / mannequin / cropped / text / model, confidence >= 0.5) plus a free border-plainness test; **no local cutout run** (rembg not installed here), so the real gate will be a bit lower. Cost $0.07 of the 2 USD cap. Fashion rows = clothing, shoes, bags, watches and other accessories by category path and name (Tooled Up: workwear clothing and footwear only, gloves and tools excluded; Brian James counted in GBP only because every row exists twice, EUR + GBP). Sale = rrp_price > price. Samples of 20 give roughly +-15 points.
+
+| merchant | currency | rows | fashion | usable (of 20) | sale | in stock | brands | gender | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| Tooled Up | GBP | 11,097 | 10,031 | 90% | 29% | 100% | 15 | men 9.4k, women 0.6k | **Maybe**: workwear only (boots, work trousers, tees) |
+| Brian James | GBP/EUR | 6,204 | 3,102 | 65% | 12% | 100% | 16 | men | **Import**: Tommy Hilfiger, Boss, Barbour, Gant; models in 30% |
+| Emensuits | USD | 2,399 | 2,399 | 60% | 0% | 100% | 3 | men | **Maybe**: suits and dress wear only, mannequins in 30% |
+| Fashiontamers | USD | 1,625 | 1,625 | 0% | 0% | 100% | 42 | women 967, men 658 | **Skip for now**: no usable image (see below); re-probe later |
+| Viaduct | GBP | 1,275 | 1,275 | 50% | 99% | 100% | 8 | women 366, men 172, rest unlabelled | **Maybe**: exactly at the line; adidas / New Balance sport and trainers, model 25%, cropped 25% |
+| T.LUXY | EUR | 1,166 | 1,166 | 85% | 0% | 100% | 27 | not labelled | **Import**: designer clothing and bags (Balmain, Valentino, D&G), 66-4,225 EUR |
+| Watch & Watch | GBP | 1,037 | 1,037 | 100% | 100% | 91% | 9 | men 555, women 482 | **Import**: watches |
+| Watch Enclave | GBP | 927 | 927 | 100% | 0% | 39% | 7 | men | **Maybe**: only 39% in stock |
+| Watches of USA | USD | 915 | 915 | 100% | 88% | 100% | 10 | men 594, women 321 | **Import**: watches |
+| Luregod (DE) | EUR | 882 | 882 | 30% | 0% | 78% | 3 | not labelled | **Skip**: fishing / outdoor brands (FOX, Westin), model photos |
+| Bennimarceau | GBP | 539 | 539 | 95% | 0% | 100% | 8 | not labelled | **Import**: reseller of Nike, adidas, New Balance, The North Face, Off-White |
+| MoreThisWay | GBP | 136 | 136 | 70% | 94% | 100% | 5 | men 110 | **Maybe**: 104 of 136 are WWE merch tees |
+| Plusshop IE | EUR | 96 | 96 | 75% | 0% | 100% | 7 | women 65, men 31 | **Maybe**: only 96 rows (watches) |
+| Plusshop UK | GBP | 75 | 75 | 70% | 0% | 100% | 7 | men | **Skip**: same watch range as IE, under 100 rows |
+| Body Body | USD | 35 | 27 | not run | 0% | 71% | 1 | women | **Skip**: under 50 fashion rows, intimate items |
+
+Top category values per merchant (merchant_category): Tooled Up Trousers 3,108 / Work Boots 2,398 / Work Trainers 1,055 / Work Shoes 969 / T Shirts 663 / Shorts 495 / Polo 486; Brian James Shirts 1,168 / T-Shirts 716 / Jeans 650 / Coats & Jackets 570 / Knitwear 536 / Sweatshirts 462 / Chinos 458 / Trainers 332 / Polo 330 / Suit jackets 170; Emensuits and Viaduct only "General Clothing" (use product names); Fashiontamers Women > Accessories > Sunglasses 294 / Eyeglasses 154 / Men > Sweatshirts 145 / Women > Shoes > Laced 90 / Men > Sneakers 82 / Women > Sneakers 70 / Men > Sunglasses 66; T.LUXY CLOTHING 1,093 / BAGS 73; Luregod Sweaters 209 / Pants 192 / T-shirts 172 / Jackets 170; Bennimarceau Jacket 316 / Hoodie 83 / T-shirt 66 / Sweatshirt 44 / Pants 30; MoreThisWay Men's T-shirts 88 / Men's Hats 10 / Jeans 9 / Rucksacks 4 / Scarves 4. Category quality is poor for Emensuits, Viaduct, T.LUXY and Bennimarceau (one generic value), so classification must rely on name + image; `category_name` is a coarse Awin bucket (gender + type).
+
+**Findings that matter for an import:**
+- **Fashiontamers images do not work:** `merchant_image_url` is empty for all rows and `aw_image_url` (images2.productserve.com) answers 302 to `noimage.gif` for the 3 products tried (the "0%" is the placeholder, not the products). Re-probe later; it is the most interesting merchant (294 women's sunglasses + 154 eyeglasses, designer shoes and bags).
+- Other merchants' `merchant_image_url` points to the shop's own CDN (Shopify or the shop host); 3 of 120 sampled images were 404 (Emensuits 1, T.LUXY 2). `aw_image_url` always goes through the Awin image proxy (redirect).
+- Sale: Watch & Watch 100% and Viaduct 99% show rrp > price on nearly every row, so the strike-through is a standing "was" price; do not turn that into a sale marker without a second source.
+- Nothing with Awin tracking is stored yet; the tracking link must stay server-side.
+
+**Style and gender fit (our 24 styles):** Brian James: classic, smart casual, preppy, old money (men; Barbour = heritage, Hilfiger / Gant = preppy). T.LUXY: luxury streetwear, old money, minimal (mixed). Bennimarceau: streetwear, sporty, gorpcore (The North Face), a little techwear (Off-White). Viaduct: sporty, athleisure, streetwear (adidas Originals, New Balance; women + men). Tooled Up: rugged / workwear men. Emensuits: formal men only. Watch shops: watches for both genders (accessory slot, 40% family cap applies). **Thin supply:** none of the 15 helps Techwear, Punk Edgy, Boho, Dark Academia, Grunge, men's Coquette / Y2K / Dark Academia, or women's belts and hats. Men's Preppy: yes, Brian James. Women's sunglasses: only Fashiontamers (blocked by images). The Awin account holds no merchant for these styles; ask Awin for others.
+
+**Programme and image notes:** the feed has no column for programme terms, commission or image rules. The Awin success centre says (public article "Can I use any images from the advertiser's website?") that being accepted into a programme grants permission to use the product images and banners that are in the Awin platform / datafeed; images from the shop website outside the feed need the advertiser's consent. Cutting out or recolouring images is not mentioned there, and per-programme terms, cookie windows and commission rates sit behind the Awin login (not checked). Open for the security / rights round.
+
+**Recommendation:** import order Brian James (men's preppy / classic, 3.1k), Bennimarceau (539, 95%), T.LUXY (1.2k, luxury), then the watch shops Watch & Watch and Watches of USA (about 1.9k watches; cap per family). Do not import Tooled Up, Emensuits, Viaduct, MoreThisWay, Watch Enclave, Plusshop yet. Merchants to look for in Awin (to cover the thin styles): boho / festival, dark academia, grunge / punk, techwear, women's belts, hats, sunglasses.
