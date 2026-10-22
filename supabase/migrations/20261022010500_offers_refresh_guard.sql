@@ -1,8 +1,8 @@
 -- offers_refresh guard: some shops show different prices per visitor country (Shopify Markets). A refresh from another country than the one the offers were
 -- ingested from would overwrite prices with another market's prices (seen on 2026-10-22: the runner in Dublin vs the US ingestion). If more than 30% of the matched
 -- offers of a shop would change price, nothing is applied and {suspicious: true} is returned (the caller logs the shop as skipped). p_guard = false forces it.
-drop function if exists public.offers_refresh(integer, jsonb, boolean);
-create or replace function public.offers_refresh(p_source_id integer, p_items jsonb, p_complete boolean default false, p_guard boolean default true) returns jsonb
+-- (the old 3-argument version stays: dropping it hangs on this database; nothing calls it any more)
+create or replace function public.offers_refresh(p_source_id integer, p_items jsonb, p_complete boolean, p_guard boolean) returns jsonb
 language plpgsql set search_path to 'public' as $function$
 declare res jsonb; n_t integer; n_pr integer;
 begin
