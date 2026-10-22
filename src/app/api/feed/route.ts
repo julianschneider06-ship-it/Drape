@@ -6,7 +6,7 @@ import { getCat } from "@/lib/dynamic";
 import { outfitTags } from "@/outfits/tags";
 
 export const dynamic = "force-dynamic";
-const ACC_REV_DEFAULT = "1";
+const ACC_REV_DEFAULT = "2";
 
 // GET /api/feed?gender=women|men[&device=<uuid>][&cursor=<int>]  -> a fixed page of 6 outfits from the precomputed pool.
 // Without cursor: the device's start page (not cached). With cursor: identical for everyone (CDN cache).
