@@ -72,3 +72,7 @@ export const SHINE = {
 export const SEARCH_STATE_KEY = "drape.search.state";
 /** Highlight chip: the shine strokes show only while it is on (localStorage, default off) */
 export const HIGHLIGHT_KEY = "drape.highlight";
+
+/** Highlight chip size: visual scale vs. the original chip (20% smaller); the invisible tap area keeps at least HIGHLIGHT_HIT_PX height */
+export const HIGHLIGHT_SCALE = 0.8;
+export const HIGHLIGHT_HIT_PX = 36;

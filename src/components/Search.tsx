@@ -4,7 +4,7 @@ import type { FeedCard, FeedOutfit } from "@/lib/types";
 import type { SlotName } from "@/lib/layout/engine";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { FAMILY_KEYS, type StyleFamily } from "@/config/style-families";
-import { DIRECTIONS, EXTRAS, HIGHLIGHT_KEY, SEARCH_STATE_KEY, FAMILY_INFO, ITEMS, SEASONS, dirIcon, extraIcon, familyIcon, itemIcon, seasonIcon, type Direction, type SearchExtra, type SearchItem, type SearchSeason } from "@/config/search";
+import { DIRECTIONS, EXTRAS, HIGHLIGHT_HIT_PX, HIGHLIGHT_KEY, HIGHLIGHT_SCALE, SEARCH_STATE_KEY, FAMILY_INFO, ITEMS, SEASONS, dirIcon, extraIcon, familyIcon, itemIcon, seasonIcon, type Direction, type SearchExtra, type SearchItem, type SearchSeason } from "@/config/search";
 import { facetCount, isSearchedSlot, matchCount, type Facets, type Relaxed } from "@/lib/search";
 import { STYLES_GENDER_KEY, STYLES_KEY, cleanStyles } from "@/lib/welcome";
 import { track } from "@/lib/client/track";
@@ -249,8 +249,11 @@ function Search({ gender, tapKey, canvas, onOpen, onBack }: {
           </div>
           {!forcedOff && (   // Highlight chip: bottom left inside the white strip under the card (above the bottom bar), centred in its height; the counter text keeps clear of it (side padding)
             <button type="button" aria-pressed={highlight} onClick={toggleHighlight} onPointerDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}
-              className={`absolute left-4 z-20 flex items-center rounded-2xl border px-3 py-2 text-sm font-medium transition-colors [touch-action:manipulation] ${highlight ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-black active:bg-neutral-50"}`}
-              style={{ bottom: `calc(${(BUTTON_BAR_PX - 36) / 2}px + var(--safe-b, 0px))` }}>Highlight</button>
+              className="absolute z-20 flex items-center px-4 [touch-action:manipulation]"
+              style={{ left: 0, height: HIGHLIGHT_HIT_PX, bottom: `calc(${(BUTTON_BAR_PX - HIGHLIGHT_HIT_PX) / 2}px + var(--safe-b, 0px))` }}>
+              <span className={`flex items-center border font-medium transition-colors ${highlight ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-black"}`}
+                style={{ borderRadius: 16 * HIGHLIGHT_SCALE, padding: `${8 * HIGHLIGHT_SCALE}px ${12 * HIGHLIGHT_SCALE}px`, fontSize: 14 * HIGHLIGHT_SCALE, lineHeight: `${20 * HIGHLIGHT_SCALE}px` }}>Highlight</span>
+            </button>
           )}
         </div>
       )}

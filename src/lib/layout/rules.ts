@@ -5,6 +5,7 @@
 //  accessories: head zone above the top (hat, inline glasses), inline overlays (necklace, belt at the seam), watch/bracelet beside the sleeve,
 //           everything else in a side column on the right (vertical zones, collisions resolved, shrink then drop the lowest priority).
 import { ACCESSORIES as A, DEFAULT_ASPECT, JITTER, MARGIN_ZONE, REAL_CM, REF_CM, RULES, SIZE, SCALE_SHOES, SCALE_TOP_BOTTOM } from "./config";
+import { jewelryScale } from "@/config/jewelry";
 import type { AccIn, Layout, LayoutDebug, Placed, PieceIn, Rect, SlotName } from "./engine";
 
 const mulberry32 = (a: number) => () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -132,6 +133,8 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
         const hMax = A.necklace.maxHOfTop * topRect.h;
         if (h > hMax) { h = hMax; w = h * ar; }
         if (ar > A.necklace.maxAspect || w < A.necklace.minWidthOfTop * topRect.w || Math.max(w, h) < A.necklace.minLongest * W) { accInfo.demoted.push(`${a.type}:pendant->column`); continue; }   // a tiny pendant would be invisible on the top
+        const js = Math.min(jewelryScale(a.type), (0.95 * topRect.w) / w);   // scaled pendant stays within the top's width
+        w *= js; h *= js;
         const rect = { x: axis - w / 2, y: topRect.y + A.necklace.neckline * topRect.h, w, h };
         placedExtra.push({ slot: a.slot, rect, rot: 0, z: A.z.inline }); taken.add(a.slot);
         accInfo.placed.push({ slot: a.slot, type: a.type, kind: "inline", zone: "neck" });
@@ -150,7 +153,7 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
       const ar = a.aspect && a.aspect > 0.05 ? a.aspect : 1;
       const sz = sideSize(a, ppc, topRect.h, W, H, ar);
       const x = topRect.x + topRect.w + A.sleeve.gap * W;
-      const w = Math.min(sz.w, A.sleeve.maxW * W);
+      const w = Math.min(sz.w, A.sleeve.maxW * W * jewelryScale(a.type));
       const h = w / ar;
       const rect = { x, y: topRect.y + A.sleeve.at * topRect.h - h / 2, w, h };
       if (rect.x + rect.w <= W - padX && !collides(rect, [...Object.values(rects), ...placedExtra.map((p) => p.rect)], 2)) {
@@ -223,6 +226,7 @@ function sideSize(a: AccIn, ppc: number, topH: number, W: number, H: number, ar:
   if (!L) L = cm * ppc;
   L *= A.boost[a.type] ?? A.boost.default;
   L = Math.max(L, (A.minLongest[a.type] ?? A.minLongest.default) * W);
+  L *= jewelryScale(a.type);   // watches / rings / chains drawn larger (JEWELRY_SCALE); the width / height clamps below keep it inside the card
   let w = ar >= 1 ? L : L * ar, h = ar >= 1 ? L / ar : L;
   const maxW = A.side.maxColW * W;
   if (w > maxW) { h *= maxW / w; w = maxW; }
