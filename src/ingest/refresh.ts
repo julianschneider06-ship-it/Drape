@@ -13,11 +13,14 @@ export interface ShopResult {
   changed: number;
 }
 interface Item { external_id: string; availability: string; price_cents: number | null; compare_at_cents: number | null }
+/** currency of the ingested offers -> market country (the offers were ingested from the US, where each shop showed its own primary market) */
+export const MARKET: Record<string, string> = { USD: "US", GBP: "GB", EUR: "DE", AUD: "AU", CAD: "CA", SEK: "SE", NZD: "NZ", DKK: "DK", JPY: "JP" };
 const SKIP_CODES = new Set([401, 403, 404, 410, 429, 503]);
 
-export async function refreshShop(cfg: SourceConfig, o: { dry?: boolean; minDelayMs?: number; force?: boolean } = {}): Promise<ShopResult> {
+export async function refreshShop(cfg: SourceConfig, o: { dry?: boolean; minDelayMs?: number; force?: boolean; market?: boolean } = {}): Promise<ShopResult> {
   const { exclude: _e, only: _o, ...opts } = (cfg.options ?? {}) as Record<string, unknown>;       // every category: availability and price do not depend on it
   if (o.minDelayMs) opts.minDelayMs = Math.max(Number(opts.minDelayMs ?? 0), o.minDelayMs);
+  if (o.market) { const c = MARKET[String(opts.currency ?? "")]; if (c) opts.country = c; }   // market of the ingested currency
   const adapter = createAdapter({ ...cfg, options: opts });
   const items = new Map<string, Item>();
   let cursor: Record<string, unknown> | null = null, complete = false, lastLen = 0;

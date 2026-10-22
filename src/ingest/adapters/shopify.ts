@@ -15,6 +15,7 @@ export interface ShopifyOptions {
   max?: number; // products to keep for this store (default: the CLI --max)
   maxPages?: number; // safety cap per feed
   minDelayMs?: number;
+  country?: string; // refresh only: ISO country that fixes the shop's market (Shopify Markets show other prices per visitor country)
 }
 
 interface ShopifyProduct {
@@ -49,7 +50,7 @@ export class ShopifyAdapter implements SourceAdapter {
     const f = this.feeds[feed];
     const path = f.handle ? `/collections/${f.handle}/products.json` : "/products.json";
     const data = await politeGetJson<{ products: ShopifyProduct[] }>(
-      `${this.cfg.baseUrl}${path}?limit=250&page=${page}`,
+      `${this.cfg.baseUrl}${path}?limit=250&page=${page}${this.o.country ? `&country=${this.o.country}` : ""}`,
       { minDelayMs: this.o.minDelayMs ?? 1500 },
     );
     const items: RawItem[] = data.products.map((p) => ({ externalId: String(p.id), payload: { ...p, _feed: feed } }));
