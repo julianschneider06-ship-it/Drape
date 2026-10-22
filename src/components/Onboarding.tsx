@@ -20,7 +20,7 @@ export function OnboardingInkDefs() {
         <feComposite in="ink" in2="ring" operator="in" result="line" />
         <feMerge><feMergeNode in="line" /><feMergeNode in="SourceGraphic" /></feMerge>
       </filter>
-      <filter id="drape-ob-line" filterUnits="userSpaceOnUse" x="-5%" y="-5%" width="110%" height="110%">
+      <filter id="drape-ob-line" x="-50%" y="-50%" width="200%" height="200%">
         <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="7" result="noise" />
         <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
       </filter>
@@ -89,7 +89,7 @@ function Pointer({ step, onDone, onNoSale }: { step: 2 | 3; onDone: () => void; 
   const W = Math.min(250, vp.w - 24);
   if (step === 2) {
     const T = rects.top; if (!T) return null;
-    const cx = T.x + T.w / 2, left = clamp(cx - W / 2, 12, vp.w - W - 12), y0 = Math.min(T.y + T.h + 52, vp.h - 220);
+    const cx = T.x + T.w / 2, left = clamp(cx - W / 2, 12, vp.w - W - 12), y0 = Math.min(T.y + T.h + 72, vp.h - 220);
     const ax = clamp(cx, left + 30, left + W - 30);
     return (
       <>

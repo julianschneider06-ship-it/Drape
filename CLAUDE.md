@@ -55,6 +55,7 @@ Scalability is very important to the user. Design for millions of products and u
 - **Markets:** each shop has its own market (country) in `shop_market`, plus a `frozen` flag with a stored reason. No row = default US (`country=US`). The runner runs in Dublin, so the market must be set explicitly per shop. A 30% price-change guard rejects suspicious updates per shop.
 - **Market probe result:** 11 formerly frozen shops now have their own market (DE, GB, SE, JP). `nordgreen` stays frozen (needs re-ingest and re-probe). `margarethowell` is held by the guard.
 - **Currency labels:** audit done, five shops corrected to USD. Shops with unclear evidence are listed in `docs/architecture.md`; do not guess their currency.
+- **Onboarding:** first-visit 3-step tutorial (`src/components/Onboarding.tsx`, flag `drape.onboarding.done` in localStorage, `?onboarding=1` forces it). Two pinned outfits in `src/lib/onboarding.ts` (ids never change; B has top alternatives and sale pieces), served by `/api/onboarding` from the catalogue snapshot. Nothing from it is recorded (no events, likes or taste signals). Step 3 is skipped if `sale_marker_enabled` is off or no sale label shows.
 - **Dashboard:** read-only views `dash_*` (security_invoker, no access for anon/authenticated).
 - **Tests:** `npm test` runs a mocked 429 retry test (one retry after at least 6 s, no third request); no real shop is touched.
 - **Cost limit:** `DRAPE_RUN_CAP_USD`; nothing public may trigger paid calls.
