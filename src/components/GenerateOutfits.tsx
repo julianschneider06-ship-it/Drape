@@ -13,9 +13,9 @@ const dims = new WeakMap<FeedOutfit, (slot: SlotName) => boolean>();   // one st
 const dimFor = (o: FeedOutfit) => { let f = dims.get(o); if (!f) { f = (slot) => isFiller(o, slot); dims.set(o, f); } return f; };
 
 /** Wishlist > Generate Outfits: a vertical feed of outfits built from the liked products; filler pieces are greyed out and cannot be tapped. Nothing is recorded by generating. */
-function GenerateOutfits({ gender, likedIds, shuffleKey, onOpen }: {
+function GenerateOutfits({ gender, likedIds, shuffleKey, onOpen, onLike }: {
   gender: "women" | "men"; likedIds: number[]; shuffleKey: number;
-  onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void;
+  onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const root = useRef<HTMLDivElement>(null), tail = useRef<HTMLElement>(null);
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
@@ -71,7 +71,7 @@ function GenerateOutfits({ gender, likedIds, shuffleKey, onOpen }: {
       )}
       {canvas && items.map((o, i) => (
         <section key={`${i}:${o.id}`} data-i={i} className="relative flex h-full snap-start snap-always flex-col items-center justify-center">
-          <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dimFor(o)} onOpen={(c, slot) => onOpen(c, o, i, slot)} />
+          <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dimFor(o)} onOpen={(c, slot) => onOpen(c, o, i, slot)} onLike={(c, slot) => onLike(c, o, i, slot)} />
         </section>
       ))}
       {status !== "empty" && (

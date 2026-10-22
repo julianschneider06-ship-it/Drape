@@ -1,11 +1,11 @@
 "use client";
 import { memo, type ReactNode } from "react";
-import { ACTION_RAIL_WIDTH } from "@/config/action-rail";
+import { ACTION_RAIL_WIDTH, RAIL_HEART } from "@/config/action-rail";
 
 export interface RailAction { id: string; label: string; active: boolean; onPress: () => void; icon: (active: boolean) => ReactNode }
 
 const HeartIcon = (on: boolean) => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill={on ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={on ? RAIL_HEART.likedFill : RAIL_HEART.restFill} stroke={on ? RAIL_HEART.likedStroke : RAIL_HEART.restStroke} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ filter: on ? undefined : RAIL_HEART.restShadow }} aria-hidden>
     <path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7C19.5 15.9 12 20.5 12 20.5z" />
   </svg>
 );

@@ -59,9 +59,9 @@ function Section({ step, title, sub, children }: { step: Step; title: string; su
   );
 }
 
-function Search({ gender, tapKey, canvas, onOpen, onBack }: {
+function Search({ gender, tapKey, canvas, onOpen, onLike, onBack }: {
   gender: "women" | "men"; tapKey: number; canvas: { w: number; h: number } | null;
-  onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onBack: () => void;
+  onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean; onBack: () => void;
 }) {
   const saved = useMemo(() => (typeof window === "undefined" ? null : decodeState(ss.get(SEARCH_STATE_KEY))), []);   // the selection survives a reload of the page (this session only, selection without results)
   const [dir, setDir] = useState<Direction>(saved?.dir ?? gender);   // step 1: preselected with the feed's direction, can be changed
@@ -219,7 +219,7 @@ function Search({ gender, tapKey, canvas, onOpen, onBack }: {
           <div ref={scroller} className="no-scrollbar h-full snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
             {res.items.map((o, i) => (
               <section key={o.id} data-i={i} className="relative flex h-full snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))` }}>
-                {canvas && <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} priceTag={priceOn} shine={shineOn ? { color: o.sc ?? null } : undefined} onOpen={(c, slot) => onOpen(c, o, i, slot)} />}
+                {canvas && <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} priceTag={priceOn} shine={shineOn ? { color: o.sc ?? null } : undefined} onOpen={(c, slot) => onOpen(c, o, i, slot)} onLike={(c, slot) => onLike(c, o, i, slot)} />}
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-white px-24 text-center text-xs leading-tight text-neutral-400" style={{ height: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))`, paddingBottom: "var(--safe-b, 0px)" }}>
                   {i + 1} / {res.done ? res.items.length : res.total - res.skipped}{res.relaxed !== "none" ? " · Showing fewer exact matches" : ""}
                 </div>

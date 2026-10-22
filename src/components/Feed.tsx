@@ -308,8 +308,10 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     if (items.length && current >= items.length - 4) loadMore();
   }, [current, items, loadMore, dbg.cut]);
 
+  const likeResult = useRef(false);   // new like state of the last toggleLike (the double-tap pulse reads it)
   const toggleLike = useCallback((card: FeedCard, outfit: FeedOutfit | null, index: number, slot: SlotName | "sheet") => {
     const want = !liked.has(card.id);
+    likeResult.current = want;
     setLiked((prev) => { const n = new Set(prev); if (want) n.add(card.id); else n.delete(card.id); return n; });
     if (outfit && tabRef.current === "foryou") interacted.current.add(index);   // a like from the Search tab counts as a normal like, but is not a feed interaction
     const og = outfit?.og;   // Search in the other direction than the feed's: the like counts for THAT direction's taste, from the product alone (the rest of such an outfit is arbitrary)
@@ -403,6 +405,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   }, []);
   useEffect(() => { if (!navOn && tabRef.current !== "foryou") goTab("foryou"); }, [navOn, goTab]);
   const openFromSearch = useCallback((card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => setSheet({ card, outfit, index, slot }), []);   // no tap event: Search only shares the like path with the feed
+  const likeFromCard = useCallback((card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => { toggleLike(card, outfit, index, slot); return likeResult.current; }, [toggleLike]);
   const backToForYou = useCallback(() => goTab("foryou"), [goTab]);
   const hideFeed = tab !== "foryou" ? ({ visibility: "hidden" } as const) : undefined;   // visibility keeps the scroll position
   const obHeader = obPhase !== "off";   // header controls rest during the tutorial
@@ -432,7 +435,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
           <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)" }}>
             {feedCanvas && (
               <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>   {/* the right ACTION_RAIL_WIDTH px stay empty: the fixed rail overlay sits there */}
-                <OutfitCanvas outfit={o} canvas={feedCanvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
+                <OutfitCanvas outfit={o} canvas={feedCanvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => { toggleLike(c, o, i, slot); return likeResult.current; }} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
                   onLayout={(layout, mode, slots) => { layoutInfo.current.set(o.id, { layout, mode }); const k = slots.join(","); setPlaced((p) => (p[o.id] === k ? p : { ...p, [o.id]: k })); }} />
               </div>
             )}
@@ -457,11 +460,11 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
 
       {navOn && searchOn && searchSeen && (
         <div className="fixed inset-x-0 top-0 z-30" style={{ bottom: "var(--nav-h)", visibility: tab === "search" ? "visible" : "hidden" }}>
-          <Search key={gender ?? "women"} gender={gender ?? "women"} tapKey={searchTap} canvas={canvas} onOpen={openFromSearch} onBack={backToForYou} />
+          <Search key={gender ?? "women"} gender={gender ?? "women"} tapKey={searchTap} canvas={canvas} onOpen={openFromSearch} onLike={likeFromCard} onBack={backToForYou} />
         </div>
       )}
       {navOn && tab === "likes" && (
-        <WishlistView gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch}
+        <WishlistView gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
           onUnlike={(id) => setLiked((prev) => { const n = new Set(prev); n.delete(id); return n; })} />
       )}
       {navOn && <BottomNav tab={tab} onTab={goTab} searchOn={searchOn} />}

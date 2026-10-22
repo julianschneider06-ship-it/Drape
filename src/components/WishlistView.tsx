@@ -9,9 +9,9 @@ export type WishTab = "products" | "outfits";
 const TABS: { id: WishTab; label: string }[] = [{ id: "products", label: "Products" }, { id: "outfits", label: "Generate Outfits" }];
 
 /** The Wishlist tab: title, a Products | Generate Outfits switcher, and the chosen view below (the bottom bar stays visible). */
-export default function WishlistView({ gender, liked, tab, onTab, onUnlike, onOpen }: {
+export default function WishlistView({ gender, liked, tab, onTab, onUnlike, onOpen, onLike }: {
   gender: "women" | "men"; liked: Set<number>; tab: WishTab; onTab: (t: WishTab) => void; onUnlike: (id: number) => void;
-  onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void;
+  onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const [shuffle, setShuffle] = useState(0);
   return (
@@ -34,7 +34,7 @@ export default function WishlistView({ gender, liked, tab, onTab, onUnlike, onOp
         {tab === "products" ? (
           <div className="absolute inset-0 overflow-y-auto px-3 pb-6"><div className="mx-auto max-w-5xl"><LikesView onUnlike={onUnlike} /></div></div>
         ) : (
-          <GenerateOutfits gender={gender} likedIds={[...liked]} shuffleKey={shuffle} onOpen={onOpen} />
+          <GenerateOutfits gender={gender} likedIds={[...liked]} shuffleKey={shuffle} onOpen={onOpen} onLike={onLike} />
         )}
       </div>
     </div>
