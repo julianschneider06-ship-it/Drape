@@ -61,7 +61,8 @@ export async function searchPage(g: Gender, q: SearchQuery, from: number, limit 
   }
   const out = await Promise.all(made.map(async ({ o, g: og, id }, n) => {
     const [fo] = await toFeedOutfits(c[og], og, [o], [{}], from + n);
-    return fo ? { fo: { ...fo, ...(og !== g ? { og } : {}) } as FeedOutfit, id } : null;
+    const sc = q.item === "accessory" ? c[og].accById.get(id)?.main : c[og].byId.get(id)?.colors[0];   // searched piece's main colour
+    return fo ? { fo: { ...fo, sc: sc ?? null, ...(og !== g ? { og } : {}) } as FeedOutfit, id } : null;
   }));
   const ok = out.filter((x): x is { fo: FeedOutfit; id: number } => !!x);
   return { items: ok.map((x) => x.fo), sids: ok.map((x) => x.id), relaxed, exact, total: cands.length, next: i, skipped: skipped + (made.length - ok.length) };

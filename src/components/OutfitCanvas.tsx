@@ -6,6 +6,8 @@ import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/form
 import { garmentClass, RULES, SALE_LABEL } from "@/lib/layout/config";
 import { isOnSale, saleMarkerOn } from "@/lib/client/sale";
 import { showSale } from "@/lib/search";
+import { shineColor, shineStrokes } from "@/lib/shine";
+import { SHINE } from "@/config/search";
 import { computeLayout, hash32, pickTemplate, type AccIn, type AccSlot, type PieceIn, type SlotName } from "@/lib/layout/engine";
 import FeedImage from "./FeedImage";
 import { tagLine } from "@/outfits/tags";
@@ -13,10 +15,10 @@ import { tagLine } from "@/outfits/tags";
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim }: {
+function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, shine }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string) => void;
-  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; animateLayout?: boolean;   // dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
+  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; shine?: { color: string | null }; animateLayout?: boolean;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
@@ -147,6 +149,15 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
             <button key={`${p.slot}-${c.id}-${isNew ? swapEvt!.seq : 0}`} type="button" onClickCapture={(e) => { if (Date.now() < suppressUntil.current) { e.stopPropagation(); e.preventDefault(); } }} onClick={() => onOpen(orig(c, p.slot), p.slot)} disabled={dimmed} tabIndex={dimmed ? -1 : undefined} aria-label={`${c.brand} ${c.name}`}
               className={`absolute inset-0 ${isNew ? (swapEvt!.dir === "next" ? "swap-in-next" : "swap-in-prev") : ""} ${debug ? "outline outline-1 outline-red-400" : ""}`} style={{ touchAction: "pan-y" }}>
               <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} noSale={dimmed} />
+              {shine && !dimmed && c.cut && (() => {
+                const sale = saleMarkerOn() && isOnSale(c), m = SHINE.distance + (sale ? SHINE.saleExtra : 0) + SHINE.length * 1.5 + SHINE.width + 2, w = p.rect.w, h = p.rect.h;
+                return (
+                  <svg aria-hidden className="pointer-events-none absolute overflow-visible" data-shine={c.id} style={{ left: -m, top: -m, width: w + 2 * m, height: h + 2 * m }} viewBox={`${-m} ${-m} ${w + 2 * m} ${h + 2 * m}`}
+                    fill="none" stroke={shineColor(shine.color, sale)} strokeWidth={SHINE.width} strokeLinecap="round">
+                    {shineStrokes(w, h, hash32(`${outfit.id}:${c.id}`), sale).map((d, i) => <path key={i} d={d} />)}
+                  </svg>
+                );
+              })()}
               {labels[p.slot] && (
                 <span aria-hidden className="pointer-events-none absolute select-none whitespace-nowrap" data-sale-label={labels[p.slot].side}
                   style={{ [labels[p.slot].side === "right" ? "left" : "right"]: "100%", [labels[p.slot].side === "right" ? "marginLeft" : "marginRight"]: SALE_LABEL.gap * W, top: labels[p.slot].dy,

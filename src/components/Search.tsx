@@ -9,6 +9,7 @@ import { facetCount, isSearchedSlot, matchCount, type Facets, type Relaxed } fro
 import { STYLES_GENDER_KEY, STYLES_KEY, cleanStyles } from "@/lib/welcome";
 import { track } from "@/lib/client/track";
 import OutfitCanvas from "./OutfitCanvas";
+import { shineOn as shineParam } from "@/lib/shine";
 import { IconGlyph } from "./OutfitIcons";
 import type { IconId } from "@/lib/outfit-icons";
 
@@ -125,6 +126,7 @@ function Search({ gender, canvas, onOpen, onBack }: {
     requestAnimationFrame(() => cfg.current?.querySelector(`[data-step="${step}"]`)?.scrollIntoView({ block: "start" }));
   };
 
+  const shineOn = useMemo(() => typeof window === "undefined" || shineParam(window.location.search), []);   // ?shine=0 turns the strokes off
   const dim = useCallback((slot: SlotName) => !isSearchedSlot(slot, shownItem), [shownItem]);
   const chips: { step: Step; icon: IconId | null; label: string }[] = useMemo(() => {
     const s = lastSel; if (!s.family || !s.item) return [];
@@ -175,7 +177,7 @@ function Search({ gender, canvas, onOpen, onBack }: {
           <div ref={scroller} className="no-scrollbar h-full snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
             {res.items.map((o, i) => (
               <section key={o.id} data-i={i} className="relative flex h-full snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))` }}>
-                {canvas && <div className="contents" style={o.og ? { opacity: 0.72 } : undefined}><OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} onOpen={(c, slot) => onOpen(c, o, i, slot)} /></div>}
+                {canvas && <div className="contents" style={o.og ? { opacity: 0.72 } : undefined}><OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} shine={shineOn ? { color: o.sc ?? null } : undefined} onOpen={(c, slot) => onOpen(c, o, i, slot)} /></div>}
                 {o.og && <span className="pointer-events-none absolute left-4 top-[4.25rem] rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-500">{o.og === "women" ? "Women\u2019s" : "Men\u2019s"}</span>}
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-white px-4 text-xs text-neutral-400" style={{ height: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))`, paddingBottom: "var(--safe-b, 0px)" }}>
                   {i + 1} / {res.done ? res.items.length : res.total - res.skipped}{res.relaxed !== "none" ? " · Showing fewer exact matches" : ""}

@@ -47,3 +47,16 @@ export const itemIcon = (i: SearchItem): IconId => `item-${i}`;
 export const familyIcon = (f: StyleFamily): IconId => `family-${f}`;
 export const seasonIcon = (s: SearchSeason): IconId => `season-${s}`;
 export const extraIcon = (e: SearchExtra): IconId => e;   // every extra id is also an icon id
+
+/** "Shine" strokes around the searched piece in Search results (decoration only). Edit here to tweak the look; ?shine=0 turns it off. */
+export const SHINE = {
+  count: 9,              // strokes around the piece, evenly spread
+  length: 9,             // px per stroke
+  distance: 7,           // px from the piece edge to the inner end of a stroke
+  saleExtra: 7,          // extra px of distance when the red sale outline is shown (strokes sit outside the outline)
+  width: 1.6,            // line width in px
+  wobble: 1.1,           // px of hand-drawn wobble
+  fallback: "#8b9099",   // light grey of the attribute icons: no usable colour, or red colour on a sale piece
+  minContrast: 3,        // WCAG contrast against white a stroke colour must reach (lighter colours are darkened)
+  redTolerance: 28,      // degrees of hue around red that count as "close to red" next to the sale outline
+};
