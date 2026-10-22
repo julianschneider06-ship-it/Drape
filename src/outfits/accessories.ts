@@ -59,6 +59,7 @@ export const WOMEN_ACC = {
   otherMax: 1,                           // watch / scarf / gloves / belt / tie: at most this many beyond the singles and jewelry, unless needed to reach minTotal
   reusePenalty: 0.04,                    // women: gentler reuse penalty than ACC.reusePenalty (jewelry supply is small, 650 pieces for 4,000 outfits); the recent-window penalty still spreads repeats
   minScore: 0.5,                         // minimum accessory score (scoreAcc) for any pick
+  extraMinScore: { jewelry: [0.5, 0.66, 0.76], singles: [0.5, 0.5, 0.7] },   // bar for the 1st / 2nd / 3rd jewelry piece and single: extra ones must fit well, so only some outfits go to the maximum
   fillMinScore: 0.42,                    // lower bar only for the "reach minTotal" fill
 };
 const JEWELRY = new Set(Object.keys(WOMEN_ACC.jewelry.perType));
@@ -167,8 +168,8 @@ function chooseWomen(o: OutfitCtx, scored: { a: Acc; s: number }[]): Pick[] {
     const k = singleKind(a.type); if (k) kinds.set(k, (kinds.get(k) ?? 0) + 1); else if (isJewelry(a.type)) jew++; else others++;
     picks.push({ acc: a, score: s, ...placementFor(a, o) });
   };
-  for (const { a, s } of scored) { const k = singleKind(a.type); if (k && (kinds.get(k) ?? 0) < W.single[k].max && ok(a, s, W.minScore)) take(a, s); }
-  for (const { a, s } of scored) if (isJewelry(a.type) && jew < W.jewelry.max && ok(a, s, W.minScore)) take(a, s);
+  for (const { a, s } of scored) { const k = singleKind(a.type); if (k && (kinds.get(k) ?? 0) < W.single[k].max && ok(a, s, W.extraMinScore.singles[Math.min(2, [...kinds.values()].reduce((x, y) => x + y, 0))])) take(a, s); }
+  for (const { a, s } of scored) if (isJewelry(a.type) && jew < W.jewelry.max && ok(a, s, W.extraMinScore.jewelry[Math.min(2, jew)])) take(a, s);
   for (const { a, s } of scored) if (!singleKind(a.type) && !isJewelry(a.type) && others < W.otherMax && ok(a, s, W.minScore)) take(a, s);
   // reach the minimum: jewelry first (while room), then other types, then singles; lower score bar
   for (const pass of [(a: Acc) => isJewelry(a.type) && jew < W.jewelry.max, (a: Acc) => !singleKind(a.type) && !isJewelry(a.type), (a: Acc) => !!singleKind(a.type)])
