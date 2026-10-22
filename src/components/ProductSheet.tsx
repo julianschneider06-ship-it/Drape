@@ -1,7 +1,8 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import type { FeedCard } from "@/lib/types";
 import { formatPrice } from "@/lib/client/format";
+import { feedSrc, viewCard } from "@/lib/client/format";
 import FeedImage from "./FeedImage";
 import Heart from "./Heart";
 
@@ -13,6 +14,7 @@ export default function ProductSheet({ card, liked, onLike, onClose, onViewProdu
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  const view = useMemo(() => viewCard(card, "auto"), [card]);   // the feed's cutout when there is one, else the photo as before
   const price = formatPrice(card.price_cents, card.currency);
   const was = card.compare_at_cents && card.compare_at_cents > (card.price_cents ?? 0) ? formatPrice(card.compare_at_cents, card.currency) : null;
   return (
@@ -21,7 +23,7 @@ export default function ProductSheet({ card, liked, onLike, onClose, onViewProdu
       <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl">
         <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-neutral-300" />
         <div className="relative h-[52dvh] bg-white">
-          <FeedImage card={card} fill={0.96} minW={1000} priority />
+          <FeedImage card={view} src={view.cut ? feedSrc(view, "top") : undefined} blend={!view.cut} noSale fill={0.96} minW={1000} priority />
         </div>
         <div className="mt-3 flex items-start justify-between gap-3">
           <div className="min-w-0">

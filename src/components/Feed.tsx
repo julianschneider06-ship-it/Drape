@@ -465,7 +465,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       )}
       {navOn && tab === "likes" && (
         <WishlistView gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
-          onUnlike={(id) => setLiked((prev) => { const n = new Set(prev); n.delete(id); return n; })} />
+          onToggle={(card) => toggleLike(card, null, 0, "sheet")} />
       )}
       {navOn && <BottomNav tab={tab} onTab={goTab} searchOn={searchOn} />}
 
