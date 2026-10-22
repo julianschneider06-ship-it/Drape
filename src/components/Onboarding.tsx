@@ -1,7 +1,16 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
+import * as m from "motion/react-m";
 import { RING } from "@/lib/client/sale";
+import { ACTION_RAIL_WIDTH } from "@/config/action-rail";
+import { TUTORIAL } from "@/config/tutorial";
+import { fadeSlide } from "@/lib/menu-motion";
+import { useReducedMotion } from "@/lib/motion";
+import { boxLeft, boxSpan } from "@/lib/tutorial-layout";
+import ActionRail, { heartAction } from "./ActionRail";
+import LikePop, { type LikePopHandle } from "./LikePop";
 
-/** First-visit tutorial overlay (steps 1-3). It never blocks gestures (pointer-events none) except the "Got it" button; no dimming.
+/** First-visit tutorial overlay (steps 1-6: swipe up, alternatives, sale mark, heart, tap, double-tap). It never blocks gestures (pointer-events none) except the "Got it" button; no dimming.
  *  Boxes and arrows use the same hand-drawn technique as the red sale outline (see SaleInkDefs): dilate the silhouette, wobble it with
  *  noise, keep only the ring and paint it (here black) under the shape. Lines get the same noise displacement.
  *  Performance: the filtered shapes are rasterised ONCE as SVG images (data URLs), so animating or fading them is a cheap GPU transform /
@@ -25,7 +34,9 @@ const boxUrl = (w: number, h: number) => { const k = `${w}x${h}`; let u = boxCac
 
 export interface Pt { x: number; y: number }
 export interface Rect { x: number; y: number; w: number; h: number }
-export interface ObRects { top: Rect | null; sale: Rect | null; vw: number; vh: number }
+export interface ObRects { top: Rect | null; sale: Rect | null; heart: Rect | null; vw: number; vh: number }
+export type ObStep = 1 | 2 | 3 | 4 | 5 | 6;
+export const OB_LAST: ObStep = 6;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /** hand-drawn arrow from a to b: a slightly bent line with an open arrowhead, as one pre-rendered image */
@@ -63,36 +74,84 @@ function UpArrow() {
     <div role="status" className="ob-nudge pointer-events-none fixed left-1/2 z-40" style={{ top: "calc(50% - 120px)", width: ARROW_W, height: ARROW_H, marginLeft: -ARROW_W / 2 }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={upArrowUrl} alt="" draggable={false} className="pointer-events-none absolute max-w-none" style={{ left: -M, top: -M, width: ARROW_W + 2 * M, height: ARROW_H + 2 * M }} />
-      <p className="absolute text-center" style={{ left: 66, width: 78, top: 124, ...textStyle }}>Swipe up to see the next outfit</p>
+      <p className="absolute text-center" style={{ left: 66, width: 78, top: 124, ...textStyle }}>{TUTORIAL.text.swipeUp}</p>
     </div>
   );
 }
 
-/** steps 2 and 3: text box with an arrow to a piece of outfit B (positions measured once per step / swap by the parent, no polling) */
-function Pointer({ step, rects, onDone }: { step: 2 | 3; rects: ObRects; onDone: () => void }) {
-  const { vw, vh } = rects, W = Math.min(250, vw - 24);
-  if (step === 2) {
+/** the heart as in the feed (white with soft shadow, red when all pieces are liked), on the rail's real position; a demonstration only: it loops white -> red -> white
+ *  and cannot be tapped. Same geometry as the feed's fixed rail overlay (card area under the header, canvas + rail width). */
+export function HeartDemo({ canvas }: { canvas: { w: number; h: number } }) {
+  const [on, setOn] = useState(false);
+  const reduced = useReducedMotion();
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>, dead = false;
+    const run = (next: boolean) => { t = setTimeout(() => { if (dead) return; setOn(next); run(!next); }, next ? TUTORIAL.heartDemo.restMs : TUTORIAL.heartDemo.likedMs); };
+    run(true);
+    return () => { dead = true; clearTimeout(t); };
+  }, []);
+  return (
+    <m.div {...fadeSlide(reduced, 0)} aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-30 flex h-dvh flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div className="relative [&_*]:!pointer-events-none" style={{ width: canvas.w + ACTION_RAIL_WIDTH, height: canvas.h }} data-ob-heart="1">
+        <ActionRail actions={[heartAction(on, () => undefined)]} />
+      </div>
+    </m.div>
+  );
+}
+
+/** demo of a double tap: the real like pop (LikePop) plays over the piece, like then quiet unlike, looping */
+function PopDemo({ at }: { at: Rect }) {
+  const pop = useRef<LikePopHandle>(null);
+  useEffect(() => {
+    const { firstMs, periodMs } = TUTORIAL.popDemo;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const cycle = () => { timers.push(setTimeout(() => pop.current?.play(true), 0), setTimeout(() => pop.current?.play(false), periodMs / 2)); };
+    timers.push(setTimeout(cycle, firstMs));
+    const iv = setInterval(cycle, periodMs);
+    return () => { timers.forEach(clearTimeout); clearInterval(iv); };
+  }, []);
+  return <div aria-hidden className="pointer-events-none fixed z-40" style={{ left: at.x, top: at.y, width: at.w, height: at.h }}><LikePop ref={pop} /></div>;
+}
+
+/** steps 2-6: text box with an arrow to a piece of outfit B (positions measured once per step / swap by the parent, no polling). Boxes stay inside the safe margin and clear of the heart. */
+function Pointer({ step, rects, onNext }: { step: 2 | 3 | 4 | 5 | 6; rects: ObRects; onNext: () => void }) {
+  const { vw, vh } = rects, W = boxSpan(vw).w, { text, buttonW: BW, buttonH: BH } = TUTORIAL;
+  const button = (left: number, top: number) => <Box left={left} top={top} w={BW} h={BH} onClick={onNext} label={step === 6 ? text.done : text.next}>{step === 6 ? text.done : text.next}</Box>;
+  if (step === 4) {   // heart: box left of the real heart, arrow pointing at it
+    const Hr = rects.heart; if (!Hr) return null;
+    const h = TUTORIAL.boxHHeart, left = boxLeft(0, vw, W), cy = Hr.y + Hr.h / 2, top = cy - TUTORIAL.heartLeadY - h;
+    return (
+      <>
+        <Arrow a={{ x: left + W, y: top + h / 2 }} b={{ x: Hr.x + Hr.w / 2 - 22, y: cy }} />
+        <Box left={left} top={top} w={W} h={h}>{text.heart}</Box>
+        {button(left, top + h + 12)}
+      </>
+    );
+  }
+  if (step === 2 || step === 5 || step === 6) {   // a piece (the top): box below it, arrow up to it
     const T = rects.top; if (!T) return null;
-    const H = 66, cx = T.x + T.w / 2, left = clamp(cx - W / 2, 12, vw - W - 12), y0 = Math.min(T.y + T.h + 72, vh - 220);
+    const H = TUTORIAL.boxH, cx = T.x + T.w / 2, left = boxLeft(cx, vw, W), y0 = Math.min(T.y + T.h + 72, vh - 220);
     return (
       <>
         <Arrow a={{ x: clamp(cx, left + 30, left + W - 30), y: y0 }} b={{ x: clamp(cx, T.x + 18, T.x + T.w - 18), y: Math.max(T.y + T.h - 14, T.y + 20) }} />
-        <Box left={left} top={y0} w={W} h={H}>Swipe left or right to see alternatives</Box>
+        <Box left={left} top={y0} w={W} h={H}>{step === 2 ? text.alts : step === 5 ? text.tap : text.doubleTap}</Box>
+        {step !== 2 && button(left + (W - BW) / 2, y0 + H + 12)}
+        {step === 6 && <PopDemo at={T} />}
       </>
     );
   }
   const S = rects.sale; if (!S) return null;
-  const H = 44, BW = 104, tx = S.x + S.w / 2, left = clamp(tx - W / 2 + 60, 12, vw - W - 12), yb = Math.max(S.y - 56, 150);
+  const H = 44, tx = S.x + S.w / 2, left = boxLeft(tx, vw, W, 60), yb = Math.max(S.y - 56, 150);
   const ax = clamp(tx, left + 34, left + W - 34), btnLeft = ax > left + W / 2 ? left : left + W - BW;
   return (
     <>
       <Arrow a={{ x: ax, y: yb }} b={{ x: tx, y: S.y - 6 }} />
-      <Box left={left} top={yb - H} w={W} h={H}>Red mark = on sale</Box>
-      <Box left={btnLeft} top={yb + 12} w={BW} h={H} onClick={onDone} label="Got it">Got it</Box>
+      <Box left={left} top={yb - H} w={W} h={H}>{text.sale}</Box>
+      {button(btnLeft, yb + 12)}
     </>
   );
 }
 
-export default function OnboardingOverlay({ step, rects, onDone }: { step: 1 | 2 | 3; rects: ObRects; onDone: () => void }) {
-  return step === 1 ? <UpArrow /> : <Pointer step={step} rects={rects} onDone={onDone} />;
+export default function OnboardingOverlay({ step, rects, onNext }: { step: ObStep; rects: ObRects; onNext: () => void }) {
+  return step === 1 ? <UpArrow /> : <Pointer step={step} rects={rects} onNext={onNext} />;
 }

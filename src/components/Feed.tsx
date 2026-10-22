@@ -475,7 +475,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       {navOn && <BottomNav tab={tab} onTab={goTab} searchOn={searchOn} />}
 
       {obPhase === "welcome" && <Welcome onDone={finishWelcome} onGender={fetchOb} />}
-      {obPhase === "on" && canvas && <TutorialFeed items={obItems} canvas={canvas} onFinish={finishOb} onSkip={skipOb} onWarm={warmFeed} />}
+      {obPhase === "on" && feedCanvas && <TutorialFeed items={obItems} canvas={feedCanvas} onFinish={finishOb} onSkip={skipOb} onWarm={warmFeed} />}
 
       {dbg.debug && (
         <button onClick={() => setDbg((d) => ({ ...d, cut: d.cut === "auto" ? "off" : "auto" }))}
