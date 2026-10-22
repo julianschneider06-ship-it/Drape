@@ -289,10 +289,11 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     const want = !liked.has(card.id);
     setLiked((prev) => { const n = new Set(prev); if (want) n.add(card.id); else n.delete(card.id); return n; });
     if (outfit && tabRef.current === "foryou") interacted.current.add(index);   // a like from the Search tab counts as a normal like, but is not a feed interaction
-    signal({ t: want ? "like" : "unlike", p: card.id, o: outfit ? shownIds(outfit) : undefined, tg: outfit ? tg(outfit) : null });
+    const og = !!outfit?.og;   // Search, other gender's outfit: the like is stored as a normal like, but the outfit context and the taste signal are left out
+    if (!og) signal({ t: want ? "like" : "unlike", p: card.id, o: outfit ? shownIds(outfit) : undefined, tg: outfit ? tg(outfit) : null });
     fetch("/api/likes", {
       method: "POST",
-      body: JSON.stringify({ device_id: device.current, product_id: card.id, liked: want, outfit_id: outfit?.id, feed_index: index, slot: slot === "sheet" ? "sheet" : slot, gender: genderRef.current, tags: outfit?.tags ? compactTags(outfit.tags) : undefined, product_ids: outfit ? shownIds(outfit) : undefined }),
+      body: JSON.stringify({ device_id: device.current, product_id: card.id, liked: want, outfit_id: outfit?.id, feed_index: index, slot: slot === "sheet" ? "sheet" : slot, gender: genderRef.current, tags: !og && outfit?.tags ? compactTags(outfit.tags) : undefined, product_ids: !og && outfit ? shownIds(outfit) : undefined }),
     }).then((r) => { if (!r.ok) throw new Error(); }).catch(() => {
       setLiked((prev) => { const n = new Set(prev); if (want) n.delete(card.id); else n.add(card.id); return n; }); // revert
     });
@@ -429,7 +430,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
 
       {navOn && searchSeen && (
         <div className="fixed inset-x-0 top-0 z-30" style={{ bottom: "var(--nav-h)", visibility: tab === "search" ? "visible" : "hidden" }}>
-          <Search key={gender ?? "women"} gender={gender ?? "women"} canvas={canvas} iconsOn={iconsOn} onOpen={openFromSearch} onBack={backToForYou} />
+          <Search key={gender ?? "women"} gender={gender ?? "women"} canvas={canvas} onOpen={openFromSearch} onBack={backToForYou} />
         </div>
       )}
       {navOn && <BottomNav tab={tab} onTab={goTab} />}

@@ -58,7 +58,7 @@ export const CONTRAST_PATTERNS: typeof CONTRAST_PATTERNS_V1 = [
 
 const BOOTS = /\b(boots?|chelsea|hiker)\b/i;
 /** bottom length vs shoes: short bottoms (shorts, mini skirts) never with boots */
-const lengthShoeOk = (bottom: CatPiece | undefined, shoes: CatPiece) => !(bottom?.short && BOOTS.test(`${shoes.sub} ${shoes.name}`));
+export const lengthShoeOk = (bottom: CatPiece | undefined, shoes: CatPiece) => !(bottom?.short && BOOTS.test(`${shoes.sub} ${shoes.name}`));
 
 function pick<T>(items: T[], w: (x: T) => number, rnd: Rnd): T | null {
   let tot = 0; const ws = items.map((x) => { const v = Math.max(0, w(x)); tot += v; return v; });

@@ -4,6 +4,7 @@ import type { StyleFamily } from "@/config/style-families";
 import type { IconId } from "@/lib/outfit-icons";
 
 export const SEARCH_MAX_RESULTS = 30;     // a search shows at most this many outfits, then an end card (no endless scroll)
+export const SEARCH_STORE_CAP = 5;        // per tier, at most this many pieces of one shop come first (keeps one shop from filling the page)
 export const SEARCH_MIN_EXACT = 8;        // fewer exact matches than this: the optional filters are relaxed (extra first, then season)
 
 export type SearchItem = "accessory" | "shoes" | "top" | "bottom";
@@ -30,20 +31,19 @@ export const SEASONS: { id: SearchSeason; label: string; hint: string }[] = [
   { id: "winter", label: "Winter", hint: "Warm and covered up" },
 ];
 
-/** the extras are exactly the ones the outfit icons already show (src/lib/outfit-icons.ts) */
-export type SearchExtra = "rain" | "evening" | "office" | "resort" | "contrast" | "bold" | "tonal" | "colourful" | "formal";
+/** the extras describe the searched PIECE (rules in src/lib/search-index.ts); outfit-only ones (tonal, pattern break) are not offered */
+export type SearchExtra = "rain" | "evening" | "office" | "resort" | "bold" | "colourful" | "formal";
 export const EXTRAS: { id: SearchExtra; label: string; hint: string }[] = [
   { id: "rain", label: "Rain", hint: "Ready for wet weather" },
-  { id: "evening", label: "Evening", hint: "Dressy looks for after dark" },
-  { id: "office", label: "Office", hint: "Smart looks for work" },
-  { id: "resort", label: "Holiday", hint: "Relaxed looks for warm trips" },
-  { id: "contrast", label: "Pattern break", hint: "A print or pattern breaks up the look" },
-  { id: "bold", label: "Bold", hint: "Statement pieces that stand out" },
-  { id: "tonal", label: "Tonal", hint: "One colour family, head to toe" },
-  { id: "colourful", label: "Colourful", hint: "Several colours together" },
+  { id: "evening", label: "Evening", hint: "Dressy pieces for after dark" },
+  { id: "office", label: "Office", hint: "Smart pieces for work" },
+  { id: "resort", label: "Holiday", hint: "Relaxed pieces for warm trips" },
+  { id: "bold", label: "Bold", hint: "A statement piece that stands out" },
+  { id: "colourful", label: "Colourful", hint: "A colour or print, not a neutral" },
   { id: "formal", label: "Formal", hint: "Very dressed up" },
 ];
 
+export const itemIcon = (i: SearchItem): IconId => `item-${i}`;
 export const familyIcon = (f: StyleFamily): IconId => `family-${f}`;
 export const seasonIcon = (s: SearchSeason): IconId => `season-${s}`;
 export const extraIcon = (e: SearchExtra): IconId => e;   // every extra id is also an icon id

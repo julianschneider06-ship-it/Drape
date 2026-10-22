@@ -4,7 +4,7 @@ import type { OutfitTags } from "@/outfits/tags";
 import { familyOf, type StyleFamily } from "@/config/style-families";
 
 export type ExtraIcon = "rain" | "evening" | "office" | "resort" | "contrast" | "bold" | "tonal" | "colourful" | "formal";
-export type IconId = `family-${StyleFamily}` | `season-${"spring" | "summer" | "autumn" | "winter"}` | ExtraIcon;
+export type IconId = `family-${StyleFamily}` | `season-${"spring" | "summer" | "autumn" | "winter"}` | ExtraIcon | `item-${"accessory" | "shoes" | "top" | "bottom"}`;   // item-* only for the Search tab
 export const MAX_EXTRA = 3;
 
 export function outfitIcons(t: OutfitTags | null | undefined): IconId[] {

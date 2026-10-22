@@ -7,5 +7,5 @@ export interface FeedAccessory { card: FeedCard; type: string; placement: "head"
 export interface FeedAlt { rank: number; card: FeedCard; meta?: { type: string | null; size: string | null; front_flat: boolean | null; belt_shape: string | null } | null }
 import type { OutfitTags } from "@/outfits/tags";
 export type { OutfitTags };
-export interface FeedOutfit { tags?: OutfitTags | null; id: number; kind: "three" | "full"; score: number; order: number; top: FeedCard; bottom: FeedCard | null; shoes: FeedCard; accessories?: FeedAccessory[]; alts?: Record<string, FeedAlt[]>; dyn?: { style: string; store: string; season: string; fit: number; bucket: string; pattern?: string; ids: number[] } }
+export interface FeedOutfit { og?: "women" | "men"; /* Search only: the outfit is from the other gender than the user's */ tags?: OutfitTags | null; id: number; kind: "three" | "full"; score: number; order: number; top: FeedCard; bottom: FeedCard | null; shoes: FeedCard; accessories?: FeedAccessory[]; alts?: Record<string, FeedAlt[]>; dyn?: { style: string; store: string; season: string; fit: number; bucket: string; pattern?: string; ids: number[] } }
 export interface FeedResponse { items: FeedOutfit[]; next_cursor: number; size: number }

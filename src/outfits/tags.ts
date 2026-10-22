@@ -26,7 +26,9 @@ export const TAG_RULES = {
   distinctMinShare: 0.1,                           // a style needs this share of the outfit to be "distinct"
 };
 const NEUTRALS = new Set(["black", "white", "grey", "beige", "cream", "navy", "brown", "silver"]);
-const SPORT = ["sporty", "athleisure", "gorpcore", "retro_sport", "techwear"], SMART = ["business_casual", "classic", "old_money", "quiet_luxury", "preppy"], RESORT = ["resort", "boho", "vintage", "coquette"];
+export const SPORT = ["sporty", "athleisure", "gorpcore", "retro_sport", "techwear"];
+export const SMART = ["business_casual", "classic", "old_money", "quiet_luxury", "preppy"];
+export const RESORT = ["resort", "boho", "vintage", "coquette"];
 const RAIN = /\b(rain|raincoat|waterproof|anorak|gore-?tex|shell jacket|windbreaker|trench)\b/i;
 const idx = (k: string) => STYLE_KEYS.indexOf(k as never);
 
