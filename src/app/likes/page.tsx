@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import LikesView from "@/components/LikesView";
+import MotionRoot from "@/components/MotionRoot";
 
 // Standalone /likes page (direct link); in the app the same view lives in the Wishlist tab of the bottom bar.
 export default function LikesPage() {
@@ -11,7 +12,7 @@ export default function LikesPage() {
         <h1 className="text-base font-semibold">Wishlist</h1>
         <span className="w-12" />
       </header>
-      <LikesView />
+      <MotionRoot><LikesView /></MotionRoot>
     </main>
   );
 }

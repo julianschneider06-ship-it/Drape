@@ -1,5 +1,11 @@
 "use client";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import * as m from "motion/react-m";
+import { AnimatePresence } from "motion/react";
+import { DISABLED_OPACITY, DURATION_MS, MENU, MENU_COLORS, sec } from "@/config/motion";
+import { useReducedMotion } from "@/lib/motion";
+import { fadeSlide, pressProps, staggerDelay, stateTransition } from "@/lib/menu-motion";
+import Layer from "./Layer";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 import type { SlotName } from "@/lib/layout/engine";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
@@ -41,21 +47,29 @@ function normalize(f: Facets | null, s: Sel, k: keyof Sel, incl = false): Sel {
   return n;
 }
 
-function Option({ icon, label, hint, on, disabled, onClick }: { icon: IconId | null; label: string; hint: string; on: boolean; disabled: boolean; onClick: () => void }) {
+/** Option chip: appears with fade + slide (staggered by `i`), springs on press, colour and opacity fade when it turns active / grey. */
+function Option({ icon, label, hint, on, disabled, onClick, i = 0, base = 0 }: { icon: IconId | null; label: string; hint: string; on: boolean; disabled: boolean; onClick: () => void; i?: number; base?: number }) {
+  const reduced = useReducedMotion();
+  const fs = fadeSlide(reduced, MENU.itemShiftPx, staggerDelay(base + i, reduced));
   return (
-    <button type="button" onClick={onClick} disabled={disabled} aria-pressed={on}
-      className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors ${on ? "border-black bg-neutral-50" : "border-neutral-200 bg-white"} ${disabled ? "opacity-35" : "active:bg-neutral-50"}`}>
-      {icon && <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-100"><IconGlyph id={icon} size={20} stroke={on ? "#000" : "#6b7280"} width={1.6} /></span>}
-      <span className="min-w-0"><span className="block text-sm font-medium text-black">{label}</span><span className="block text-xs leading-snug text-neutral-500">{hint}</span></span>
-    </button>
+    <m.div initial={fs.initial} animate={fs.animate} transition={fs.transition}>
+      <m.button type="button" onClick={onClick} disabled={disabled} aria-pressed={on} {...pressProps(reduced, MENU.chipPress)} initial={false}
+        animate={{ ...(on ? MENU_COLORS.chip.on : MENU_COLORS.chip.off), opacity: disabled ? DISABLED_OPACITY : 1 }} transition={stateTransition(reduced)}
+        className="flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left">
+        {icon && <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-100"><IconGlyph id={icon} size={20} stroke={on ? "#000" : "#6b7280"} width={1.6} /></span>}
+        <span className="min-w-0"><span className="block text-sm font-medium text-black">{label}</span><span className="block text-xs leading-snug text-neutral-500">{hint}</span></span>
+      </m.button>
+    </m.div>
   );
 }
 
-function Section({ step, title, sub, children }: { step: Step; title: string; sub: string; children: React.ReactNode }) {
+function Section({ step, title, sub, children, i }: { step: Step; title: string; sub: string; children: React.ReactNode; i: number }) {
+  const reduced = useReducedMotion();
+  const fs = fadeSlide(reduced, MENU.itemShiftPx, staggerDelay(i, reduced));
   return (
-    <section data-step={step} className="px-4 pb-6">
+    <m.section data-step={step} className="px-4 pb-6" initial={fs.initial} animate={fs.animate} transition={fs.transition}>
       <h2 className="text-sm font-semibold text-black">{title}</h2><p className="mb-2 text-xs text-neutral-500">{sub}</p>{children}
-    </section>
+    </m.section>
   );
 }
 
@@ -174,39 +188,53 @@ function Search({ gender, tapKey, canvas, onOpen, onLike, onBack }: {
     ];
   }, [lastSel, lastDir]);
 
-  const showing = phase === "results";   // results stay mounted (hidden) while the configurator is open, so the scroll position is kept
+  const reduced = useReducedMotion();
+  const showing = phase === "results";   // results stay mounted (hidden) while the configurator is open, so the scroll position is kept (Layer crossfades the two)
+  const [cfgKey, setCfgKey] = useState(0);   // the configurator's steps and options appear again (staggered) each time it is reopened
+  const wasShowing = useRef(false);
+  useLayoutEffect(() => { if (wasShowing.current && !showing) setCfgKey((k) => k + 1); wasShowing.current = showing; }, [showing]);
   const clearable = canClear(dir, gender, sel, !!res);
   return (
     <div className="absolute inset-0 bg-white">
       {/* configurator (stays mounted so the choices survive a visit to the results) */}
-      <div ref={cfg} className="no-scrollbar absolute inset-0 overflow-y-auto overscroll-y-contain pt-[calc(max(0.75rem,env(safe-area-inset-top))+2.75rem)]" style={{ visibility: showing ? "hidden" : "inherit" }}>
+      <Layer active={!showing} className="absolute inset-0">
+      <div ref={cfg} className="no-scrollbar absolute inset-0 overflow-y-auto overscroll-y-contain pt-[calc(max(0.75rem,env(safe-area-inset-top))+2.75rem)]">
+        <div key={cfgKey}>
         <h1 className="px-4 pb-4 text-xl font-semibold tracking-tight">Find an outfit</h1>
-        <Section step="G" title="1. Men or women?" sub="Required. Search shows only this direction.">
-          <div className="grid grid-cols-2 gap-2">{DIRECTIONS.map((d) => <Option key={d.id} icon={dirIcon(d.id)} label={d.label} hint={d.hint} on={dir === d.id} disabled={false} onClick={() => setDir(d.id)} />)}</div>
+        <Section step="G" i={0} title="1. Men or women?" sub="Required. Search shows only this direction.">
+          <div className="grid grid-cols-2 gap-2">{DIRECTIONS.map((d, k) => <Option key={d.id} i={k} base={1} icon={dirIcon(d.id)} label={d.label} hint={d.hint} on={dir === d.id} disabled={false} onClick={() => setDir(d.id)} />)}</div>
         </Section>
-        <Section step="A" title="2. What are you looking for?" sub="Required. This piece stays in colour, the rest is greyed out.">
-          <div className="grid grid-cols-2 gap-2">{ITEMS.map((i) => <Option key={i.id} icon={itemIcon(i.id)} label={i.label} hint={i.hint} on={sel.item === i.id} disabled={!ok("item", i.id)} onClick={() => pick("item", i.id)} />)}</div>
+        <Section step="A" i={1} title="2. What are you looking for?" sub="Required. This piece stays in colour, the rest is greyed out.">
+          <div className="grid grid-cols-2 gap-2">{ITEMS.map((it, k) => <Option key={it.id} i={k} base={2} icon={itemIcon(it.id)} label={it.label} hint={it.hint} on={sel.item === it.id} disabled={!ok("item", it.id)} onClick={() => pick("item", it.id)} />)}</div>
         </Section>
-        <Section step="B" title="3. Pick a style family" sub="Required. The piece matches this family; the rest of the outfit can be any style.">
-          <div className="grid gap-2">{FAMILY_KEYS.map((f) => <Option key={f} icon={familyIcon(f)} label={FAMILY_INFO[f].label} hint={FAMILY_INFO[f].hint} on={sel.family === f} disabled={!ok("family", f)} onClick={() => pick("family", f)} />)}</div>
+        <Section step="B" i={2} title="3. Pick a style family" sub="Required. The piece matches this family; the rest of the outfit can be any style.">
+          <div className="grid gap-2">{FAMILY_KEYS.map((f, k) => <Option key={f} i={k} base={3} icon={familyIcon(f)} label={FAMILY_INFO[f].label} hint={FAMILY_INFO[f].hint} on={sel.family === f} disabled={!ok("family", f)} onClick={() => pick("family", f)} />)}</div>
         </Section>
-        <Section step="C" title="4. Pick a season" sub="Optional.">
-          <div className="grid grid-cols-2 gap-2">{SEASONS.map((s) => <Option key={s.id} icon={seasonIcon(s.id)} label={s.label} hint={s.hint} on={sel.season === s.id} disabled={!ok("season", s.id) && sel.season !== s.id} onClick={() => pick("season", s.id)} />)}</div>
+        <Section step="C" i={3} title="4. Pick a season" sub="Optional.">
+          <div className="grid grid-cols-2 gap-2">{SEASONS.map((se, k) => <Option key={se.id} i={k} base={4} icon={seasonIcon(se.id)} label={se.label} hint={se.hint} on={sel.season === se.id} disabled={!ok("season", se.id) && sel.season !== se.id} onClick={() => pick("season", se.id)} />)}</div>
         </Section>
-        <Section step="D" title="5. Add one extra" sub="Optional. Only extras that have results are shown.">
-          <div className="grid grid-cols-2 gap-2">{EXTRAS.filter((e) => ok("extra", e.id) || sel.extra === e.id || !facets).map((e) => <Option key={e.id} icon={extraIcon(e.id)} label={e.label} hint={e.hint} on={sel.extra === e.id} disabled={false} onClick={() => pick("extra", e.id)} />)}</div>
+        <Section step="D" i={4} title="5. Add one extra" sub="Optional. Only extras that have results are shown.">
+          <div className="grid grid-cols-2 gap-2">{EXTRAS.filter((e) => ok("extra", e.id) || sel.extra === e.id || !facets).map((e, k) => <Option key={e.id} i={k} base={5} icon={extraIcon(e.id)} label={e.label} hint={e.hint} on={sel.extra === e.id} disabled={false} onClick={() => pick("extra", e.id)} />)}</div>
         </Section>
+        </div>
         <div className="sticky bottom-0 bg-gradient-to-t from-white via-white to-white/0 px-4 pb-3 pt-4">
-          {phase === "error" && <p className="mb-2 text-center text-xs text-neutral-500">Search is not available right now. Please try again.</p>}
-          <button type="button" disabled={!clearable || phase === "loading"} onClick={clear}
-            className="mb-2 w-full rounded-full border border-neutral-300 bg-white py-2 text-sm text-neutral-600 transition-opacity active:bg-neutral-50 disabled:opacity-40">Clear</button>
-          <button type="button" disabled={!ready || phase === "loading" || n === 0} onClick={submit}
-            className={`w-full rounded-full py-3 text-sm font-medium text-white transition-opacity ${ready && n !== 0 ? "bg-black active:opacity-80" : "bg-neutral-300"}`}>{phase === "loading" ? "Searching…" : n === null ? "Search" : `Search (${n})`}</button>
+          <AnimatePresence>
+            {phase === "error" && <m.p key="err" {...fadeSlide(reduced, MENU.hintShiftPx)} className="mb-2 text-center text-xs text-neutral-500">Search is not available right now. Please try again.</m.p>}
+          </AnimatePresence>
+          <m.button type="button" disabled={!clearable || phase === "loading"} onClick={clear} {...pressProps(reduced, MENU.chipPress)} initial={false}
+            animate={{ opacity: !clearable || phase === "loading" ? DISABLED_OPACITY : 1 }} transition={stateTransition(reduced)}
+            className="mb-2 w-full rounded-full border border-neutral-300 bg-white py-2 text-sm text-neutral-600">Clear</m.button>
+          <m.button type="button" disabled={!ready || phase === "loading" || n === 0} onClick={submit} {...pressProps(reduced, MENU.chipPress)} initial={false}
+            animate={ready && n !== 0 ? MENU_COLORS.action.on : MENU_COLORS.action.off} transition={stateTransition(reduced)}
+            className="w-full rounded-full py-3 text-sm font-medium text-white">
+            {phase === "loading" ? "Searching…" : n === null ? "Search" : <>Search (<m.span key={n} className="inline-block" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.counter) }}>{n}</m.span>)</>}
+          </m.button>
         </div>
       </div>
+      </Layer>
 
       {res && (
-        <div className="absolute inset-0 bg-white" style={{ visibility: showing ? "inherit" : "hidden" }}>
+        <Layer active={showing} appear className="absolute inset-0 bg-white">
           <div className="absolute inset-x-0 top-0 z-20 bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
             <div className="no-scrollbar flex h-9 items-center gap-2 overflow-x-auto" role="list" aria-label="Your search (tap to change)">
               {chips.map((c) => (
@@ -221,7 +249,7 @@ function Search({ gender, tapKey, canvas, onOpen, onLike, onBack }: {
               <section key={o.id} data-i={i} className="relative flex h-full snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))` }}>
                 {canvas && <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} priceTag={priceOn} shine={shineOn ? { color: o.sc ?? null } : undefined} onOpen={(c, slot) => onOpen(c, o, i, slot)} onLike={(c, slot) => onLike(c, o, i, slot)} />}
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-white px-24 text-center text-xs leading-tight text-neutral-400" style={{ height: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))`, paddingBottom: "var(--safe-b, 0px)" }}>
-                  {i + 1} / {res.done ? res.items.length : res.total - res.skipped}{res.relaxed !== "none" ? " · Showing fewer exact matches" : ""}
+                  {i + 1} / {res.done ? res.items.length : res.total - res.skipped}<AnimatePresence initial={false}>{res.relaxed !== "none" && <m.span key="relaxed" className="inline-block whitespace-pre" {...fadeSlide(reduced, MENU.hintShiftPx)}>{" · Showing fewer exact matches"}</m.span>}</AnimatePresence>
                 </div>
               </section>
             ))}
@@ -231,7 +259,7 @@ function Search({ gender, tapKey, canvas, onOpen, onLike, onBack }: {
                 {res.failed && <button type="button" onClick={() => setRes({ ...res, failed: false })} className="rounded-full border border-neutral-300 px-5 py-2.5 text-sm text-neutral-700">Try again</button>}
               </section>
             )}
-            {res.done && <section className="flex h-full snap-start flex-col items-center justify-center gap-3 px-8 text-center" data-end>
+            {res.done && <m.section className="flex h-full snap-start flex-col items-center justify-center gap-3 px-8 text-center" data-end {...fadeSlide(reduced, MENU.hintShiftPx)}>
               {res.items.length ? (
                 <>
                   <p className="text-base font-semibold">That&apos;s all for now.</p>
@@ -247,17 +275,17 @@ function Search({ gender, tapKey, canvas, onOpen, onLike, onBack }: {
                 <button type="button" onClick={() => edit("B")} className="rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white">{res.items.length ? "Refine search" : "Change search"}</button>
                 {res.items.length > 0 && <button type="button" onClick={onBack} className="rounded-full border border-neutral-300 px-5 py-2.5 text-sm text-neutral-700">For You</button>}
               </div>
-            </section>}
+            </m.section>}
           </div>
           {!forcedOff && (   // Highlight chip: bottom left inside the white strip under the card (above the bottom bar), centred in its height; the counter text keeps clear of it (side padding)
-            <button type="button" aria-pressed={highlight} onClick={toggleHighlight} onPointerDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}
+            <m.button type="button" aria-pressed={highlight} onClick={toggleHighlight} onPointerDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} {...pressProps(reduced, MENU.pressScale)}
               className="absolute z-20 flex items-center px-4 [touch-action:manipulation]"
-              style={{ left: 0, height: HIGHLIGHT_HIT_PX, bottom: `calc(${(BUTTON_BAR_PX - HIGHLIGHT_HIT_PX) / 2}px + var(--safe-b, 0px))` }}>
-              <span className={`flex items-center border font-medium transition-colors ${highlight ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-black"}`}
-                style={{ borderRadius: 16 * HIGHLIGHT_SCALE, padding: `${8 * HIGHLIGHT_SCALE}px ${12 * HIGHLIGHT_SCALE}px`, fontSize: 14 * HIGHLIGHT_SCALE, lineHeight: `${20 * HIGHLIGHT_SCALE}px` }}>Highlight</span>
-            </button>
+              style={{ left: 0, height: HIGHLIGHT_HIT_PX, bottom: `calc(${(BUTTON_BAR_PX - HIGHLIGHT_HIT_PX) / 2}px + var(--safe-b, 0px))`, originX: "16px" }}>
+              <m.span className="flex items-center border font-medium" initial={false} animate={highlight ? MENU_COLORS.toggle.on : MENU_COLORS.toggle.off} transition={stateTransition(reduced)}
+                style={{ borderRadius: 16 * HIGHLIGHT_SCALE, padding: `${8 * HIGHLIGHT_SCALE}px ${12 * HIGHLIGHT_SCALE}px`, fontSize: 14 * HIGHLIGHT_SCALE, lineHeight: `${20 * HIGHLIGHT_SCALE}px` }}>Highlight</m.span>
+            </m.button>
           )}
-        </div>
+        </Layer>
       )}
     </div>
   );

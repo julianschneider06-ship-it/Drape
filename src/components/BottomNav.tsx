@@ -1,6 +1,10 @@
 "use client";
 import { memo } from "react";
+import * as m from "motion/react-m";
 import { navTabs, TAB_LABELS, type Tab } from "@/lib/nav-tabs";
+import { MENU, MENU_COLORS, SPRING, DURATION_MS, sec } from "@/config/motion";
+import { useReducedMotion } from "@/lib/motion";
+import { pressProps, stateTransition } from "@/lib/menu-motion";
 
 export type { Tab };
 /** height of the bar without the phone's bottom safe area */
@@ -12,16 +16,21 @@ const Icon = ({ tab }: { tab: Tab }) => (
   </svg>
 );
 
-/** Slim bottom bar (white, thin grey line on top). Active tab black, inactive grey. Switching only toggles visibility; nothing is recorded. Tapping Search while in Search is passed on too (the configurator reopens). */
+/** Slim bottom bar (white, thin grey line on top). Active tab black, inactive grey (colour fades); a short black indicator glides over the line to the active tab; a pressed tab springs to 0.94. Switching only toggles visibility; nothing is recorded. Tapping Search while in Search is passed on too (the configurator reopens). */
 function BottomNav({ tab, onTab, searchOn }: { tab: Tab; onTab: (t: Tab) => void; searchOn: boolean }) {
+  const reduced = useReducedMotion();
   return (
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)]" style={{ height: `calc(${NAV_PX}px + env(safe-area-inset-bottom))` }}>
       <div className="mx-auto flex h-[49px] max-w-md" role="tablist">
         {navTabs(searchOn).map((t) => (
-          <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => (tab !== t || t === "search") && onTab(t)}
-            className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] ${tab === t ? "font-semibold text-black" : "text-neutral-400"}`}>
+          <m.button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => (tab !== t || t === "search") && onTab(t)}
+            {...pressProps(reduced, MENU.pressScale)} initial={false} animate={{ color: tab === t ? MENU_COLORS.nav.on : MENU_COLORS.nav.off }} transition={stateTransition(reduced)}
+            className="relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium">
+            {tab === t && (reduced
+              ? <m.span aria-hidden className="absolute -top-px left-1/2 -ml-4 h-0.5 w-8 rounded-full bg-black" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: sec(DURATION_MS.reducedFade) }} />
+              : <m.span aria-hidden layoutId="nav-indicator" className="absolute -top-px left-1/2 -ml-4 h-0.5 w-8 rounded-full bg-black" transition={SPRING.pill} />)}
             <Icon tab={t} />{TAB_LABELS[t]}
-          </button>
+          </m.button>
         ))}
       </div>
     </nav>

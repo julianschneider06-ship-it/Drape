@@ -1,4 +1,8 @@
 "use client";
+import * as m from "motion/react-m";
+import { MENU } from "@/config/motion";
+import { useReducedMotion } from "@/lib/motion";
+import { fadeSlide } from "@/lib/menu-motion";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 import type { SlotName } from "@/lib/layout/engine";
@@ -18,6 +22,7 @@ function GenerateOutfits({ gender, likedIds, shuffleKey, onOpen, onLike }: {
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const root = useRef<HTMLDivElement>(null), tail = useRef<HTMLElement>(null);
+  const reduced = useReducedMotion();
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
   const [items, setItems] = useState<FeedOutfit[]>([]);
   const [status, setStatus] = useState<Status>("loading");
@@ -65,9 +70,9 @@ function GenerateOutfits({ gender, likedIds, shuffleKey, onOpen, onLike }: {
   return (
     <div ref={root} className="no-scrollbar absolute inset-0 snap-y snap-mandatory overflow-y-scroll overscroll-y-contain bg-white">
       {status === "empty" && !items.length && (
-        <section className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
+        <m.section className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center" {...fadeSlide(reduced, MENU.hintShiftPx)}>
           <p className="text-sm text-neutral-500">{likedIds.length || run.current.ids.length ? "No outfits could be built from your wishlist yet." : "Like some pieces to generate outfits"}</p>
-        </section>
+        </m.section>
       )}
       {canvas && items.map((o, i) => (
         <section key={`${i}:${o.id}`} data-i={i} className="relative flex h-full snap-start snap-always flex-col items-center justify-center">

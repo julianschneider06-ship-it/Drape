@@ -1,5 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import * as m from "motion/react-m";
+import { MENU } from "@/config/motion";
+import { useReducedMotion } from "@/lib/motion";
+import { fadeSlide } from "@/lib/menu-motion";
 import Heart from "@/components/Heart";
 import type { FeedCard } from "@/lib/types";
 import { getDeviceId } from "@/lib/client/device";
@@ -11,6 +15,7 @@ import { heartLook, heartVisual, refreshItems } from "@/lib/wishlist-soft";
 
 /** Minimal "Wishlist" products list (the full "My collection" comes later): products this anonymous device liked. Used by the Wishlist tab and by the /likes page. */
 export default function LikesView({ liked, onToggle }: { liked?: Set<number>; onToggle?: (card: FeedCard) => void }) {
+  const reduced = useReducedMotion();
   const [items, setItems] = useState<FeedCard[] | null>(null);
   const [error, setError] = useState(false);
   const [device, setDevice] = useState("");
@@ -36,8 +41,8 @@ export default function LikesView({ liked, onToggle }: { liked?: Set<number>; on
 
   return (
     <>
-      {error && <p className="py-10 text-center text-sm text-neutral-500">Could not load your wishlist.</p>}
-      {items && items.length === 0 && <p className="py-16 text-center text-sm text-neutral-500">Nothing liked yet. Tap the heart on a piece you like.</p>}
+      {error && <m.p {...fadeSlide(reduced, MENU.hintShiftPx)} className="py-10 text-center text-sm text-neutral-500">Could not load your wishlist.</m.p>}
+      {items && items.length === 0 && <m.p {...fadeSlide(reduced, MENU.hintShiftPx)} className="py-16 text-center text-sm text-neutral-500">Nothing liked yet. Tap the heart on a piece you like.</m.p>}
       <ul className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-4 lg:grid-cols-6">
         {(items ?? []).map((c) => (
           <li key={c.id} className="relative">

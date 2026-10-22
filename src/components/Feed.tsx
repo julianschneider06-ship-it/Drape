@@ -16,7 +16,11 @@ import TutorialFeed from "./TutorialFeed";
 import Welcome from "./Welcome";
 import BottomNav, { NAV_PX, type Tab } from "./BottomNav";
 import WishlistView, { type WishTab } from "./WishlistView";
-import { navVisible } from "@/lib/nav-tabs";
+import { navVisible, tabLayers } from "@/lib/nav-tabs";
+import { AnimatePresence } from "motion/react";
+import MotionRoot from "./MotionRoot";
+import Layer from "./Layer";
+import Segmented from "./Segmented";
 import Search from "./Search";
 import OutfitIcons from "./OutfitIcons";
 import { outfitIcons } from "@/lib/outfit-icons";
@@ -407,7 +411,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const openFromSearch = useCallback((card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => setSheet({ card, outfit, index, slot }), []);   // no tap event: Search only shares the like path with the feed
   const likeFromCard = useCallback((card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => { toggleLike(card, outfit, index, slot); return likeResult.current; }, [toggleLike]);
   const backToForYou = useCallback(() => goTab("foryou"), [goTab]);
-  const hideFeed = tab !== "foryou" ? ({ visibility: "hidden" } as const) : undefined;   // visibility keeps the scroll position
+  const layers = tabLayers(tab, searchSeen);   // panels crossfade (Layer); visibility keeps the scroll position, nothing re-renders
   const obHeader = obPhase !== "off";   // header controls rest during the tutorial
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
@@ -417,56 +421,57 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   };
 
   return (
+    <MotionRoot>
     <main className="h-dvh bg-white" style={{ "--nav-h": navOn ? `calc(${NAV_PX}px + env(safe-area-inset-bottom))` : "0px", "--safe-b": navOn ? "0px" : "env(safe-area-inset-bottom)" } as React.CSSProperties}>
       <SaleInkDefs />
-      <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur" style={hideFeed}>
-        <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
-        <div className="flex rounded-full bg-neutral-100 p-0.5 text-sm" role="tablist" aria-label="Section" style={obHeader ? { pointerEvents: "none" } : undefined}>
-          {(["women", "men"] as Gender[]).map((g) => (
-            <button key={g} role="tab" aria-selected={gender === g} onClick={() => gender !== g && setGender(g)}
-              className={`rounded-full px-4 py-1 capitalize transition-colors ${gender === g ? "bg-black text-white" : "text-neutral-600"}`}>{g === "women" ? "Women" : "Men"}</button>
+      <Layer active={layers.feedActive} shiftPx={0}>
+        <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
+          <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
+          <Segmented id="gender" label="Section" disabled={obHeader} value={gender as Gender} onChange={setGender} options={[{ id: "women", label: "Women" }, { id: "men", label: "Men" }]} />
+          <span className="w-16" aria-hidden />
+        </header>
+
+        <div ref={scroller} className="no-scrollbar snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ height: H }}>
+          {obPhase === "off" && shown.map((o, i) => (
+            <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)" }}>
+              {feedCanvas && (
+                <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>   {/* the right ACTION_RAIL_WIDTH px stay empty: the fixed rail overlay sits there */}
+                  <OutfitCanvas outfit={o} canvas={feedCanvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => { toggleLike(c, o, i, slot); return likeResult.current; }} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
+                    onLayout={(layout, mode, slots) => { layoutInfo.current.set(o.id, { layout, mode }); const k = slots.join(","); setPlaced((p) => (p[o.id] === k ? p : { ...p, [o.id]: k })); }} />
+                </div>
+              )}
+              {iconsOn && <OutfitIcons icons={outfitIcons(o.tags)} />}
+            </section>
           ))}
+          {obPhase === "loading" && <section style={{ height: H }} className="flex items-center justify-center text-sm text-neutral-400">Loading…</section>}
+          {obPhase === "off" && !items.length && (
+            <section style={{ height: H }} className="flex items-center justify-center text-sm text-neutral-400">
+              {error ? <button onClick={() => loadMore()} className="rounded-full border border-neutral-300 px-4 py-2 text-neutral-700">Try again</button> : loading || !gender ? "Loading…" : "No outfits yet."}
+            </section>
+          )}
         </div>
-        <span className="w-16" aria-hidden />
-      </header>
 
-      <div ref={scroller} className="no-scrollbar snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ height: H, ...hideFeed }}>
-        {obPhase === "off" && shown.map((o, i) => (
-          <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)" }}>
-            {feedCanvas && (
-              <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>   {/* the right ACTION_RAIL_WIDTH px stay empty: the fixed rail overlay sits there */}
-                <OutfitCanvas outfit={o} canvas={feedCanvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => { toggleLike(c, o, i, slot); return likeResult.current; }} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
-                  onLayout={(layout, mode, slots) => { layoutInfo.current.set(o.id, { layout, mode }); const k = slots.join(","); setPlaced((p) => (p[o.id] === k ? p : { ...p, [o.id]: k })); }} />
-              </div>
-            )}
-            {iconsOn && <OutfitIcons icons={outfitIcons(o.tags)} />}
-          </section>
-        ))}
-        {obPhase === "loading" && <section style={{ height: H }} className="flex items-center justify-center text-sm text-neutral-400">Loading…</section>}
-        {obPhase === "off" && !items.length && (
-          <section style={{ height: H }} className="flex items-center justify-center text-sm text-neutral-400">
-            {error ? <button onClick={() => loadMore()} className="rounded-full border border-neutral-300 px-4 py-2 text-neutral-700">Try again</button> : loading || !gender ? "Loading…" : "No outfits yet."}
-          </section>
-        )}
-      </div>
-
-      {obPhase === "off" && feedCanvas && shown[railIdx] && (   // fixed action rail: never moves with the cards; acts on the outfit in view
-        <div className="pointer-events-none fixed inset-x-0 top-0 z-20 flex flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)", ...hideFeed }}>
-          <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>
-            <ActionRail actions={[heartAction(heartState(outfitPieces(shown[railIdx], placed[shown[railIdx].id]?.split(",")).map((c) => c.id), liked) === "all", () => heartOutfit(shown[railIdx], railIdx))]} />
+        {obPhase === "off" && feedCanvas && shown[railIdx] && (   // fixed action rail: never moves with the cards; acts on the outfit in view
+          <div className="pointer-events-none fixed inset-x-0 top-0 z-20 flex flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)" }}>
+            <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>
+              <ActionRail actions={[heartAction(heartState(outfitPieces(shown[railIdx], placed[shown[railIdx].id]?.split(",")).map((c) => c.id), liked) === "all", () => heartOutfit(shown[railIdx], railIdx))]} />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {navOn && searchOn && searchSeen && (
-        <div className="fixed inset-x-0 top-0 z-30" style={{ bottom: "var(--nav-h)", visibility: tab === "search" ? "visible" : "hidden" }}>
+      </Layer>
+
+      {navOn && searchOn && layers.searchMounted && (
+        <Layer active={layers.searchActive} appear className="fixed inset-x-0 top-0 z-30" style={{ bottom: "var(--nav-h)" }}>
           <Search key={gender ?? "women"} gender={gender ?? "women"} tapKey={searchTap} canvas={canvas} onOpen={openFromSearch} onLike={likeFromCard} onBack={backToForYou} />
-        </div>
+        </Layer>
       )}
-      {navOn && tab === "likes" && (
-        <WishlistView gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
-          onToggle={(card) => toggleLike(card, null, 0, "sheet")} />
-      )}
+      <AnimatePresence>
+        {navOn && layers.wishlistOpen && (
+          <WishlistView key="wishlist" gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
+            onToggle={(card) => toggleLike(card, null, 0, "sheet")} />
+        )}
+      </AnimatePresence>
       {navOn && <BottomNav tab={tab} onTab={goTab} searchOn={searchOn} />}
 
       {obPhase === "welcome" && <Welcome onDone={finishWelcome} onGender={fetchOb} />}
@@ -477,11 +482,14 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
           className="fixed bottom-3 left-3 z-50 rounded bg-black px-2 py-1 text-xs text-white">cutouts: {dbg.cut === "auto" ? "on" : "off (originals)"}</button>
       )}
 
-      {sheet && (
-        <ProductSheet card={sheet.card} liked={liked.has(sheet.card.id)} onClose={() => setSheet(null)}
+      <AnimatePresence>
+        {sheet && (
+          <ProductSheet key="sheet" card={sheet.card} liked={liked.has(sheet.card.id)} onClose={() => setSheet(null)}
           onLike={() => toggleLike(sheet.card, sheet.outfit, sheet.index, "sheet")}
           onViewProduct={() => (signal({ t: "view_product_click", p: sheet.card.id, o: shownIds(sheet.outfit) }), track({ event_type: "view_product_click", product_id: sheet.card.id, outfit_id: sheet.outfit.id, feed_index: sheet.index, slot: "sheet", gender: genderRef.current }))} />
       )}
+      </AnimatePresence>
     </main>
+    </MotionRoot>
   );
 }
