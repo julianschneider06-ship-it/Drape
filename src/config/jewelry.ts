@@ -4,9 +4,9 @@
 // "chain" is not a stored type (chains are classified as necklace) but is mapped here too, as an alias.
 export const JEWELRY_SCALE: Record<string, number> = {
   watch: 1.10,
-  ring: 1.50,
+  ring: 1.80,
   necklace: 1.25,
   chain: 1.25,
-  bracelet: 1.00,   // unchanged for now; change here later
+  bracelet: 1.20,
 };
 export const jewelryScale = (type: string): number => JEWELRY_SCALE[type] ?? 1;
