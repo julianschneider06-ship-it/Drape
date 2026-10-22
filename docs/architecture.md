@@ -380,7 +380,7 @@ Some product photos show several items (three tees in a row, stacked garments). 
 | studionicholson | GB | 110 / 110 (US ratio 1.45) |
 | universalworks | GB | 238 / 238 (US ratio 1.37) |
 | whitemountaineering | JP | 100 / 100 (US ratio 0.006: the ingested numbers are JPY) |
-| **nordgreen** | **frozen** | best is no parameter with 40 of 70 (57%); US 0, DE ratio 0.86; needs a re-ingest or a longer sample, prices may have changed since ingestion |
+| **nordgreen** | DE (job 8) | re-ingested with the DE market; 70 of 70 sampled prices within 1%; unfrozen |
 
 Reading: for these shops a US *address* without the parameter showed the shop's primary market; asking explicitly for `country=US` shows a different (US) market. So "US" is not always the market of the ingestion; the probe finds the one that is.
 
