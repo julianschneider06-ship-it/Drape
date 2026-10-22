@@ -36,6 +36,34 @@ const SEASON_BIT: Record<string, number> = { spring: 1, summer: 2, autumn: 4, wi
 const dot = (a: Float32Array, b: Float32Array) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
+
+/**
+ * Women's accessory slot limits (men keep the rules above). Everything about "how many of what" is here.
+ * Hard rejects (reject()) still apply first: no sunglasses in cold outfits, no hat / cap / backpack in tailored ones, no beanie / scarf / gloves in warm ones,
+ * so a cap or sunglasses is never forced where it does not fit; such outfits simply end up with other accessories (or fewer).
+ */
+export const WOMEN_ACC = {
+  minTotal: 3,                           // aim: at least this many accessories per outfit (only where supply and the hard rules allow it)
+  maxTotal: 6,                           // never more than this (layout column limit)
+  single: {                              // max 1 each per outfit; "head" = cap / hat / beanie, "bag" = bag / backpack
+    sunglasses: { types: ["sunglasses"], max: 1 },
+    head: { types: ["cap", "hat", "beanie"], max: 1 },
+    bag: { types: ["bag", "backpack"], max: 1 },
+  } as Record<string, { types: string[]; max: number }>,
+  minSingles: 2,                         // aim: at least this many of the 3 single-slot accessories (all 3 allowed)
+  jewelry: {
+    max: 3,                              // jewelry pieces per outfit
+    perType: { earrings: 1, necklace: 1, bracelet: 1, ring: 1, other_wearable: 1 } as Record<string, number>,   // never two of one sub-type (max 1 necklace, max 1 hair / other piece)
+  },
+  belt: { max: 1 },                      // belts are not jewelry
+  otherMax: 1,                           // watch / scarf / gloves / belt / tie: at most this many beyond the singles and jewelry, unless needed to reach minTotal
+  minScore: 0.5,                         // minimum accessory score (scoreAcc) for any pick
+  fillMinScore: 0.42,                    // lower bar only for the "reach minTotal" fill
+};
+const JEWELRY = new Set(Object.keys(WOMEN_ACC.jewelry.perType));
+export const isJewelry = (t: string) => JEWELRY.has(t);
+export const singleKind = (t: string): string | null => { for (const [k, v] of Object.entries(WOMEN_ACC.single)) if (v.types.includes(t)) return k; return null; };
+
 export const HEAD = new Set(["cap", "hat", "beanie"]);
 export const BAG = new Set(["bag", "backpack"]);
 export const NECK = new Set(["scarf", "necklace", "tie"]);
@@ -118,6 +146,35 @@ export function placementFor(a: Acc, o?: OutfitCtx): { placement: Placement; zon
   }
 }
 
+
+/** Women: singles (sunglasses / head item / bag) first, then jewelry, then fill up to the minimum with other types. Same hard rules and scoring as the base selection. */
+function chooseWomen(o: OutfitCtx, scored: { a: Acc; s: number }[]): Pick[] {
+  const W = WOMEN_ACC;
+  const picks: Pick[] = [];
+  const types = new Set<string>(); const kinds = new Map<string, number>();
+  let neck = false, statement = o.statements > 0, accent: string | null = o.accents.size ? [...o.accents][0] : null, jew = 0, others = 0;
+  const ok = (a: Acc, s: number, min: number) => {
+    if (picks.length >= W.maxTotal || s < min || types.has(a.type)) return false;
+    if (NECK.has(a.type) && neck) return false;
+    if (a.statement >= ACC.statementMin && statement) return false;
+    if (a.accent && accent && a.accent !== accent) return false;
+    if (a.accent && picks.some((p) => p.acc.accent) && s * ACC.accentPenalty < min) return false;
+    return true;
+  };
+  const take = (a: Acc, s: number) => {
+    types.add(a.type); if (NECK.has(a.type)) neck = true; if (a.statement >= ACC.statementMin) statement = true; if (a.accent) accent = a.accent;
+    const k = singleKind(a.type); if (k) kinds.set(k, (kinds.get(k) ?? 0) + 1); else if (isJewelry(a.type)) jew++; else others++;
+    picks.push({ acc: a, score: s, ...placementFor(a, o) });
+  };
+  for (const { a, s } of scored) { const k = singleKind(a.type); if (k && (kinds.get(k) ?? 0) < W.single[k].max && ok(a, s, W.minScore)) take(a, s); }
+  for (const { a, s } of scored) if (isJewelry(a.type) && jew < W.jewelry.max && ok(a, s, W.minScore)) take(a, s);
+  for (const { a, s } of scored) if (!singleKind(a.type) && !isJewelry(a.type) && others < W.otherMax && ok(a, s, W.minScore)) take(a, s);
+  // reach the minimum: jewelry first (while room), then other types, then singles; lower score bar
+  for (const pass of [(a: Acc) => isJewelry(a.type) && jew < W.jewelry.max, (a: Acc) => !singleKind(a.type) && !isJewelry(a.type), (a: Acc) => !!singleKind(a.type)])
+    for (const { a, s } of scored) if (picks.length < W.minTotal && pass(a) && ok(a, s, W.fillMinScore)) take(a, s);
+  return picks;
+}
+
 export interface Usage { uses: Map<number, number>; recentIds: number[][]; recentStores: string[][] }
 
 /**
@@ -136,6 +193,7 @@ export function chooseAccessories(o: OutfitCtx, cands: Acc[], usage: Usage): Pic
     scored.push({ a, s });
   }
   scored.sort((x, y) => y.s - x.s);
+  if (o.gender === "women") return chooseWomen(o, scored);
   const picks: Pick[] = [];
   const types = new Set<string>(); let head = false, bag = false, neck = false, statement = o.statements > 0, accent: string | null = o.accents.size ? [...o.accents][0] : null;
   for (const { a, s } of scored) {

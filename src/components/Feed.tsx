@@ -182,6 +182,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       } else {
       const q = new URLSearchParams({ gender: g });
       if (cursorRef.current !== null) q.set("cursor", String(cursorRef.current)); else q.set("device", device.current); // pages with a cursor are shared + CDN-cached
+      { const ar = new URLSearchParams(location.search).get("accrev"); if (ar) q.set("accrev", ar); }   // ?accrev=2: women's accessory set revision 2 (preview)
       let res = await fetch(`/api/feed?${q}`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
       if (!res || !res.ok) res = await fetch(`/api/feed?${q}`, { signal: AbortSignal.timeout(10000) }); // one automatic retry
       if (!res.ok) throw new Error(String(res.status));
