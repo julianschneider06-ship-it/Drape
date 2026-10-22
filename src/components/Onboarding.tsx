@@ -40,7 +40,7 @@ function Arrow({ a, b }: { a: Pt; b: Pt }) {
   const tx = b.x - c.x, ty = b.y - c.y, tl = Math.hypot(tx, ty) || 1, ux = tx / tl, uy = ty / tl;
   const head = (deg: number) => { const k = (deg * Math.PI) / 180, cos = Math.cos(k), sin = Math.sin(k); return `M${b.x} ${b.y} l${-(ux * cos - uy * sin) * 16} ${-(ux * sin + uy * cos) * 16}`; };
   return (
-    <svg className="pointer-events-none fixed inset-0 h-full w-full" aria-hidden>
+    <svg className="pointer-events-none fixed inset-0 z-40 h-full w-full" aria-hidden>
       <g filter="url(#drape-ob-line)" fill="none" stroke={INK} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
         <path d={`M${a.x} ${a.y} Q${c.x} ${c.y} ${b.x} ${b.y}`} />
         <path d={head(28)} /><path d={head(-28)} />
