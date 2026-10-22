@@ -13,6 +13,8 @@ import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
 import TutorialFeed from "./TutorialFeed";
 import Welcome from "./Welcome";
+import OutfitIcons from "./OutfitIcons";
+import { outfitIcons } from "@/lib/outfit-icons";
 import { STYLES_GENDER_KEY, STYLES_KEY, cleanStyles } from "@/lib/welcome";
 import { ONBOARDING_KEY } from "@/lib/onboarding";
 import { compactTags } from "@/outfits/tags";
@@ -39,9 +41,10 @@ function pickedStyles(g: Gender): string[] {
   try { return store.get(STYLES_GENDER_KEY) === g ? cleanStyles(JSON.parse(store.get(STYLES_KEY) ?? "[]")) : []; } catch { return []; }
 }
 
-export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynamic" | "hybrid"; sale: boolean } }) {
+export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynamic" | "hybrid"; sale: boolean; icons?: boolean } }) {
   setSaleDefault(defaults?.sale);   // app_settings.sale_marker_enabled (?sale=on|off still overrides)
   const [gender, setGender] = useState<Gender | null>(null);
+  const [iconsOn, setIconsOn] = useState(defaults?.icons !== false);   // app_settings.icons_enabled; ?icons=0 / ?icons=1 override it
   const [items, setItems] = useState<FeedOutfit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -117,6 +120,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   // debug options: ?layout=A,FB forces templates (3-piece, full-body), ?debug=1 shows boxes + margin zone
   useEffect(() => {
     const q = new URLSearchParams(location.search);
+    const ic = q.get("icons"); if (ic === "0" || ic === "1") setIconsOn(ic === "1");
     const mode = q.get("feed") ?? defaults?.feed ?? "base";   // ?feed=... always wins; without it the default comes from app_settings.feed_default
     hybridRef.current = mode === "hybrid";
     dynRef.current = mode === "dynamic" || hybridRef.current;   // ?feed=base (or an unknown value) = the pool feed
@@ -390,6 +394,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
           <section key={o.id} data-i={i} className="relative flex h-dvh snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + env(safe-area-inset-bottom))` }}>
             {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
               onLayout={(layout, mode) => layoutInfo.current.set(o.id, { layout, mode })} />}
+            {iconsOn && <OutfitIcons icons={outfitIcons(o.tags)} />}
             <OutfitButtons value={reactions[o.id] ?? null} onPress={(d) => pressOutfit(o, i, d)} />
           </section>
         ))}

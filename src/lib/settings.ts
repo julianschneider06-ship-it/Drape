@@ -6,8 +6,8 @@ import { SALE_MARKER_ENABLED } from "@/lib/layout/config";
 
 export const FEED_DEFAULTS = ["base", "dynamic", "hybrid"] as const;
 export type FeedDefault = (typeof FEED_DEFAULTS)[number];
-export interface Settings { feed_default: FeedDefault; sale_marker_enabled: boolean }
-export const CODE_DEFAULTS: Settings = { feed_default: "base", sale_marker_enabled: SALE_MARKER_ENABLED };
+export interface Settings { feed_default: FeedDefault; sale_marker_enabled: boolean; icons_enabled: boolean }
+export const CODE_DEFAULTS: Settings = { feed_default: "base", sale_marker_enabled: SALE_MARKER_ENABLED, icons_enabled: true };
 
 const TTL_MS = 45_000, FAIL_TTL_MS = 15_000;
 let cache: { value: Settings; at: number; ok: boolean } | null = null, inflight: Promise<Settings> | null = null;
@@ -18,6 +18,7 @@ export function validateSettings(raw: unknown): Settings {
   return {
     feed_default: (FEED_DEFAULTS as readonly unknown[]).includes(r.feed_default) ? (r.feed_default as FeedDefault) : CODE_DEFAULTS.feed_default,
     sale_marker_enabled: typeof r.sale_marker_enabled === "boolean" ? r.sale_marker_enabled : CODE_DEFAULTS.sale_marker_enabled,
+    icons_enabled: typeof r.icons_enabled === "boolean" ? r.icons_enabled : CODE_DEFAULTS.icons_enabled,
   };
 }
 
