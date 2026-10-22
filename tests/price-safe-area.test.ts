@@ -111,3 +111,20 @@ test("rail state follows the nearest snap position and flips once at the halfway
   assert.equal(railIndex(300, 0, 5), 0);
   assert.equal(railIndex(300, 600, 0), 0);
 });
+
+test("all four sides: nothing leaves the safe area (375 px phones, short heights, rail canvas, rings/necklaces), same shape for side-by-side", () => {
+  for (const [W, H] of [[327, 560], [327, 480], [375, 600], [343, 520], [390, 640], [360, 420]] as const)
+    for (const folded of [false, true])
+      for (const accessories of [[], BIG, [acc("acc1", "ring", 1, "mid"), acc("acc2", "necklace", 1.1, "neck")]]) {
+        const L = mk(folded, W, H, accessories);
+        for (const p of L.pieces) {
+          const r = p.rect, d = `${folded} ${W}x${H} ${p.slot}`;
+          assert.ok(r.x >= SAFE.left - 0.05 && r.x + r.w <= W - SAFE.right + 0.05, `${d} x ${r.x}..${r.x + r.w}`);
+          assert.ok(r.y >= SAFE.top - 0.05 && r.y + r.h <= H - SAFE.bottom + 0.05, `${d} y ${r.y}..${r.y + r.h}`);
+        }
+        if (folded) {   // centre line and 15% offset survive the scale-down
+          const top = L.pieces.find((p) => p.slot === "top"), bot = L.pieces.find((p) => p.slot === "bottom");
+          if (top && bot) { assert.ok(Math.abs(top.rect.y + top.rect.h / 2 - SIDE_BY_SIDE.centerY * H) < 1, "top centred on the line"); assert.ok(Math.abs((bot.rect.y + bot.rect.h / 2) - (top.rect.y + top.rect.h / 2) - SIDE_BY_SIDE_BOTTOM_OFFSET * top.rect.h) < 3, "15% offset"); }
+        }
+      }
+});

@@ -13,7 +13,7 @@ import { computeLayout, hash32, pickTemplate, type AccIn, type AccSlot, type Pie
 import { hitCategory, HIT_DEBUG_COLORS, HIT_ICON_ZONE } from "@/config/hit-area";
 import { hitInsets } from "@/lib/hit-areas";
 import { ProductGesture } from "@/lib/product-gesture";
-import { LIKE_PULSE_COLORS, LIKE_PULSE_MS, LONG_PRESS_MS } from "@/config/product-gesture";
+import { DOUBLE_TAP_MS, LIKE_PULSE_COLORS, LIKE_PULSE_MS } from "@/config/product-gesture";
 import FeedImage from "./FeedImage";
 import { tagLine } from "@/outfits/tags";
 
@@ -23,7 +23,7 @@ export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc
 function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, shine, reserveIcons, priceTag, onLike }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string, slots: string[]) => void;
-  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; shine?: { color: string | null }; animateLayout?: boolean; reserveIcons?: boolean; priceTag?: boolean; onLike?: (c: FeedCard, slot: SlotName) => boolean | void;   // onLike given = product gestures: single tap nothing, double tap toggles the like (returns the new state), long press calls onOpen; without it the old single tap opens (welcome tutorial);   // priceTag: Search only, hand-drawn price box next to the searched (not dimmed) piece, decoration (not tappable);   // reserveIcons: the attribute icons sit top left (non-tappable), tap areas never extend into them;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
+  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; shine?: { color: string | null }; animateLayout?: boolean; reserveIcons?: boolean; priceTag?: boolean; onLike?: (c: FeedCard, slot: SlotName) => boolean | void;   // onLike given = product gestures: single tap opens (after the double-tap window), double tap toggles the like (returns the new state); without it the old single tap opens (welcome tutorial);   // priceTag: Search only, hand-drawn price box next to the searched (not dimmed) piece, decoration (not tappable);   // reserveIcons: the attribute icons sit top left (non-tappable), tap areas never extend into them;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
@@ -87,9 +87,9 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
     suppressUntil.current = Date.now() + 350;   // the tap that would follow a drag must not open the sheet
     if (Math.abs(dx) >= 44 && g.slot) onSwipe?.(g.slot as SlotName, dx > 0 ? "next" : "prev")   // swipe right = next, swipe left = previous (both loop);
   };
-  // ---- product gestures (only with onLike): double tap = like, long press = open, single tap = nothing ----
+  // ---- product gestures (only with onLike): single tap = open (after the double-tap window), double tap = like ----
   const pg = useRef(new ProductGesture());
-  const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);   // pending single tap
   const [pulse, setPulse] = useState<{ slot: string; seq: number; liked: boolean } | null>(null);
   const clearLp = () => { if (lpTimer.current) { clearTimeout(lpTimer.current); lpTimer.current = null; } };
   useEffect(() => () => clearLp(), []);
@@ -97,16 +97,16 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
   const gDown = (c: FeedCard, slot: SlotName) => (e: React.PointerEvent) => {
     if (!onLike || (e.pointerType === "mouse" && e.button !== 0)) return;
     pg.current.down(`${slot}:${c.id}`, Date.now(), e.clientX, e.clientY);
-    clearLp();
-    lpTimer.current = setTimeout(() => { lpTimer.current = null; if (pg.current.longPress() === "open") onOpen(orig(c, slot), slot); }, LONG_PRESS_MS);
   };
-  const gMove = (e: React.PointerEvent) => { if (onLike && pg.current.move(e.clientX, e.clientY)) clearLp(); };
+  const gMove = (e: React.PointerEvent) => { if (onLike) pg.current.move(e.clientX, e.clientY); };
   const gUp = (c: FeedCard, slot: SlotName) => () => {
     if (!onLike) return;
+    const a = pg.current.up(Date.now());
     clearLp();
-    if (pg.current.up(Date.now()) === "like") { const now = onLike(orig(c, slot), slot); setPulse({ slot, seq: Date.now(), liked: now !== false }); }
+    if (a === "like") { const now = onLike(orig(c, slot), slot); setPulse({ slot, seq: Date.now(), liked: now !== false }); }
+    else if (a === "tap") lpTimer.current = setTimeout(() => { lpTimer.current = null; onOpen(orig(c, slot), slot); }, DOUBLE_TAP_MS);
   };
-  const gCancel = () => { if (!onLike) return; clearLp(); pg.current.cancel(); };
+  const gCancel = () => { if (!onLike) return; pg.current.cancel(); };
 
   // ghosts: the piece that was swapped out slides away while the new one slides in
   const prevPieces = useRef<Record<string, { card: ReturnType<typeof viewCard>; rect: { x: number; y: number; w: number; h: number } }>>({});
