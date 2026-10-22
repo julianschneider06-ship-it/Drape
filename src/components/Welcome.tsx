@@ -1,14 +1,27 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ALL_STYLES, MAX_STYLES, styleLabel } from "@/lib/welcome";
 
 /** First-visit welcome flow (screen 1: gender, screen 2: styles). Nothing is recorded. Only transform / opacity animate. */
-export default function Welcome({ onDone }: { onDone: (gender: "men" | "women", styles: string[]) => void }) {
+export default function Welcome({ onDone, onGender }: { onDone: (gender: "men" | "women", styles: string[]) => void; onGender?: (gender: "men" | "women") => void }) {
   const [screen, setScreen] = useState<1 | 2>(1);
   const [gender, setGender] = useState<"men" | "women" | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [hint, setHint] = useState(false);
+  const [offered, setOffered] = useState<{ g: string; styles: string[] } | null>(null);   // styles with outfits for the chosen gender (null = still loading)
   const hintTimer = useState<{ t?: ReturnType<typeof setTimeout> }>(() => ({}))[0];
+
+  // the styles on offer depend on the gender: fetched as soon as it is chosen (screen 2 is not shown before Continue); any failure = the full list
+  useEffect(() => {
+    if (!gender) return;
+    let dead = false;
+    fetch(`/api/styles?gender=${gender}`, { signal: AbortSignal.timeout(3000) }).then((r) => (r.ok ? r.json() : null)).then((j: { styles?: string[] } | null) => {
+      if (!dead) setOffered({ g: gender, styles: Array.isArray(j?.styles) && j.styles.length ? j.styles : ALL_STYLES });
+    }).catch(() => { if (!dead) setOffered({ g: gender, styles: ALL_STYLES }); });
+    return () => { dead = true; };
+  }, [gender]);
+  const list = offered && offered.g === gender ? offered.styles : null;
+  const pickGender = (g: "men" | "women") => { if (g === gender) return; setGender(g); setPicked([]); onGender?.(g); };
 
   const toggle = (k: string) => {
     if (picked.includes(k)) { setPicked(picked.filter((x) => x !== k)); return; }
@@ -26,7 +39,7 @@ export default function Welcome({ onDone }: { onDone: (gender: "men" | "women", 
           <p className="mt-12 text-base font-medium">What are you most interested in?</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             {(["men", "women"] as const).map((g) => (
-              <button key={g} type="button" aria-pressed={gender === g} onClick={() => setGender(g)}
+              <button key={g} type="button" aria-pressed={gender === g} onClick={() => pickGender(g)}
                 className={`h-28 rounded-2xl border text-xl font-medium active:scale-[0.98] ${gender === g ? "border-black bg-black text-white" : "border-neutral-300 text-neutral-900"}`}>{g === "men" ? "Men" : "Women"}</button>
             ))}
           </div>
@@ -45,7 +58,7 @@ export default function Welcome({ onDone }: { onDone: (gender: "men" | "women", 
         </div>
         <div className="no-scrollbar flex-1 overflow-y-auto overscroll-y-contain px-6 pb-28 pt-3">
           <div className="grid grid-cols-2 gap-2">
-            {ALL_STYLES.map((k) => {
+            {(list ?? []).map((k) => {
               const on = picked.includes(k);
               return (
                 <button key={k} type="button" aria-pressed={on} onClick={() => toggle(k)}
@@ -53,6 +66,7 @@ export default function Welcome({ onDone }: { onDone: (gender: "men" | "women", 
               );
             })}
           </div>
+          {!list && <p className="pt-8 text-center text-sm text-neutral-400">Loading…</p>}
         </div>
         <div className={`pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-white via-white to-transparent px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8 transition-opacity duration-200 ${picked.length ? "opacity-100" : "opacity-0"}`}>
           <button type="button" tabIndex={picked.length ? 0 : -1} onClick={() => gender && picked.length && onDone(gender, picked)}

@@ -11,3 +11,13 @@ export function cleanStyles(x: unknown): StyleKey[] {
   if (!Array.isArray(x)) return [];
   return [...new Set(x)].filter((k): k is StyleKey => (STYLE_KEYS as string[]).includes(k as string)).slice(0, MAX_STYLES);
 }
+
+/** a style is offered in the picker only if the gender's pool has at least this many active outfits of it (display only, no data is changed) */
+export const MIN_STYLE_OUTFITS = 1;
+/** the styles to offer: those with >= MIN_STYLE_OUTFITS outfits in `counts` (style key -> pool outfits), in the usual order. No counts (query failed) = all styles. */
+export function availableStyles(counts: Record<string, number> | null | undefined, min = MIN_STYLE_OUTFITS): StyleKey[] {
+  if (!counts || typeof counts !== "object") return ALL_STYLES;
+  return ALL_STYLES.filter((k) => (Number(counts[k]) || 0) >= min);
+}
+/** the stored picks only count for the gender they were picked for (the styles on offer differ per gender) */
+export const STYLES_GENDER_KEY = "drape.stylesFor";

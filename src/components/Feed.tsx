@@ -13,7 +13,7 @@ import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
 import TutorialFeed from "./TutorialFeed";
 import Welcome from "./Welcome";
-import { STYLES_KEY, cleanStyles } from "@/lib/welcome";
+import { STYLES_GENDER_KEY, STYLES_KEY, cleanStyles } from "@/lib/welcome";
 import { ONBOARDING_KEY } from "@/lib/onboarding";
 import { compactTags } from "@/outfits/tags";
 import type { Signal } from "@/outfits/taste-codec";
@@ -34,6 +34,11 @@ const PERSONALIZE_FROM = TASTE.personalizeFrom, OUTBOX_MAX = TASTE.outboxMax;
 const shownIds = (o: FeedOutfit) => [o.top.id, ...(o.bottom ? [o.bottom.id] : []), o.shoes.id];
 const tg = (o: FeedOutfit) => (o.tags ? (({ se, oc, pk, si, fo, w, ct }) => ({ se, oc, pk, si, fo, w, ct }))(compactTags(o.tags)) : null);
 
+/** the styles picked on the welcome screen, only for the gender they were picked for (they stay on this device) */
+function pickedStyles(g: Gender): string[] {
+  try { return store.get(STYLES_GENDER_KEY) === g ? cleanStyles(JSON.parse(store.get(STYLES_KEY) ?? "[]")) : []; } catch { return []; }
+}
+
 export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynamic" | "hybrid"; sale: boolean } }) {
   setSaleDefault(defaults?.sale);   // app_settings.sale_marker_enabled (?sale=on|off still overrides)
   const [gender, setGender] = useState<Gender | null>(null);
@@ -51,8 +56,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   // first-visit tutorial (3 steps): two pinned outfits instead of the feed. Nothing from it is recorded: no events, no likes, no taste signals.
   const [obPhase, setObPhase] = useState<"off" | "welcome" | "loading" | "on">("off");   // welcome (gender + styles) comes before the tutorial; its choice is only stored on the device
   const [obItems, setObItems] = useState<FeedOutfit[]>([]);
-  const [obWomen, setObWomen] = useState(false);                  // chose Women: the pinned tutorial outfits are menswear, so a neutral line says they are examples
-  const obFetch = useRef<"pending" | "ok" | "fail">("pending"), welcomeOpen = useRef(false);
+  const obFetch = useRef<"pending" | "ok" | "fail">("pending"), welcomeOpen = useRef(false), obGender = useRef<Gender | null>(null);   // the tutorial outfits are fetched for the gender chosen on the welcome screen
   const obActive = useRef(false), pendingLoad = useRef(false), loadMoreRef = useRef<() => void>(() => undefined);   // while the tutorial runs, the real feed is not loaded yet (no competing requests / decoding)
 
   const device = useRef("");
@@ -81,11 +85,6 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   useEffect(() => {
     if (new URLSearchParams(location.search).get("onboarding") !== "1" && store.get(ONBOARDING_KEY) === "1") return;
     obActive.current = true; welcomeOpen.current = true; setObPhase("welcome");
-    // the tutorial outfits load while the user answers the welcome screens
-    fetch("/api/onboarding", { signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.json() : null)).then((j: { items: FeedOutfit[] } | null) => {
-      if (j?.items?.length === 2) { setObItems(j.items); obFetch.current = "ok"; if (!welcomeOpen.current) setObPhase("on"); }
-      else { obFetch.current = "fail"; if (!welcomeOpen.current) { setObPhase("off"); warmFeed(); } }
-    }).catch(() => { obFetch.current = "fail"; if (!welcomeOpen.current) { setObPhase("off"); warmFeed(); } });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const warmFeed = useCallback(() => { obActive.current = false; if (pendingLoad.current) { pendingLoad.current = false; loadMoreRef.current(); } }, []);
   const finishOb = useCallback(() => {
@@ -94,12 +93,23 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     requestAnimationFrame(() => scroller.current?.scrollTo({ top: 0 }));
   }, [warmFeed]);
   const skipOb = useCallback(() => { setObPhase("off"); setObItems([]); warmFeed(); }, [warmFeed]);   // not marked as done: the next visit tries again
+  // the tutorial outfits load while the user answers the rest of the welcome screens (men and women have their own two outfits)
+  const fetchOb = useCallback((g: Gender) => {
+    obGender.current = g; obFetch.current = "pending";
+    const done = (items: FeedOutfit[] | null) => {
+      if (obGender.current !== g) return;   // the gender was changed meanwhile
+      if (items?.length === 2) { setObItems(items); obFetch.current = "ok"; if (!welcomeOpen.current) setObPhase("on"); }
+      else { obFetch.current = "fail"; if (!welcomeOpen.current) { setObPhase("off"); warmFeed(); } }
+    };
+    fetch(`/api/onboarding?gender=${g}`, { signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.json() : null)).then((j: { items: FeedOutfit[] } | null) => done(j?.items ?? null)).catch(() => done(null));
+  }, [warmFeed]);
   const finishWelcome = useCallback((g: Gender, styles: string[]) => {
     welcomeOpen.current = false;
-    store.set(STYLES_KEY, JSON.stringify(cleanStyles(styles)));
-    setObWomen(g === "women"); setGender(g);   // the feed (loaded after the tutorial) starts with this gender; the header stays on Men while the tutorial runs
+    store.set(STYLES_KEY, JSON.stringify(cleanStyles(styles))); store.set(STYLES_GENDER_KEY, g);
+    setGender(g);   // the feed (loaded after the tutorial) starts with this gender
+    if (obGender.current !== g) fetchOb(g);
     if (obFetch.current === "ok") setObPhase("on"); else if (obFetch.current === "fail") { setObPhase("off"); warmFeed(); } else setObPhase("loading");
-  }, [warmFeed]);
+  }, [warmFeed, fetchOb]);
 
   // remembered outfit reactions (this device)
   useEffect(() => { try { const r = JSON.parse(store.get("drape.reactions") ?? "{}"); if (r && typeof r === "object") setReactions(r); } catch { /* ignore */ } }, []);
@@ -156,7 +166,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         // dynamic prototype: the fixed starter set first (CDN-cached pages), then pages composed for this device
         let items: FeedOutfit[] = [];
         const tasteN = Number(store.get(`drape.tasteN.${g}`) ?? 0) + outbox.current.length;   // hybrid: from about 20 signals on, skip the rest of the starter set
-        if (hybridRef.current && tasteN >= PERSONALIZE_FROM) dynState.current.startersDone = true;
+        if (hybridRef.current && (tasteN >= PERSONALIZE_FROM || pickedStyles(g).length)) dynState.current.startersDone = true;   // picked styles: straight to composed pages, so the picks count from the first card
         if (!dynState.current.startersDone && new URLSearchParams(location.search).get("starter") !== "off") {   // ?starter=off: straight to composed pages (tests)
           const r = await fetch(`/api/dynamic?gender=${g}&starter=${dynState.current.page}`, { signal: AbortSignal.timeout(15000) });
           if (!r.ok) throw new Error(String(r.status));
@@ -166,7 +176,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         if (!items.length) {
           const recent = itemsRef.current.slice(-12).filter((o) => o.dyn).map((o) => ({ ids: o.dyn!.ids, style: o.dyn!.style, store: o.dyn!.store }));
           const sent = hybridRef.current ? outbox.current.slice(0, OUTBOX_MAX) : [];
-          const hyb = hybridRef.current ? { mode: "hybrid", taste: store.get(`drape.taste.${g}`) ?? "", signals: sent, ...(store.get(`drape.taste.${g}`) ? {} : { seed: cleanStyles((() => { try { return JSON.parse(store.get(STYLES_KEY) ?? "[]"); } catch { return []; } })()) }) } : {};   // no taste yet: the styles from the welcome screen are the start preference
+          const hyb = hybridRef.current ? { mode: "hybrid", taste: store.get(`drape.taste.${g}`) ?? "", signals: sent, ...(pickedStyles(g).length ? { seed: pickedStyles(g) } : {}) } : {};   // the welcome picks are a starting prior; the server fades it out as real events come in
           const r = await fetch("/api/dynamic", { method: "POST", signal: AbortSignal.timeout(20000), body: JSON.stringify({ ...hyb, device_id: device.current, gender: g, recent, contrast: Number(new URLSearchParams(location.search).get("contrast")) || undefined, ban: new URLSearchParams(location.search).get("ban") === "db" ? "db" : (store.get(`drape.ban.${g}`) ?? ""), startersServed: dynState.current.startersSent ? 0 : dynState.current.servedStarters }) });
           if (!r.ok) throw new Error(String(r.status));
           dynState.current.startersSent = true;
@@ -349,7 +359,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     return () => { cancelled = true; clearTimeout(t); for (const i of inflight) if (!i.complete) i.src = ""; };
   }, [current, shown.length, dbg.cut, dbg.preload]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const obHeader = obPhase !== "off";   // header controls rest during the tutorial (it shows the men's outfits)
+  const obHeader = obPhase !== "off";   // header controls rest during the tutorial
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
     signal({ t: "tap_product", p: card.id, o: shownIds(outfit), tg: tg(outfit) });
@@ -364,8 +374,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
         <div className="flex rounded-full bg-neutral-100 p-0.5 text-sm" role="tablist" aria-label="Section" style={obHeader ? { pointerEvents: "none" } : undefined}>
           {(["women", "men"] as Gender[]).map((g) => (
-            <button key={g} role="tab" aria-selected={(obHeader ? "men" : gender) === g} onClick={() => gender !== g && setGender(g)}
-              className={`rounded-full px-4 py-1 capitalize transition-colors ${(obHeader ? "men" : gender) === g ? "bg-black text-white" : "text-neutral-600"}`}>{g === "women" ? "Women" : "Men"}</button>
+            <button key={g} role="tab" aria-selected={gender === g} onClick={() => gender !== g && setGender(g)}
+              className={`rounded-full px-4 py-1 capitalize transition-colors ${gender === g ? "bg-black text-white" : "text-neutral-600"}`}>{g === "women" ? "Women" : "Men"}</button>
           ))}
         </div>
         <Link href="/likes" aria-label="My likes" className="flex w-16 justify-end" style={obHeader ? { pointerEvents: "none" } : undefined}>
@@ -391,8 +401,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         )}
       </div>
 
-      {obPhase === "welcome" && <Welcome onDone={finishWelcome} />}
-      {obPhase === "on" && obWomen && <p className="pointer-events-none fixed inset-x-0 top-[3.6rem] z-30 text-center text-xs text-neutral-400">Example looks</p>}
+      {obPhase === "welcome" && <Welcome onDone={finishWelcome} onGender={fetchOb} />}
       {obPhase === "on" && canvas && <TutorialFeed items={obItems} canvas={canvas} onFinish={finishOb} onSkip={skipOb} onWarm={warmFeed} />}
 
       {dbg.debug && (

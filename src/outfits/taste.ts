@@ -8,7 +8,7 @@
 // (no data to learn from, no way to score a new product); attributes generalise to every new product at once, need a fixed few KB per device and
 // update in O(24x24) per event.
 import { STYLE_KEYS } from "../classify/styles";
-import { SIGNAL, STEER, TASTE } from "../lib/personalization/config";
+import { PRIOR, priorWeight, SIGNAL, STEER, TASTE } from "../lib/personalization/config";
 import type { CatPiece } from "./catalogue";
 
 const D = STYLE_KEYS.length;
@@ -24,6 +24,7 @@ export interface Taste {
   fgap: Float32Array;                              // formality gap |top - bottom| in 5 bins
   catPair: Float32Array;                           // hashed category pairs (top sub x bottom sub), 64 buckets
   counts: Record<string, number>;                  // signals seen per type (debug page)
+  prior?: true;                                    // set only on the per-request copy made by withPrior (style prior from the welcome picks); never stored
   lastEventId: number;                             // watermark for the idempotent replay job
   updatedAt: number;                               // ms
 }
@@ -123,7 +124,7 @@ export function attrMatch(t: Taste, p: CatPiece): number {
 }
 /** how well a piece matches the device's taste for its slot, 0..1 (0.5 neutral when there is no history) */
 export const tasteMatch = (t: Taste | null, p: CatPiece): number => {
-  if (!t || t.n < 5) return 0.5;
+  if (!t || (t.n < 5 && !t.prior)) return 0.5;
   const sl = slotOf(p), s = Math.max(0, Math.min(1, cos(t.styles[sl], p.vec) - TASTE.negWeight * cos(t.neg[sl], p.vec)));
   return STEER.styleVsAttributes * s + (1 - STEER.styleVsAttributes) * (attrMatch(t, p) + 1) / 2;
 };
@@ -158,8 +159,12 @@ export const topStyles = (t: Taste, slot: "top" | "bottom" | "shoes", n = 5) => 
 export const lessStyles = (t: Taste, slot: "top" | "bottom" | "shoes", n = 3) => Array.from(t.neg[slot], (v, i) => [STYLE_KEYS[i], v] as [string, number]).sort((a, b) => b[1] - a[1]).slice(0, n);
 export { STYLE_KEYS };
 
-/** start preference from the welcome screen: each picked style counts like one liked piece (SIGNAL.like) in every slot; n stays 0 (no events happened) */
-export function seedStyles(t: Taste, keys: string[]): Taste {
-  for (const k of keys) { const i = STYLE_KEYS.indexOf(k as never); if (i < 0) continue; for (const sl of ["top", "bottom", "shoes"] as const) t.styles[sl][i] += SIGNAL.like; }
-  return t;
+/** Starting prior from the welcome style picks: a COPY of the taste with the picked styles added in every slot, weighted PRIOR.strength x priorWeight(n)
+ *  (fades to nothing as events come in). null = no prior (no picks or faded out). The persisted taste is never changed. */
+export function withPrior(t: Taste, keys: string[]): Taste | null {
+  const w = PRIOR.strength * priorWeight(t.n), idx = [...new Set(keys)].map((k) => STYLE_KEYS.indexOf(k as never)).filter((i) => i >= 0);
+  if (!idx.length || w <= 0) return null;
+  const c: Taste = { ...t, prior: true, styles: { top: t.styles.top.slice(), bottom: t.styles.bottom.slice(), shoes: t.styles.shoes.slice() } };
+  for (const sl of ["top", "bottom", "shoes"] as const) for (const i of idx) c.styles[sl][i] += w;
+  return c;
 }
