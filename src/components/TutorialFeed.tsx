@@ -81,7 +81,7 @@ export default function TutorialFeed({ items, canvas, onFinish, onSkip, onWarm }
     addEventListener("resize", onResize);
     return () => { clearTimeout(t1); clearTimeout(t2); removeEventListener("resize", onResize); };
   }, [ready, step, pos, measure, onFinish]);
-  useEffect(() => { if (step === 3) onWarm(); }, [step, onWarm]);   // the real feed starts loading once the user is on the last, idle step
+  useEffect(() => { if (step !== 3) return; const t = setTimeout(onWarm, 2500); return () => clearTimeout(t); }, [step, onWarm]);   // the real feed starts loading once the user has been on the last, idle step for a moment (never during the swap animation); "Got it" also starts it
 
   // 3) gestures
   const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
