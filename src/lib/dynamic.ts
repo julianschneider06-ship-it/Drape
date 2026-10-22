@@ -16,7 +16,7 @@ import { gatewayRpc } from "@/lib/gateway";
 import type { FeedAccessory, FeedAlt, FeedCard, FeedOutfit } from "@/lib/types";
 
 const defer = (p: Promise<unknown>) => { try { after(() => p); } catch { void p; } };   // background refresh after the response (outside a request the promise just runs)
-export const getCat = (): Promise<Catalogue> => getCatalogue((known) => gatewayRpc("snapshot_get", { p_known_version: known }), 5 * 60_000, defer);
+export const getCat = (g: "women" | "men"): Promise<Catalogue> => getCatalogue((known) => gatewayRpc("snapshot_get", { p_known_version: known }), g, 5 * 60_000, defer);
 
 export async function readBan(device: string): Promise<BanState> { return BanState.fromBase64(await gatewayRpc<string | null>("ban_get", { p_device: device })); }
 export async function writeBan(device: string, ban: BanState) { await gatewayRpc("ban_put", { p_device: device, p_b64: ban.toBase64() }, { retry: false }); }
@@ -66,7 +66,7 @@ export interface PageInput { banB64?: string | null; device: string; gender: "wo
   taste?: string | null; signals?: Signal[]; hybrid?: boolean }
 export interface TasteOut { taste: string; n: number; personalized: boolean; applied: number; skipped: number; bytes: number; thin: string[]; mix: Record<string, number> }
 export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number; taste?: number; cat?: typeof catalogueLoad & { coldMs: number }; up?: number }; taste?: TasteOut }> {
-  const t0 = performance.now(); const countBefore = catalogueLoad.count; const cat = await getCat(); const tCat = performance.now() - t0;
+  const t0 = performance.now(); const countBefore = catalogueLoad.count; const cat = await getCat(inp.gender); const tCat = performance.now() - t0;
   const tb = performance.now(); const ban = inp.banB64 !== undefined && inp.banB64 !== null ? BanState.fromBase64(inp.banB64) : await readBan(inp.device);   // client-held ban list (no storage round trip) or the database copy
   if (inp.startersServed && inp.startersServed > 0) {            // first dynamic page after the starter set: the starter pieces are banned too
     const rows = (await starterRows(inp.gender)).slice(0, inp.startersServed); ban.push(rows.flatMap((r) => [...r.piece_ids, ...r.acc_ids]));
@@ -99,7 +99,7 @@ export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items:
 }
 
 export async function starterPage(g: "women" | "men", page: number): Promise<FeedOutfit[]> {
-  const cat = await getCat(); const rows = (await starterRows(g)).slice(page * 6, page * 6 + 6);
+  const cat = await getCat(g); const rows = (await starterRows(g)).slice(page * 6, page * 6 + 6);
   if (!rows.length) return [];
   const { composedFromRow } = await import("@/outfits/starter");
   const outs = rows.filter((r) => r.piece_ids.every((id) => cat.byId.has(id))).map((r) => composedFromRow(cat, r));   // a starter piece that left the catalogue (out of stock) drops its outfit

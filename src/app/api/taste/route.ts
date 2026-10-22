@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   if (limited(`taste:${clientIp(req)}`, 30, 60_000)) return NextResponse.json({ error: "slow down" }, { status: 429 });
   try {
     const t0 = performance.now();
-    const [rows, cat] = await Promise.all([gatewayRpc<EventRow[]>("events_for_device", { p_device: device, p_gender: gender, p_after: null, p_limit: 5000 }), getCat()]);
+    const [rows, cat] = await Promise.all([gatewayRpc<EventRow[]>("events_for_device", { p_device: device, p_gender: gender, p_after: null, p_limit: 5000 }), getCat(gender)]);
     const t = newTaste(); const r = applySignals(cat, t, eventsToSignals(rows));
     return NextResponse.json({ source: "event log replay", events: rows.length, applied: r.applied, skipped: r.skipped, ms: Math.round(performance.now() - t0), summary: summarize(t) }, { headers: { "cache-control": "no-store" } });
   } catch (e) { return NextResponse.json({ error: "unavailable", detail: String(e).slice(0, 120) }, { status: 502 }); }

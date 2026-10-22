@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const data = await gatewayRpc<FeedResponse>("feed_list", { p_gender: gender, p_device: cursor === null ? device : null, p_cursor: cursor, p_limit: 6 });
     // additive field: tags per outfit, computed on demand from the catalogue snapshot (best effort: a slow or missing catalogue never blocks the page)
     try {
-      const cat = await Promise.race([getCat(), new Promise<null>((r) => setTimeout(() => r(null), 2500))]);
+      const cat = await Promise.race([getCat(gender), new Promise<null>((r) => setTimeout(() => r(null), 2500))]);
       if (cat) for (const o of data.items) {
         const ps = [o.top.id, ...(o.bottom ? [o.bottom.id] : []), o.shoes.id].map((id) => cat.byId.get(id));
         if (ps.every(Boolean)) o.tags = outfitTags(cat, { pieces: ps as NonNullable<(typeof ps)[number]>[], accs: (o.accessories ?? []).map((a) => cat.accById.get(a.card.id)).filter((a): a is NonNullable<typeof a> => !!a) });

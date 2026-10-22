@@ -85,45 +85,54 @@ export function buildCatalogue(snap: Snapshot): Catalogue {
 export const packSnapshot = (s: Snapshot) => gzipSync(Buffer.from(JSON.stringify(s)), { level: 9 }).toString("base64");
 export const unpackSnapshot = (b64: string): Snapshot => JSON.parse(gunzipSync(Buffer.from(b64, "base64")).toString("utf8"));
 
-/** Per function instance cache with a version stamp: a cheap `snapshot_get(version)` call answers "unchanged" without sending the blob.
- *  - A cold instance first reads the snapshot that was bundled with the deployment (src/generated, written by the prebuild step): about 5 ms instead of the
- *    0.6-0.9 s download through the gateway. It is only the starting point: a stale cache is returned immediately and refreshed in the background (`defer`).
- *  - Concurrent callers share ONE in-flight load (two requests arriving together on a cold instance must not both load and unpack the snapshot). */
-let cached: Catalogue | null = null; let checkedAt = 0; let inflight: Promise<Catalogue> | null = null;
+/** Per function instance cache (one catalogue per gender) with a version stamp: a cheap `snapshot_get(version)` call answers "unchanged" without sending the blob.
+ *  - A cold instance first reads the snapshot that was bundled with the deployment (src/generated/snapshot.<gender>.b64, written by the prebuild step, one file per
+ *    gender): about 5 ms instead of the 0.6-0.9 s download through the gateway, and only the requested gender is unpacked and built (about 40% less work).
+ *    It is only the starting point: a stale cache is returned immediately and refreshed in the background (`defer`).
+ *  - Concurrent callers share ONE in-flight load per gender (two requests arriving together on a cold instance must not both load and unpack the snapshot). */
+export type Gender = "women" | "men";
+const cached = new Map<Gender, { cat: Catalogue; checkedAt: number }>(); const inflight = new Map<Gender, Promise<Catalogue>>();
 export const catalogueLoad: { fetchMs: number; unpackMs: number; buildMs: number; blobKB: number; at: number; count: number; source: string } = { fetchMs: 0, unpackMs: 0, buildMs: 0, blobKB: 0, at: 0, count: 0, source: "none" };   // timings of the last load on this instance (cold start diagnosis)
 type Fetcher = (known: string | null) => Promise<{ version: string; unchanged?: boolean; data?: string } | null>;
 
-function readBundled(): { version: string; data: string } | null {
+/** the part of a snapshot one gender needs: its own pieces + unisex / unknown ones (same rule as toPiece / toAcc) */
+export function snapshotFor(snap: Snapshot, g: Gender): Snapshot {
+  const ok = (x: { gender: string | null }) => x.gender === g || (x.gender !== "women" && x.gender !== "men");
+  return { version: snap.version, pieces: snap.pieces.filter(ok), accs: snap.accs.filter(ok) };
+}
+function readBundled(g: Gender): { version: string; data: string } | null {
   try {
     const dir = join(process.cwd(), "src", "generated");
-    return { version: readFileSync(join(dir, "snapshot.version"), "utf8").trim(), data: readFileSync(join(dir, "snapshot.b64"), "utf8") };
+    return { version: readFileSync(join(dir, "snapshot.version"), "utf8").trim(), data: readFileSync(join(dir, `snapshot.${g}.b64`), "utf8") };
   } catch { return null; }
 }
-function install(r: { version: string; data: string }, fetchMs: number, source: string): Catalogue {
-  const t1 = performance.now(); const snap = unpackSnapshot(r.data); const t2 = performance.now();
-  cached = buildCatalogue(snap); const t3 = performance.now();
+function install(g: Gender, r: { version: string; data: string }, fetchMs: number, source: string, full: boolean): Catalogue {
+  const t1 = performance.now(); let snap = unpackSnapshot(r.data); if (full) snap = snapshotFor(snap, g); const t2 = performance.now();
+  const cat = buildCatalogue(snap); const t3 = performance.now();
+  cached.set(g, { cat, checkedAt: source === "bundled" ? 0 : Date.now() });
   Object.assign(catalogueLoad, { fetchMs, unpackMs: t2 - t1, buildMs: t3 - t2, blobKB: r.data.length / 1024, at: Date.now(), count: catalogueLoad.count + 1, source });
-  return cached;
+  return cat;
 }
-export async function getCatalogue(fetchSnapshot: Fetcher, maxAgeMs = 5 * 60_000, defer?: (p: Promise<unknown>) => void): Promise<Catalogue> {
-  if (cached && Date.now() - checkedAt < maxAgeMs) return cached;
+export async function getCatalogue(fetchSnapshot: Fetcher, g: Gender, maxAgeMs = 5 * 60_000, defer?: (p: Promise<unknown>) => void): Promise<Catalogue> {
+  const c = cached.get(g);
+  if (c && Date.now() - c.checkedAt < maxAgeMs) return c.cat;
   const refresh = (): Promise<Catalogue> => {
-    if (inflight) return inflight;
-    inflight = (async () => {
+    const f = inflight.get(g); if (f) return f;
+    const p = (async () => {
       try {
-        const t0 = performance.now(); const r = await fetchSnapshot(cached?.version ?? null); const fetchMs = performance.now() - t0;
-        checkedAt = Date.now();
-        if (!r) { if (cached) return cached; throw new Error("no catalogue snapshot"); }
-        if (r.unchanged && cached) return cached;
-        return install({ version: r.version, data: r.data! }, fetchMs, "gateway");
-      } finally { inflight = null; }
+        const t0 = performance.now(); const r = await fetchSnapshot(cached.get(g)?.cat.version ?? null); const fetchMs = performance.now() - t0;
+        if (!r) { const cc = cached.get(g); if (cc) { cc.checkedAt = Date.now(); return cc.cat; } throw new Error("no catalogue snapshot"); }
+        const cc = cached.get(g);
+        if (r.unchanged && cc) { cc.checkedAt = Date.now(); return cc.cat; }
+        return install(g, { version: r.version, data: r.data! }, fetchMs, "gateway", true);
+      } finally { inflight.delete(g); }
     })();
-    return inflight;
+    inflight.set(g, p); return p;
   };
-  if (cached) { const p = refresh().catch(() => cached!); if (defer) { defer(p); return cached; } return p; }   // stale: answer now, refresh in the background when the runtime lets us
-  if (inflight) return inflight;
-  const b = readBundled();
-  if (b) { const c = install(b, 0, "bundled"); checkedAt = 0; return c; }      // checkedAt = 0: the next request triggers the version check
+  if (c) { const p = refresh().catch(() => c.cat); if (defer) { defer(p); return c.cat; } return p; }   // stale: answer now, refresh in the background when the runtime lets us
+  const f = inflight.get(g); if (f) return f;
+  const b = readBundled(g);
+  if (b) return install(g, b, 0, "bundled", false);      // checkedAt = 0: the next request triggers the version check
   return refresh();
 }
-export const _resetCatalogueCache = () => { cached = null; checkedAt = 0; };
+export const _resetCatalogueCache = () => { cached.clear(); inflight.clear(); };
