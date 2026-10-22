@@ -423,7 +423,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       <div ref={scroller} className="no-scrollbar snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ height: H, ...hideFeed }}>
         {obPhase === "off" && shown.map((o, i) => (
           <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: `calc(${BUTTON_BAR_PX}px + var(--safe-b))` }}>
-            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
+            {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
               onLayout={(layout, mode) => layoutInfo.current.set(o.id, { layout, mode })} />}
             {iconsOn && <OutfitIcons icons={outfitIcons(o.tags)} />}
             <OutfitButtons value={reactions[o.id] ?? null} onPress={(d) => pressOutfit(o, i, d)} />

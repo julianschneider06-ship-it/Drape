@@ -9,16 +9,18 @@ import { showSale } from "@/lib/search";
 import { shineColor, shineStrokes } from "@/lib/shine";
 import { SHINE } from "@/config/search";
 import { computeLayout, hash32, pickTemplate, type AccIn, type AccSlot, type PieceIn, type SlotName } from "@/lib/layout/engine";
+import { hitCategory, HIT_DEBUG_COLORS, HIT_ICON_ZONE } from "@/config/hit-area";
+import { hitInsets } from "@/lib/hit-areas";
 import FeedImage from "./FeedImage";
 import { tagLine } from "@/outfits/tags";
 
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, shine }: {
+function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, shine, reserveIcons }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string) => void;
-  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; shine?: { color: string | null }; animateLayout?: boolean;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
+  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; shine?: { color: string | null }; animateLayout?: boolean; reserveIcons?: boolean;   // reserveIcons: the attribute icons sit top left (non-tappable), tap areas never extend into them;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
@@ -42,6 +44,11 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
     // rule layout by default; ?layout=A,FB forces one of the old random templates (debug)
     return computeLayout({ kind: outfit.kind, pieces, seed, canvas, accessories, template: override?.length ? pickTemplate(outfit.kind, seed, override) : undefined });
   }, [cards, outfit, canvas, override, accs]);
+
+  // invisible tap areas: visible rect + HIT_PADDING per category, split at the midpoint between neighbours, clamped to the card (src/lib/hit-areas.ts)
+  const hits = useMemo(() => hitInsets(layout.pieces.map((p) => ({ slot: p.slot, rect: p.rect, cat: hitCategory(p.slot, accs.find((a) => a.slot === p.slot)?.acc.type) })), canvas, reserveIcons ? [HIT_ICON_ZONE] : []), [layout, accs, canvas, reserveIcons]);
+  const [hitDbg, setHitDbg] = useState(false);   // ?hit=1: draw every tap area (link parameter only, no effect on behaviour)
+  useEffect(() => { try { setHitDbg(new URLSearchParams(location.search).get("hit") === "1"); } catch { /* ignore */ } }, []);
 
   useEffect(() => { onLayout?.(layout.template, layout.debug?.mode ?? "template"); }, [layout, onLayout]);
 
@@ -149,6 +156,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
             <button key={`${p.slot}-${c.id}-${isNew ? swapEvt!.seq : 0}`} type="button" onClickCapture={(e) => { if (Date.now() < suppressUntil.current) { e.stopPropagation(); e.preventDefault(); } }} onClick={() => onOpen(orig(c, p.slot), p.slot)} disabled={dimmed} tabIndex={dimmed ? -1 : undefined} aria-label={`${c.brand} ${c.name}`}
               className={`absolute inset-0 ${isNew ? (swapEvt!.dir === "next" ? "swap-in-next" : "swap-in-prev") : ""} ${debug ? "outline outline-1 outline-red-400" : ""}`} style={{ touchAction: "pan-y" }}>
               <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} noSale={dimmed} />
+              {!dimmed && hits[p.slot] && (hits[p.slot].l || hits[p.slot].t || hits[p.slot].r || hits[p.slot].b) ? <span aria-hidden data-hit="1" className="absolute" style={{ left: -hits[p.slot].l, top: -hits[p.slot].t, right: -hits[p.slot].r, bottom: -hits[p.slot].b }} /> : null}
               {shine && !dimmed && c.cut && (() => {
                 const sale = saleMarkerOn() && isOnSale(c), m = SHINE.distance + (sale ? SHINE.saleExtra : 0) + SHINE.length * 1.5 + SHINE.width + 2, w = p.rect.w, h = p.rect.h;
                 return (
@@ -165,6 +173,10 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
                     writingMode: "vertical-rl", transform: "rotate(180deg) rotate(1.5deg)", letterSpacing: "0.02em" }}>SALE</span>
               )}
             </button>
+            {hitDbg && !dimmed && hits[p.slot] && (() => {
+              const h = hits[p.slot], col = HIT_DEBUG_COLORS[hitCategory(p.slot, accs.find((a) => a.slot === p.slot)?.acc.type)];
+              return <span aria-hidden className="pointer-events-none absolute" data-hit-debug={p.slot} style={{ left: -h.l, top: -h.t, right: -h.r, bottom: -h.b, background: `rgba(${col},0.28)`, outline: `1px solid rgba(${col},0.9)` }} />;
+            })()}
           </div>
         );
       })}
