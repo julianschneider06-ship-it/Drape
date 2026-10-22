@@ -1,6 +1,8 @@
 // Server side of the dynamic feed prototype (?feed=dynamic): catalogue cache per instance, ban list store, starter set, page composition.
 // Nothing here touches outfit_pool or the default feed.
 import "server-only";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { after } from "next/server";
 import { BanState } from "@/outfits/ban";
 import { catalogueLoad, getCatalogue, type Catalogue } from "@/outfits/catalogue";
@@ -32,10 +34,17 @@ export async function cardsFor(ids: number[], cat?: Catalogue): Promise<Map<numb
 }
 
 interface StarterRow { ord: number; kind: "three" | "full"; piece_ids: number[]; acc_ids: number[]; score: number; style: string; contrast: boolean; hash: number }
-const starterCache = new Map<string, { at: number; rows: StarterRow[] }>();
+const starterCache = new Map<string, { at: number; rows: StarterRow[] }>(); const starterInflight = new Map<string, Promise<StarterRow[]>>();
+function bundledStarter(g: string): StarterRow[] | null { try { return JSON.parse(readFileSync(join(process.cwd(), "src", "generated", `starter.${g}.json`), "utf8")) as StarterRow[]; } catch { return null; } }
+/** starter rows: the copy bundled with the deployment first (a cold instance must not wait for a database round trip: it cost 450 ms), refreshed in the background every 10 minutes */
 export async function starterRows(g: string): Promise<StarterRow[]> {
-  const c = starterCache.get(g); if (c && Date.now() - c.at < 10 * 60_000) return c.rows;
-  const rows = await gatewayRpc<StarterRow[]>("starter_list", { p_gender: g }); starterCache.set(g, { at: Date.now(), rows }); return rows;
+  const c = starterCache.get(g);
+  const refresh = () => { let p = starterInflight.get(g); if (!p) { p = gatewayRpc<StarterRow[]>("starter_list", { p_gender: g }).then((rows) => { starterCache.set(g, { at: Date.now(), rows }); return rows; }).finally(() => starterInflight.delete(g)); starterInflight.set(g, p); } return p; };
+  if (c && Date.now() - c.at < 10 * 60_000) return c.rows;
+  if (c) { defer(refresh().catch(() => c.rows)); return c.rows; }
+  const b = bundledStarter(g);
+  if (b) { starterCache.set(g, { at: Date.now() - 9 * 60_000, rows: b }); return b; }   // one minute later the first request refreshes it in the background
+  return refresh();
 }
 
 /** composed outfits (+ their 2 alternatives per piece) -> the same shape the feed UI already renders */

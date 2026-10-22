@@ -19,5 +19,10 @@ try {
     writeFileSync(`src/generated/snapshot.${g}.b64`, part); sizes.push(`${g} ${Math.round(part.length / 1024)} KB`);
   }
   writeFileSync("src/generated/snapshot.version", data.version);
+  // the starter set (60 outfits per gender, a small fixed table): a cold instance needs it for the starter pages and for banning the starter pieces
+  for (const g of ["women", "men"]) {
+    const r = await fetch(URL_, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ action: "rpc", fn: "starter_list", args: { p_gender: g } }), signal: AbortSignal.timeout(30_000) });
+    if (r.ok) { const j = await r.json(); if (Array.isArray(j.data) && j.data.length) { writeFileSync(`src/generated/starter.${g}.json`, JSON.stringify(j.data)); sizes.push(`starter ${g} ${j.data.length} rows`); } }
+  }
   console.log(`bundled catalogue snapshot ${data.version} (${sizes.join(", ")})`);
 } catch (e) { console.log(`snapshot not bundled (${String(e).slice(0, 120)}); instances fetch it at runtime`); }
