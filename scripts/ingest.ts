@@ -4,6 +4,7 @@
 import { createAdapter } from "../src/ingest/adapters";
 import { SOURCES } from "../src/ingest/sources";
 import { sink, toRow } from "../src/ingest/sink";
+import { accessoryFamily } from "../src/ingest/rules";
 
 const args = process.argv.slice(2);
 const flag = (n: string) => args.includes(`--${n}`);
@@ -25,6 +26,9 @@ async function run(slug: string) {
   const stats = { fetched: 0, kept: 0, skipped: 0, new_offers: 0, pages: 0 };
   const keptInFeed: number[] = Array(feeds).fill(0);
   const dist: Record<string, number> = {};
+  // Optional spread / stock options of a source: familyCap = max share of one accessory family, inStockOnly = skip sold-out products.
+  const so = (cfg.options ?? {}) as { familyCap?: number; inStockOnly?: boolean };
+  const famKept: Record<string, number> = {};
   let cursor: Cursor | null = null;
   let sourceId = 0, runId = 0;
 
@@ -51,6 +55,8 @@ async function run(slug: string) {
         if (keptInFeed[feed] >= perFeed) break;
         const n = adapter.normalize(raw);
         if (!n || n.category === "other" || n.gender === "kids") { stats.skipped++; continue; }
+        if (so.inStockOnly && n.availability !== "in_stock") { stats.skipped++; continue; }
+        if (so.familyCap) { const f = accessoryFamily(n.subcategory, n.name); if ((famKept[f] ?? 0) >= Math.ceil(perFeed * so.familyCap)) { stats.skipped++; continue; } famKept[f] = (famKept[f] ?? 0) + 1; }
         const k = `${n.gender ?? "none"}/${n.category}`;
         dist[k] = (dist[k] ?? 0) + 1;
         keptInFeed[feed]++;

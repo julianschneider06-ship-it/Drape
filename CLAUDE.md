@@ -25,20 +25,52 @@ Scalability is very important to the user. Design for millions of products and u
 - **User signals.** Store interactions in an append-only event log and keep a compact per-user taste vector that is updated incrementally. Plan for partitioning or archiving of events.
 - **Cost control.** Batch AI calls, cache results, and keep paid calls out of public reach.
 - **Composed outfits are not stored.** An outfit is a list of piece ids; its id is a hash of those ids and events carry the piece ids. Season, dominant style and the other outfit tags (season_primary always set + season_fit, style_primary / style_secondary / style_distinct, formality_level, weather, occasion, palette, boldness, silhouette, contrast, has_outer_layer, sale_count) are computed on demand by shared pure functions and never stored per outfit. A per-device ban list holds recently served single products only (at most 25% of each group and at most 300, client-held by default, with a soft fallback), never outfits.
-- **Availability.** Only pieces with an in-stock offer, a clean cutout and measurements are shown, in both feeds. A refresh job (`scripts/refresh-stock.ts`) keeps availability and prices current (run on demand, to be scheduled daily).
+- **Availability.** Only pieces with an in-stock offer, a clean cutout and measurements are shown, in both feeds. `scripts/refresh-stock.ts` (manual) and the daily job keep availability and prices current.
 - **Cost guards.** Every paid script prints an estimate first, has its own cap from an environment variable, and runs under the shared run cap DRAPE_RUN_CAP_USD (default $10) enforced in code (`src/lib/budget.ts`). No AI call exists in the web app or edge functions. Session tokens always expire after 24h (the web token vercel-sample-page is the one documented exception); never delete rows; never mint tokens without expiry; token hashes only in `pipeline_tokens`, plaintext only in memory.
 - **Shop crawling.** Public product feeds only; respect robots.txt and rate limits; skip hosts that answer 401/403/404/410/429/503 and never work around them.
 - **Gender.** products.gender is filled from the classification when empty (trigger); unisex means usable for both genders.
-- **Settings and jobs.** Switches live in the table `app_settings` (`feed_default` base|dynamic|hybrid, `sale_marker_enabled`), read on the server only and cached 45 s; `?feed=` and `?sale=` override. Background jobs run through `job_requests` (allowlist: `refresh_stock` only, never a paid job); pg_cron enqueues the stock refresh daily at 01:15 UTC and ticks the runner route every 5 minutes. Refreshes must use the US market (`country=US`) and are guarded against price shifts above 30% per shop.
-- **Sale marker.** A red hand-drawn outline per shape plus one SALE label per product, switchable (SALE_MARKER_ENABLED).
 - **Taste.** Taste is per device and per slot, learned incrementally from the event log, held on the client by default; the event log is the source of truth.
 - Record architecture decisions that matter for scale in `docs/architecture.md`.
+
+## Token-saving rules
+
+- Work silently: no text messages, progress notes or status updates while working. Send exactly one message at the very end.
+- That final message: max 8 lines, plain language, structure Done / Changed / Problems / Needs decision, plus one line on what changed in CLAUDE.md. Decisions needed from the user go under "Needs decision". Stop earlier only if truly blocked. No long tables, no pasted logs, no code dumps unless asked.
+- Never paste large tool output. Use LIMIT on every SQL query, count first, read only needed columns.
+- Read only the files and line ranges you need. Do not re-read files you just wrote. Do not run extra verification beyond what the task requires.
+- One task per session: when the task is finished, stop and report; do not start side tasks. Mention ideas in one line instead of doing them.
+- Docs-only commits: add "[skip ci]" to the commit message to avoid needless deployments.
+- Never search old logs or files for secrets.
+
+## CLAUDE.md maintenance
+
+- At the end of every task, update CLAUDE.md yourself, only with durable facts or rules that future sessions need (new tables, settings, shop restrictions, decisions).
+- No progress logs, no one-off details, no secrets. One or two lines per entry. Merge or delete outdated entries.
+- Keep CLAUDE.md under about 150 lines. If it grows beyond that, condense it.
+- Mention in your report, in one line, what you changed in CLAUDE.md.
+
+## Current state (details in `docs/architecture.md`, open security topics in `docs/security-backlog.md`)
+
+- **Feed variants:** `?feed=base|dynamic|hybrid` and `?sale=on|off` override the defaults. Defaults live in table `app_settings` (`feed_default`, `sale_marker_enabled`), read on the server only, cached about 45 s. Sale marker: red hand-drawn outline per shape plus one SALE label per product.
+- **Jobs:** table `job_requests` (allowlist: `refresh_stock` and `probe_market` only, never a paid job). Runner route is ticked by pg_cron + pg_net every 5 minutes; stock refresh is enqueued daily at 01:15 UTC. Per-shop result of every attempt in `shop_refresh_log`.
+- **Markets:** each shop has its own market (country) in `shop_market`, plus a `frozen` flag with a stored reason. No row = default US (`country=US`). The runner runs in Dublin, so the market must be set explicitly per shop. A 30% price-change guard rejects suspicious updates per shop.
+- **Market probe result:** 11 formerly frozen shops now have their own market (DE, GB, SE, JP). `nordgreen` stays frozen (needs re-ingest and re-probe). `margarethowell` is held by the guard.
+- **Currency labels:** audit done, five shops corrected to USD. Shops with unclear evidence are listed in `docs/architecture.md`; do not guess their currency.
+- **Onboarding:** first-visit flow = Welcome (gender, then styles) -> 3-step tutorial (`TutorialFeed.tsx` + `Onboarding.tsx`, flag `drape.onboarding.done`, `?onboarding=1` forces it). Each gender has its own two pinned outfits in `src/lib/onboarding.ts` (`ONBOARDING` men, `ONBOARDING_WOMEN`; A = swipe up only, B = top alternatives + sale marker + "Got it"), served by `/api/onboarding?gender=` from the catalogue snapshot (fetched as soon as the gender is picked). Nothing is recorded. Own component tree; images loaded AND decoded before step 1 (10 s timeout = skip, not marked done); real feed loads after step 3 idle. Step 3 is skipped if the sale marker is off or no label shows. Women: A = Simon Miller Kit dress + Ancient Greek Daria sandal, B = Lisa Says Gah Olive Bowl tee/Banana skort (alts: tees 7233, 7418). If a pinned piece leaves the catalogue the API returns 404 and the tutorial is skipped.
+- **Welcome flow:** `Welcome.tsx`: gender, then up to 5 styles. The picker shows only styles with >= `MIN_STYLE_OUTFITS` (1) active `outfit_pool` outfits for that gender (`/api/styles`, rpc `style_counts`, read-only, cached 10 min, full list on failure; men 19 styles, women 24). Stored in localStorage (`drape.gender`, `drape.styles`, `drape.stylesFor`), nothing recorded. Default feed `base` ignores styles.
+- **Style prior (hybrid only):** picks are a per-request prior (`withPrior` in `src/outfits/taste.ts`, `PRIOR` in `personalization/config.ts`): strength fades linearly to 0 at 40 events, mix leans on picks (`priorMixFor`) until 20 events, never stored in the taste. Devices with picks skip the starter set. Base and men unchanged.
+- **Perf rules (feed/tutorial):** animate only transform/opacity (no layout animation on swaps in the tutorial); SVG-filter shapes that move or fade are pre-rendered as SVG images; never poll layout; check changes under CPU throttling (6x) with CDP metrics.
+- **Women's accessory shops (branch `women-accessories`, merge pending):** lelesadoughi, stoneandstrand, eugeniakim, cluse (EUR, market DE), jenniferbehr active; ettika flagged (57% usable). Source options `familyCap` and `inStockOnly` in `scripts/ingest.ts`; check a candidate shop first with `scripts/probe-usable.ts` (the 20-sample over-predicts; use 40). Slot logic unchanged (hair = `other_wearable`). Details in `docs/architecture.md`.
+- **Women's accessory slots (merged, default = new set):** limits in `WOMEN_ACC` (min 3 / max 6 accessories, max 1 each sunglasses/head/bag, up to 3 jewelry, belt max 1); men unchanged. New set lives next to the old one (`outfit_accessories_w2`, `feed_list_w2`, `?accrev=2`); `ACC_REV_DEFAULT = "2"` in `src/app/api/feed/route.ts` (`?accrev=1` shows the old set; rollback = set it back to "1"). Details in `docs/architecture.md`.
+- **Dashboard:** read-only views `dash_*` (security_invoker, no access for anon/authenticated).
+- **Tests:** `npm test` runs a mocked 429 retry test (one retry after at least 6 s, no third request); no real shop is touched.
+- **Cost limit:** `DRAPE_RUN_CAP_USD`; nothing public may trigger paid calls.
 
 ## Project setup (done so far)
 
 - **GitHub:** `julianschneider06-ship-it/drape`, branch `main`.
 - **Vercel:** project `drape` (id `prj_JSMzTYnpPOwINsbWnRes24mGv2kk`), personal account (no team), framework preset `nextjs`. Live at `https://drape-julian-schneider.vercel.app`. Public access, Vercel Authentication is off. Push to `main` deploys automatically.
-- **Supabase:** project `Drape` (ref `ntknoxzhljktxhsbudlr`, region `eu-west-1`), API URL `https://ntknoxzhljktxhsbudlr.supabase.co`. No tables yet.
+- **Supabase:** project `Drape` (ref `ntknoxzhljktxhsbudlr`, region `eu-west-1`), API URL `https://ntknoxzhljktxhsbudlr.supabase.co`.
 - **Environment variables already set in Vercel** (production, preview, development): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. A secret key is not set yet; if needed, add it in Vercel only.
 - **Vercel tool note:** when using the Vercel MCP tools, do not pass `teamId`. The account is personal, and passing the team id returns 403. Build logs are readable with `list_deployment_events`.
 - **Sandbox note:** the cloud environment's network access must be **Trusted** or **Full** so `npm install` can reach the registry. If `registry.npmjs.org` returns 403, tell the user to switch the environment's network access setting (do not work around it).

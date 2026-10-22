@@ -8,7 +8,7 @@ const NOT_FASHION = rx("gift ?cards?|e-?gift|sticker|candle|shipping|insurance|p
 // Order matters: first match wins.
 const CATEGORY_RULES: [Category, RegExp][] = [
   ["shoes", rx("sneakers?|shoes?|boots?|sandals?|loafers?|slippers?|trainers?|clogs?|mules?|heels?|pumps?|flats|footwear|runners?|schuhe?|stiefel|sneaker|slides?|moccasins?")],
-  ["accessories", rx("bags?|totes?|backpacks?|hats?|caps?|beanies?|scarf|scarves|belts?|wallets?|socks?|gloves?|mittens?|sunglasses|glasses|eyewear|shades|jewel(?:ry|lery)|necklaces?|pendants?|anklets?|brooch(?:es)?|bangles?|hoops?|studs?|charms?|rings?|bracelets?|earrings?|visors?|berets?|bonnets?|fedoras?|clutch(?:es)?|crossbody|satchels?|purses?|handbags?|duffel|messenger|fanny pack|bum bag|shawls?|bow ?ties?|ties?(?!-?dye)|umbrellas?|bandanas?|headbands?|accessor(?:y|ies)|tasche[n]?|mützen?|müts?e|schals?|gürtel|socken|handschuhe|rucksack|hüte?|bucket hat|duffle|pouch|cardholders?|keyrings?|watch(?:es)?|laces|scrunchies?|neckties?|hair clips?")],
+  ["accessories", rx("bags?|totes?|backpacks?|hats?|caps?|beanies?|scarf|scarves|belts?|wallets?|socks?|gloves?|mittens?|sunglasses|glasses|eyewear|shades|jewel(?:ry|lery)|necklaces?|pendants?|anklets?|brooch(?:es)?|bangles?|hoops?|studs?|charms?|rings?|bracelets?|earrings?|visors?|berets?|bonnets?|fedoras?|clutch(?:es)?|crossbody|satchels?|purses?|handbags?|duffel|messenger|fanny pack|bum bag|shawls?|bow ?ties?|ties?(?!-?dye)|umbrellas?|bandanas?|headbands?|accessor(?:y|ies)|tasche[n]?|mützen?|müts?e|schals?|gürtel|socken|handschuhe|rucksack|hüte?|bucket hat|duffle|pouch|cardholders?|keyrings?|watch(?:es)?|laces|scrunchies?|neckties?|hair clips?|barrettes?|claw clips?|hair (?:claws?|pins?|ties?|sticks?|bands?)|hairpins?")],
   ["dresses", rx("dress(?:es)?|jumpsuits?|rompers?|playsuits?|kleid(?:er)?|overalls?|gown|bodycon")],
   ["outerwear", rx("jackets?|coats?|parkas?|anoraks?|puffers?|blazers?|gilets?|trench|windbreakers?|vests?|fleece|bombers?|cagoules?|outerwear|mantel|jacke[n]?|weste|shell|overshirt|raincoat|poncho|cape|shacket")],
   ["bottoms", rx("pants?|trousers?|jeans?|shorts?|skirts?|leggings?|joggers?|sweatpants?|hosen?|chinos?|cargos?|röcke|denim|bottoms?|tights|culottes?|trackpants?|skorts?")],
@@ -43,3 +43,14 @@ export function inferGender(fallback: Gender | null, ...texts: (string | undefin
 
 export const normKey = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+/** Coarse accessory family of a product (for per-shop spread caps at ingestion); "other" when nothing matches. */
+const FAMILIES: [string, RegExp][] = [
+  ["hair", rx("hair|clips?|claws?|barrettes?|scrunchies?|headbands?|bandanas?")], ["head", rx("hats?|caps?|beanies?|berets?|bucket|visors?|bonnets?|fedoras?")],
+  ["belt", rx("belts?")], ["scarf", rx("scarf|scarves|shawls?")], ["watch", rx("watch(?:es)?")], ["bag", rx("bags?|totes?|backpacks?|clutch(?:es)?|crossbody|purses?|handbags?|pouch")],
+  ["earrings", rx("earrings?|studs?|hoops?|huggies")], ["necklace", rx("necklaces?|pendants?|chains?|chokers?")], ["bracelet", rx("bracelets?|bangles?|cuffs?|anklets?")], ["ring", rx("rings?")],
+];
+export const accessoryFamily = (...texts: (string | undefined | null)[]): string => {
+  const t = texts.filter(Boolean).join(" ");
+  return FAMILIES.find(([, r]) => r.test(t))?.[0] ?? "other";
+};

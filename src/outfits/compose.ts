@@ -14,11 +14,11 @@ import { POLISH, reorderPage, runTooLong, shareOf, scoreContrast, subAllowed, su
 import { outfitStyle, scoreOutfit, type Piece } from "./score";
 import { outfitSeason, seasonRole, type SeasonResult, type SeasonPiece } from "./season";
 import { connBonus, tagMatch, tasteMatch, type Taste } from "./taste";
-import { mixFor, STEER, TASTE } from "../lib/personalization/config";
+import { mixFor, priorMixFor, STEER, TASTE } from "../lib/personalization/config";
 import { outfitTags } from "./tags";
 import { STYLE_KEYS as SK } from "../classify/styles";
 
-export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number; banOverall?: number; legacy?: boolean }
+export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number; banOverall?: number; legacy?: boolean; prior?: boolean }
 export interface ComposedAcc { id: number; type: string; placement: string; zone: string; score: number }
 export interface ComposedOutfit {
   kind: "three" | "full"; ids: number[]; acc: ComposedAcc[]; score: number; style: string; season: SeasonResult; bucket: Bucket; pattern?: string; hash: number;
@@ -85,10 +85,10 @@ export function layoutCheck(cat: Catalogue, kind: "three" | "full", ps: CatPiece
 
 export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6, session: Session = newSession(), rnd: Rnd = Math.random): { outfits: ComposedOutfit[]; ban: BanState; session: Session; stats: ComposeStats } {
   const t0 = performance.now();
-  const g = profile.gender, taste = profile.taste && profile.taste.n >= TASTE.personalizeFrom ? profile.taste : null, guest = !taste;
+  const g = profile.gender, taste = profile.taste && (profile.taste.n >= TASTE.personalizeFrom || profile.prior) ? profile.taste : null, guest = !taste;
   const legacy = !!profile.legacy, minScore = profile.minScore ?? COMPOSE.minScore, patterns = legacy ? CONTRAST_PATTERNS_V1 : CONTRAST_PATTERNS;
   let noWhy = "no-candidate", wide = 1;   // reason of the last failed build (anchor / partner / min-score) and the candidate sample multiplier of this attempt
-  const mix = profile.mix ?? (guest ? COMPOSE.guestMix : mixFor(taste!.n));
+  const mix = profile.mix ?? (guest ? COMPOSE.guestMix : profile.prior && taste!.n < TASTE.personalizeFrom ? priorMixFor(taste!.n) : mixFor(taste!.n));
   const contrastShare = profile.contrastShare ?? mix.contrast;
   const buckets: [Bucket, number][] = [["match", mix.match], ["near", mix.near], ["new", mix.new], ["contrast", contrastShare]];
   const eff = banIn.effective(cat, g, profile.banFraction);
