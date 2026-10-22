@@ -53,7 +53,7 @@ export const STEER = {
 /** Starting prior from the welcome style picks (hybrid feed only): each picked style counts PRIOR.strength liked pieces per slot at 0 events and
  *  fades linearly to nothing at PRIOR.fadeN events, so real likes / events take over. Until personalizeFrom the mix leans on the picks (PRIOR.mix)
  *  and blends into the normal personal mix. Never stored in the taste (added per request), so the persisted taste stays pure. */
-export const PRIOR = { strength: 3, fadeN: 40, mix: { match: 0.55, near: 0.25, new: 0.2, contrast: 0 } };
+export const PRIOR = { strength: 3, fadeN: 40, mix: { match: 0.7, near: 0.2, new: 0.1, contrast: 0 } };
 export const priorWeight = (n: number) => Math.max(0, 1 - n / PRIOR.fadeN);
 
 export function mixFor(n: number): Record<"match" | "near" | "new" | "contrast", number> {
