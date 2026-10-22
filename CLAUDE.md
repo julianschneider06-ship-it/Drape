@@ -34,7 +34,8 @@ Scalability is very important to the user. Design for millions of products and u
 
 ## Token-saving rules
 
-- Reports to the user: max 8 lines, plain language, structure: Done / Changed / Problems / Needs decision. No long tables, no pasted logs, no code dumps unless asked.
+- Work silently: no text messages, progress notes or status updates while working. Send exactly one message at the very end.
+- That final message: max 8 lines, plain language, structure Done / Changed / Problems / Needs decision, plus one line on what changed in CLAUDE.md. Decisions needed from the user go under "Needs decision". Stop earlier only if truly blocked. No long tables, no pasted logs, no code dumps unless asked.
 - Never paste large tool output. Use LIMIT on every SQL query, count first, read only needed columns.
 - Read only the files and line ranges you need. Do not re-read files you just wrote. Do not run extra verification beyond what the task requires.
 - One task per session: when the task is finished, stop and report; do not start side tasks. Mention ideas in one line instead of doing them.
