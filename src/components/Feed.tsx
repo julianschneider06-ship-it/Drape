@@ -10,7 +10,7 @@ import { canvasSize } from "@/lib/layout/engine";
 import ProductSheet from "./ProductSheet";
 import OutfitButtons, { type Reaction } from "./OutfitButtons";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
-import { SaleInkDefs } from "@/lib/client/sale";
+import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
 import { compactTags } from "@/outfits/tags";
 import type { Signal } from "@/outfits/taste-codec";
 import { TASTE } from "@/lib/personalization/config";
@@ -30,7 +30,8 @@ const PERSONALIZE_FROM = TASTE.personalizeFrom, OUTBOX_MAX = TASTE.outboxMax;
 const shownIds = (o: FeedOutfit) => [o.top.id, ...(o.bottom ? [o.bottom.id] : []), o.shoes.id];
 const tg = (o: FeedOutfit) => (o.tags ? (({ se, oc, pk, si, fo, w, ct }) => ({ se, oc, pk, si, fo, w, ct }))(compactTags(o.tags)) : null);
 
-export default function Feed() {
+export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynamic" | "hybrid"; sale: boolean } }) {
+  setSaleDefault(defaults?.sale);   // app_settings.sale_marker_enabled (?sale=on|off still overrides)
   const [gender, setGender] = useState<Gender | null>(null);
   const [items, setItems] = useState<FeedOutfit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -71,10 +72,11 @@ export default function Feed() {
   // debug options: ?layout=A,FB forces templates (3-piece, full-body), ?debug=1 shows boxes + margin zone
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    hybridRef.current = q.get("feed") === "hybrid";
-    dynRef.current = q.get("feed") === "dynamic" || hybridRef.current;   // ?feed=base (or no parameter) = the pool feed
-    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto", acc: q.get("acc") !== "off", preload: q.get("preload") !== "off", feed: q.get("feed") === "hybrid" ? "hybrid" : q.get("feed") === "dynamic" ? "dynamic" : "default" });   // ?feed=dynamic: prototype of the dynamic composer   // ?preload=off: test switch for the alternatives preloading
-  }, []);
+    const mode = q.get("feed") ?? defaults?.feed ?? "base";   // ?feed=... always wins; without it the default comes from app_settings.feed_default
+    hybridRef.current = mode === "hybrid";
+    dynRef.current = mode === "dynamic" || hybridRef.current;   // ?feed=base (or an unknown value) = the pool feed
+    setDbg({ layout: q.get("layout")?.split(",").filter(Boolean), debug: q.get("debug") === "1", cut: q.get("cut") === "off" ? "off" : "auto", acc: q.get("acc") !== "off", preload: q.get("preload") !== "off", feed: mode === "hybrid" ? "hybrid" : mode === "dynamic" ? "dynamic" : "default" });   // ?feed=dynamic: prototype of the dynamic composer   // ?preload=off: test switch for the alternatives preloading
+  }, [defaults?.feed]);
 
   // canvas size follows the scroller (phones, rotation, desktop)
   useEffect(() => {

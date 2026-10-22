@@ -2,11 +2,13 @@
 import { SALE_MARKER_ENABLED } from "@/lib/layout/config";
 import type { FeedCard } from "@/lib/types";
 
-/** Red hand-drawn outline on products on sale. One switch: SALE_MARKER_ENABLED in config.ts; ?sale=off / ?sale=on override it. */
+/** Red hand-drawn outline on products on sale. One switch: app_settings.sale_marker_enabled (code default SALE_MARKER_ENABLED in config.ts); ?sale=off / ?sale=on override it. */
+let saleDefault = SALE_MARKER_ENABLED;   // the live default comes from app_settings (set by Feed from the server)
+export const setSaleDefault = (v: boolean | undefined) => { if (typeof v === "boolean") saleDefault = v; };
 export function saleMarkerOn(): boolean {
   if (typeof window === "undefined") return false;
   const q = new URLSearchParams(window.location.search).get("sale");
-  return q === "on" ? true : q === "off" ? false : SALE_MARKER_ENABLED;
+  return q === "on" ? true : q === "off" ? false : saleDefault;
 }
 export const isOnSale = (c: FeedCard) => !!c.compare_at_cents && c.compare_at_cents > (c.price_cents ?? 0);
 

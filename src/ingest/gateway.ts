@@ -1,8 +1,13 @@
 // Thin client for allow-listed database functions behind the `pipeline` edge function (batch scripts only).
 const URL_ = process.env.DRAPE_PIPELINE_URL ?? "https://ntknoxzhljktxhsbudlr.supabase.co/functions/v1/pipeline";
 
+// A runner (the Vercel job route) uses a short-lived token it minted for one invocation; kept in memory only, never in process.env (the web app shares that process).
+let tokenOverride: string | null = null;
+export const useToken = (t: string | null) => { tokenOverride = t; };
+export const currentToken = () => tokenOverride ?? process.env.DRAPE_PIPELINE_TOKEN;
+
 export async function rpc<T = unknown>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
-  const token = process.env.DRAPE_PIPELINE_TOKEN;
+  const token = currentToken();
   if (!token) throw new Error("DRAPE_PIPELINE_TOKEN is not set");
   for (let attempt = 0; ; attempt++) {
     try {

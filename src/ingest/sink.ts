@@ -2,11 +2,12 @@
 import { createHash } from "node:crypto";
 import type { NormalizedProduct, RawItem } from "./types";
 import { normKey } from "./rules";
+import { currentToken } from "./gateway";
 
 const URL_ = process.env.DRAPE_PIPELINE_URL ?? "https://ntknoxzhljktxhsbudlr.supabase.co/functions/v1/pipeline";
 
 async function call<T>(body: Record<string, unknown>): Promise<T> {
-  const token = process.env.DRAPE_PIPELINE_TOKEN;
+  const token = currentToken();
   if (!token) throw new Error("DRAPE_PIPELINE_TOKEN is not set");
   for (let attempt = 0; ; attempt++) {
     try {
