@@ -90,3 +90,64 @@ It would mostly add shoes, which is not our gap (gaps are clothing in the thin s
 | Bazta IE / UK | **Skip**: perfume plus watches / sunglasses, same range as Plusshop |
 | Aussui, MyBeauty.Boutique, Caterboss | **Skip**: gift cards, perfume, 18 clogs |
 | watch merchants, T.LUXY, Fashiontamers, Tooled Up, MoreThisWay | unchanged from `docs/architecture.md` "Affiliate feed" |
+
+## 8. Selected brands (27 requested, 2026-10-22, read-only)
+Re-downloaded the feed (same way, temp folder outside the repo, deleted afterwards), analysis script kept outside the repo. **All 27 brands are in the feed** (none missing; "Solomon" is spelled `Solomon` in the feed = Salomon; no plain "Hugo" rows). Merged: Boss+Hugo Boss, adidas+adidas Originals, Calvin Klein+Jeans, Tommy Hilfiger+Tommy Jeans. Image check (top 8 brands, 15 each, `probe-awin-usable.ts`): **actual AI cost $0.028** (cap 0.35). Samples of 15 are about +-20 points. Brian James lists every product twice (EUR + GBP), so its real count is half of the rows.
+
+| brand (merged) | rows | main merchants | cur | stock | discount | link | categories (shoes/tops/bottoms/outer/acc) | usable img |
+|---|---|---|---|---|---|---|---|---|
+| Nike | 8,488 | Bennimarceau 8,295 | GBP | 100% | 0% | 100% | 95/1/0/1/0 | 93% |
+| adidas (+Originals) | 3,174 | Bennimarceau 1,640, Viaduct 972, Workout For Less 206 | GBP | 100% | 37% | 100% | 55/14/10/3/5 (12% other) | 80% |
+| Tommy Hilfiger (+Jeans) | 2,429 | Brian James 2,068, watch shops ~230 | EUR/GBP | 97% | 8% | 100% | 6/41/30/7/13 | 73% |
+| Boss (+Hugo Boss) | 1,685 | Brian James 902, Watch Enclave 321, Watches of USA 168 | EUR/GBP/USD | 87% | 21% | 100% | 5/32/12/3/32 (17% other) | 67% |
+| New Balance | 1,624 | Bennimarceau 1,458, Viaduct 166 | GBP | 100% | 10% | 100% | 86/9/4/2/0 | 93% |
+| Converse | 1,106 | Converse PL 554 (PLN), Bennimarceau 534 | PLN/GBP | 100% | 0% | 100% | 80/4/2/2/0 | 93% |
+| Bugatti | 1,050 | Brian James | EUR/GBP | 99% | 12% | 100% | 44/9/34/13/0 | 93% |
+| Vans | 488 | Bennimarceau 464 | GBP | 100% | 2% | 100% | 92 shoes | 100% |
+| Calvin Klein (+Jeans) | 402 | perfume / Bazta / Plusshop, Brian James 74 | mixed | 99% | 17% | 100% | 61% other (perfume), 17 acc | not sampled |
+| Puma | 304 | Bennimarceau 148, Tooled Up 138 | GBP | 100% | 46% | 100% | 82 shoes, 11 outer | not sampled |
+| Diesel | 250 | watch shops (76% watches) | GBP/USD | 85% | 60% | 100% | 76 acc | not sampled (img 81%) |
+| Onitsuka Tiger | 237 | Bennimarceau | GBP | 100% | 0% | 100% | 100 shoes | not sampled |
+| ASICS | 232 | Bennimarceau 220 | GBP | 100% | 0% | 100% | 95 shoes | not sampled |
+| Dsquared2 | 215 | Fashiontamers 113, T.LUXY 92 | USD/EUR | 100% | 0% | 100% | clothing | not sampled (only 47% have an image) |
+| Givenchy | 131 | perfume 70, T.LUXY 37, Fashiontamers 24 | mixed | 100% | 0% | 100% | 53% other | not sampled (82% image) |
+| Dickies | 98 | Tooled Up | GBP | 100% | **100%** | 100% | 51 bottoms, 33 tops, 12 outer | not sampled |
+| Brooks | 95 | Bennimarceau | GBP | 100% | 0% | 100% | 100 shoes (running) | not sampled |
+| Crocs | 95 | Bennimarceau 56, others | GBP/EUR | 100% | 1% | 100% | 78 shoes | not sampled |
+| Ugg | 81 | Bennimarceau | GBP | 100% | 0% | 100% | 100 shoes | not sampled |
+| Salomon | 80 | Bennimarceau | GBP | 100% | 0% | 100% | 100 shoes | not sampled |
+| The North Face | 65 | Bennimarceau 52 | GBP | 100% | 0% | 100% | 82 outerwear | not sampled |
+| Under Armour | 64 | Viaduct 23, MoreThisWay 24 | GBP | 100% | 73% | 100% | 36 bottoms, 30 tops | not sampled |
+| Helly Hansen | 62 | Brian James | EUR/GBP | 100% | 0% | 100% | 81 outer, 19 tops | not sampled |
+| Armani Exchange | 59 | Fashiontamers 47 | USD | 100% | 0% | 100% | mixed | not sampled (only 20% have an image) |
+| Superdry | 43 | Brian James 40 | EUR/GBP | 100% | 42% | 100% | 74 tops | not sampled |
+
+**Failures seen:** Tommy 4 of 15 model photos, Boss 4 multi-item (set shots) + 1 cropped, adidas 2 model, rest single cropped. Nike/NB/Converse/Bugatti/Vans are clean product photos.
+
+**Already in our `products`:** nike 15, adidas 12, ugg 10, new balance 9, asics 8, crocs 5, salomon 4, vans 2 (65 in total, 0 of the other brands). Earlier check: no URL overlap, so almost all feed products are new.
+
+**Recommendation and cap for a first import** (cap = products per brand, in-stock + image only, random but spread over categories; shoes are not our gap, clothing is):
+| brand | verdict | first cap |
+|---|---|---|
+| Tommy Hilfiger (+Jeans) | **Import** (Brian James clothing, 73% usable) | 400 |
+| Boss (+Hugo Boss) | **Import**, only Brian James clothing, skip watches/perfume; set shots lower the yield | 300 |
+| Bugatti | **Import** (clothing 56%, 93% usable) | 250 |
+| Helly Hansen | **Import** (all, outerwear) | 31 |
+| Dickies | **Import** (workwear, all on sale; check images first) | 98 |
+| Superdry | **Maybe** (small, tops) | 40 |
+| Under Armour | **Maybe** (sport clothing, on sale) | 40 |
+| The North Face | **Maybe** (outerwear, Techwear/Outdoor) | 52 |
+| Calvin Klein (+Jeans) | **Maybe**, Brian James clothing only (about 37 products) | 37 |
+| adidas (+Originals) | **Maybe**: Viaduct clothing (972 rows) plus Samba/Gazelle; skip the 1.6k Bennimarceau sneaker mass | 200 (clothing) + 60 shoes |
+| New Balance | **Maybe**: shoes (Retro Sport) | 80 |
+| Onitsuka Tiger, ASICS | **Maybe**: retro trainers for Retro Sport | 40 each |
+| Vans | **Maybe**: Skater shoes, 100% usable | 60 |
+| Converse | **Maybe**: only the Bennimarceau rows (GBP), never Converse PL (PLN, 65% usable, duplicates) | 40 |
+| Salomon | **Maybe** (Techwear, 80 shoes) | 40 |
+| Nike | **Skip** for now: 8.3k near-identical sneaker rows; if wanted, cap | 100 |
+| Puma | **Skip** (sneakers, some Tooled Up gear) | 0 |
+| Brooks, Crocs, Ugg | **Skip** (running shoes, clogs, boots; Ugg/Crocs we already have) | 0 |
+| Diesel, Givenchy | **Skip** (watches / perfume, 47-82% images) | 0 |
+| Dsquared2, Armani Exchange | **Skip** (Fashiontamers images missing or 20-47%) | 0 |
+
+Sum of the Import rows is about 1.1k clothing products; with all Maybes about 1.7k. Image risk: Tommy and Boss need the real cutout gate, expect 60-70% to survive.
