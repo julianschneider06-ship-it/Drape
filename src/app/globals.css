@@ -29,6 +29,7 @@ img { -webkit-user-drag: none; }
 @keyframes swapInPrev { from { transform: translateX(-55%); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes swapBounceNext { 30% { transform: translateX(-12px); } 60% { transform: translateX(4px); } }
 @keyframes swapBouncePrev { 30% { transform: translateX(12px); } 60% { transform: translateX(-4px); } }
+.swap-out-next, .swap-out-prev, .swap-in-next, .swap-in-prev { will-change: transform, opacity; }   /* own GPU layer: only transform / opacity animate */
 .swap-out-next { animation: swapOutNext .3s ease-in forwards; }
 .swap-out-prev { animation: swapOutPrev .3s ease-in forwards; }
 .swap-in-next { animation: swapInNext .32s ease-out both; }
@@ -39,5 +40,5 @@ img { -webkit-user-drag: none; }
 /* Onboarding: the step-1 arrow nudges upwards to invite the swipe; boxes fade in */
 @keyframes obNudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
 @keyframes obFade { from { opacity: 0; } to { opacity: 1; } }
-.ob-nudge { animation: obNudge 1.6s ease-in-out infinite; }
+.ob-nudge { animation: obNudge 1.6s ease-in-out infinite; will-change: transform; }   /* the arrow is a pre-rendered image: moving it is a pure GPU transform */
 .ob-fade { animation: obFade .3s ease-out both; }
