@@ -12,6 +12,8 @@ export interface ShopifyOptions {
   feeds?: { handle?: string; gender?: Gender }[];
   only?: string[]; // keep ONLY these categories (e.g. ["accessories"] for accessory-only stores / the accessory pass)
   exclude?: string[]; // categories to skip at ingestion (e.g. ["accessories"]: not used by the feed slots)
+  familyCap?: number; // ingest.ts: max share of one accessory family per store (e.g. 0.4)
+  inStockOnly?: boolean; // ingest.ts: skip sold-out products
   max?: number; // products to keep for this store (default: the CLI --max)
   maxPages?: number; // safety cap per feed
   minDelayMs?: number;

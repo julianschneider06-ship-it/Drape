@@ -75,6 +75,14 @@ export const SOURCES: SourceConfig[] = [
   shopify("missionbelt", "Mission Belt", "https://missionbelt.com", "USD", { brand: "Mission Belt", only: ["accessories"], max: 110 }),
   shopify("johnstons", "Johnstons of Elgin", "https://johnstonsofelgin.com", "GBP", { brand: "Johnstons of Elgin", only: ["accessories"], max: 40 }),
   shopify("thetiebar", "The Tie Bar", "https://thetiebar.com", "USD", { brand: "The Tie Bar", only: ["accessories"], max: 25 }),
+  // --- Women's accessory round (2026-10-22): hair, jewelry, belts, scarves, hats, watches. Women only, in stock only, at most 40% of one family per shop (ingest.ts familyCap).
+  shopify("lelesadoughi", "Lele Sadoughi", "https://www.lelesadoughi.com", "USD", { brand: "Lele Sadoughi", defaultGender: "women", only: ["accessories"], max: 100, familyCap: 0.4, inStockOnly: true }),
+  // Switched off after the full gates: only 57 of 100 products usable (< 70%: multi-item and defect images). Products stay, nothing deleted.
+  flagged(shopify("ettika", "Ettika", "https://www.ettika.com", "USD", { brand: "Ettika", defaultGender: "women", only: ["accessories"], max: 100, familyCap: 0.4, inStockOnly: true })),
+  shopify("stoneandstrand", "Stone and Strand", "https://www.stoneandstrand.com", "USD", { brand: "Stone and Strand", defaultGender: "women", only: ["accessories"], max: 100, familyCap: 0.4, inStockOnly: true }),
+  shopify("eugeniakim", "Eugenia Kim", "https://www.eugeniakim.com", "USD", { brand: "Eugenia Kim", defaultGender: "women", only: ["accessories"], max: 100, familyCap: 0.4, inStockOnly: true }),
+  shopify("cluse", "CLUSE", "https://www.cluse.com", "EUR", { brand: "CLUSE", defaultGender: "women", only: ["accessories"], max: 100, familyCap: 0.4, inStockOnly: true, country: "DE" }),
+  shopify("jenniferbehr", "Jennifer Behr", "https://www.jenniferbehr.com", "USD", { brand: "Jennifer Behr", defaultGender: "women", only: ["accessories"], max: 100, familyCap: 0.4, inStockOnly: true }),
   // Inactive stub: blocked by bot protection, needs a partner feed.
   { slug: "zalando-de", name: "Zalando DE", kind: "zalando", baseUrl: "https://en.zalando.de", active: false },
   // --- Style-supply round (thin styles: techwear, skater, grunge, punk, western, retro sport, scandi, preppy, quiet luxury, old money shoes ...).
