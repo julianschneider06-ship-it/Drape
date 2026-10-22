@@ -6,6 +6,7 @@
 //           everything else in a side column on the right (vertical zones, collisions resolved, shrink then drop the lowest priority).
 import { ACCESSORIES as A, DEFAULT_ASPECT, JITTER, MARGIN_ZONE, REAL_CM, REF_CM, RULES, SIZE, SCALE_SHOES, SCALE_TOP_BOTTOM } from "./config";
 import { jewelryScale } from "@/config/jewelry";
+import { SIDE_BY_SIDE as SBS, SIDE_BY_SIDE_BOTTOM_OFFSET } from "@/config/side-by-side";
 import type { AccIn, Layout, LayoutDebug, Placed, PieceIn, Rect, SlotName } from "./engine";
 
 const mulberry32 = (a: number) => () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -169,29 +170,39 @@ export function computeRuleLayout(opts: { kind: "three" | "full"; pieces: Partia
     const t = top!, b = bottom!, at = aspect(t), ab = aspect(b);
     const gapX = R.foldedGap * W;
     const usableW = frameRight - 2 * padX;
-    const upperH = R.foldedTopHalfH * H - padY;
-    // EQUAL VISUAL AREA A: width = sqrt(A * aspect), height = sqrt(A / aspect). sqrt(A) is the largest value for which
-    // each piece stays under foldedMaxW, both fit side by side left of the margin zone, and the taller one fits the upper part
+    const cy = SBS.centerY * H;                                   // centre line = middle of the card area (canvas)
+    const off = SIDE_BY_SIDE_BOTTOM_OFFSET;                       // bottom sits lower by off x the top's height
+    const zg = SBS.zoneGap * H;
+    // EQUAL VISUAL AREA A: width = sqrt(A * aspect), height = sqrt(A / aspect). sqrt(A) is the largest value for which each piece stays under foldedMaxW,
+    // both fit side by side left of the margin zone, the top (centred on the line) leaves the head zone free and the lowered bottom leaves the lower zone free
     const lim = {
       "piece-max-width": Math.min((R.foldedMaxW * W) / Math.sqrt(at), (R.foldedMaxW * W) / Math.sqrt(ab)),
       "pair-width": (usableW - gapX) / (Math.sqrt(at) + Math.sqrt(ab)),
-      "upper-height": upperH / Math.max(1 / Math.sqrt(at), 1 / Math.sqrt(ab)),
+      "head-zone": (2 * (cy - padY - SBS.headZoneH * H)) * Math.sqrt(at),
+      "lower-zone": (H - padY - SBS.lowerZoneH * H - cy) / (off / Math.sqrt(at) + 0.5 / Math.sqrt(ab)),
     };
     const [fk, q] = Object.entries(lim).sort((x, y) => x[1] - y[1])[0];
     dbg.binding.push(fk);
     const wt = q * Math.sqrt(at), ht = q / Math.sqrt(at), wb = q * Math.sqrt(ab), hb = q / Math.sqrt(ab);
-    const cy = padY + upperH / 2;
     rects.top = { x: padX, y: cy - ht / 2, w: wt, h: ht };
-    rects.bottom = { x: frameRight - padX - wb, y: cy - hb / 2, w: wb, h: hb };
-    // shoes: centred on the centre axis, lower half (no overlap needed), at most foldedShoeMaxH x the pair's height
+    rects.bottom = { x: frameRight - padX - wb, y: cy + off * ht - hb / 2, w: wb, h: hb };
+    // shoes: centred on the centre axis, directly below the lower edge of the pair (lower zone), at most foldedShoeMaxH x the pair's height
     let { sw, sh } = baseShoe();
     const pairH = Math.max(ht, hb);
     if (sh > pairH * R.foldedShoeMaxH) { sh = pairH * R.foldedShoeMaxH; sw = sh * sa; dbg.binding.push("folded-shoe-cap"); }
-    rects.shoes = { x: centre - sw / 2, y: R.foldedShoesCy * H - sh / 2, w: sw, h: sh };
-    // folded outfits: everything that is not a watch/bracelet goes to the side column; accessories never look bigger than the shoes (real-world proportions)
+    const pairBottom = Math.max(rects.top.y + ht, rects.bottom.y + hb);
+    const lowTop = Math.max(cy + zg, pairBottom + zg);
+    const zoneBottom = H - padY;
+    if (lowTop + sh > zoneBottom) { const k = Math.max(0.1, (zoneBottom - lowTop) / sh); sh *= k; sw *= k; dbg.binding.push("shoe-zone-fit"); }
+    rects.shoes = { x: centre - sw / 2, y: lowTop, w: sw, h: sh };
+    // folded outfits: no inline overlays; head items + glasses go above the line, everything else below it; accessories never look bigger than the shoes
     for (const a of accs) if (a.placement === "inline") accInfo.demoted.push(`${a.type}:inline->column(folded)`);
     const maxLongest = Math.max(sw, sh) * R.foldedAccMaxOfShoe;
-    placeSide(accs, rects, placedExtra, accInfo, { W, H, padX, padY, maxLongest, ppc: rects.top.w / REF_CM.topW, topRect: rects.top, bottomRect: rects.bottom, aspectOf: (a) => (a.aspect && a.aspect > 0.05 ? a.aspect : 1) });
+    const ppcF = rects.top.w / REF_CM.topW;
+    const isUpper = (a: AccIn) => a.type === "sunglasses" || HEAD_TYPES.has(a.type) || a.placement === "head";
+    const zc = { W, H, padX, padY, maxLongest, ppc: ppcF, topRect: rects.top, aspectOf: (a: AccIn) => (a.aspect && a.aspect > 0.05 ? a.aspect : 1) };
+    placeZone(accs.filter(isUpper), rects, placedExtra, accInfo, zc, padY, cy - zg);
+    placeZone(accs.filter((a) => !isUpper(a)), rects, placedExtra, accInfo, zc, lowTop, zoneBottom);
   }
   if (accs.length) dbg.acc = accInfo;
 
@@ -235,6 +246,56 @@ function sideSize(a: AccIn, ppc: number, topH: number, W: number, H: number, ar:
 }
 const overlapsRect = (a: Rect, b: Rect, pad = 0) => a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
 const collides = (r: Rect, others: Rect[], pad = 0) => others.some((o) => overlapsRect(r, o, pad));
+
+/** Side-by-side zone placer: puts items inside the horizontal band [yMin, yMax] without overlapping anything (centre first, then right, then left; nearest to the
+ *  pair first). If they do not fit, all items shrink (down to SBS.minScale), then the lowest-priority one is dropped. Main pieces are never touched. */
+function placeZone(items: AccIn[], main: Partial<Record<SlotName, Rect>>, out: Placed[], info: { placed: { slot: string; type: string; kind: string; zone: string }[]; dropped: string[]; shrunkTo: number; limited: string[] },
+  c: { W: number; H: number; padX: number; padY: number; maxLongest?: number; ppc: number; topRect?: Rect; aspectOf: (a: AccIn) => number }, yMin: number, yMax: number, upper = yMax < c.H / 2 + 1) {
+  if (!items.length) return;
+  const fixed = [...Object.values(main), ...out.map((p) => p.rect)] as Rect[];
+  const gap = SBS.zoneGap * c.H, pad = 1;
+  const tryPlace = (list: AccIn[], scale: number) => {
+    const here: { slot: string; rect: Rect; a: AccIn }[] = [];
+    const order = [...list].sort((x, y) => (A.side.priority[y.type] ?? 1) - (A.side.priority[x.type] ?? 1));
+    for (const a of order) {
+      let sz = sideSize(a, c.ppc, c.topRect?.h ?? 0.4 * c.H, c.W, c.H, c.aspectOf(a));
+      if (c.maxLongest && Math.max(sz.w, sz.h) > c.maxLongest) { const k = c.maxLongest / Math.max(sz.w, sz.h); sz = { w: sz.w * k, h: sz.h * k }; info.limited.push(`${a.type}(shoe-cap)`); }
+      const w = sz.w * scale, h = sz.h * scale;
+      if (h > yMax - yMin + 0.5 || w > c.W - 2 * c.padX + 0.5) return null;
+      const others = [...fixed, ...here.map((p) => p.rect)];
+      let ok: Rect | null = null;
+      const xs = [(c.W - w) / 2, c.W - c.padX - w, c.padX];
+      for (let xi = 0; xi < xs.length && !ok; xi++) {
+        for (let k = 0; k < 60 && !ok; k++) {
+          const y = upper ? yMax - h - k * 0.1 * h : yMin + k * 0.1 * h;   // upper zone: start next to the line and move up; lower zone: start under the pair and move down
+          if (y < yMin - 0.5 || y + h > yMax + 0.5) break;
+          const r = { x: xs[xi], y, w, h };
+          if (!collides(r, others, gap > pad ? gap : pad)) ok = r;
+        }
+      }
+      if (!ok) return null;
+      here.push({ slot: a.slot, rect: ok, a });
+    }
+    return here;
+  };
+  let list = [...items];
+  for (;;) {
+    let res: ReturnType<typeof tryPlace> = null, scale = 1;
+    for (const s of [1, 0.85, 0.7, SBS.minScale]) { res = tryPlace(list, s); if (res) { scale = s; break; } }
+    if (res) {
+      info.shrunkTo = Math.min(info.shrunkTo, scale);
+      for (const p of res) {
+        if (scale < 1) info.limited.push(p.a.type);
+        out.push({ slot: p.slot as SlotName, rect: p.rect, rot: 0, z: A.z.side }); info.placed.push({ slot: p.slot, type: p.a.type, kind: "side", zone: upper ? "above-line" : "below-line" });
+      }
+      return;
+    }
+    const drop = [...list].sort((x, y) => (A.side.priority[x.type] ?? 1) - (A.side.priority[y.type] ?? 1))[0];
+    info.dropped.push(`${drop.type}`);
+    list = list.filter((x) => x !== drop);
+    if (!list.length) return;
+  }
+}
 
 /** Side column: items sit right-aligned at the canvas edge in vertical zones; collisions are resolved by moving up/down;
  *  if something does not fit, all side items shrink (down to minScale), then the lowest-priority item is dropped. Main pieces are never touched. */

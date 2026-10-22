@@ -124,7 +124,6 @@ export const RULES = {
   edgePad: 0.025,             // min distance to the left/right canvas edges (fraction of width)
   edgePadY: 0.010,            // min distance to the top/bottom canvas edges (fraction of height)
   shoeOverlap: 0.50,          // the trouser/dress hem line runs through the middle of the shoes (45-55% of the shoe height overlap)
-  foldedTopHalfH: 0.5,        // folded case: the pair sits in the upper part, at most this share of the canvas height
   foldedGap: 0.03,            // folded case: gap between them (fraction of canvas width)
   foldedMaxW: 0.45,           // folded case: each piece at most this share of the canvas width; both pieces have EQUAL VISUAL AREA (aspect ratios kept)
   foldedShoeMaxH: 0.65,       // folded case: shoe height at most this x the (taller) height of the folded pair (was 0.5: shoes +30%)
@@ -132,7 +131,6 @@ export const RULES = {
   shortAspectMin: 0.95,       // a bottom at least this wide (w/h) counts as a short item, like shorts and knee-length skirts
   shortShoeMaxH: 0.5,         // short bottoms: shoe height at most this x the bottom's height
   shortMaxCover: 0.25,        // short bottoms: shoes cover at most this share of the bottom's height
-  foldedShoesCy: 0.76,        // folded case: vertical centre of the shoes (fraction of canvas height), lower half
   foldedFillMin: 0.90,        // geometry override for TOPS: a compact rectangular mask (area/bbox >= this) is a folded shirt even if the model said spread_front
   stackSlackShare: 1.0,       // spare vertical space is split: this share goes ABOVE the stack (0.5 = centred, 1 = stack sits on the bottom edge), so trousers sit lower
   edgePadTop: 0.0,          // min distance of the stack to the TOP edge of the canvas (the header is outside the canvas); the bottom keeps edgePadY as the safe gap above the buttons
