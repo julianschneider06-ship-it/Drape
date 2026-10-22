@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { FAMILY_KEYS, familyOf, STYLE_FAMILIES } from "../src/config/style-families";
 import { EXTRAS, FAMILY_INFO, ITEMS, SEARCH_MIN_EXACT } from "../src/config/search";
-import { buildFacets, facetCount, isSearchedSlot, matchCount, parseExtra, parseFamily, parseItem, searchRank, showSale, sumFacets, uniqueRows, type SearchRow } from "../src/lib/search";
+import { buildFacets, facetCount, isSearchedSlot, matchCount, parseExtra, parseFamily, parseItem, searchRank, showSale, type SearchRow } from "../src/lib/search";
 import { extrasOfPiece, familyFacts, rowsOf } from "../src/lib/search-index";
 import { STYLE_KEYS } from "../src/classify/styles";
 import { buildCatalogue, type RawCatAcc, type RawCatPiece } from "../src/outfits/catalogue";
@@ -12,6 +12,8 @@ const row = (id: number, o: Partial<SearchRow> = {}): SearchRow => ({ id, g: "me
 const many = (n: number, o: Partial<SearchRow> = {}, from = 1) => Array.from({ length: n }, (_, i) => row(from + i, { q: 0.9 - i * 0.001, ...o }));
 const ids = (r: { cands: { id: number }[] }) => r.cands.map((c) => c.id);
 const Q = { family: "smart", item: "shoes" } as const;
+/** option counts of one direction, built like the server does (rows of that direction only) */
+const facetsFor = (rows: SearchRow[], g: "men" | "women") => buildFacets(rows.filter((r) => r.g === g));
 
 test("only the five families can be chosen, never a single style", () => {
   for (const f of FAMILY_KEYS) assert.equal(parseFamily(f), f);
@@ -41,28 +43,21 @@ test("season is matched on the piece's season mask (an all-season piece matches 
   assert.deepEqual(ids(searchRank(rows, { ...Q, season: "summer" }, "men", 1)).sort(), [2, 3]);
 });
 
-test("own gender first, then the other gender; a unisex piece appears once", () => {
+test("direction filter: only the chosen direction is listed, never the other one; a unisex piece counts once", () => {
   const rows = [...many(3, { g: "women" }, 100), ...many(3, { g: "men" }, 1), row(50, { g: "men" }), row(50, { g: "women" })];
   const men = searchRank(rows, Q, "men"), women = searchRank(rows, Q, "women");
-  assert.deepEqual(men.cands.map((c) => c.g), ["men", "men", "men", "men", "women", "women", "women"]);
-  assert.deepEqual(women.cands.slice(0, 4).map((c) => c.g), ["women", "women", "women", "women"]);
-  assert.equal(men.cands.filter((c) => c.id === 50).length, 1); assert.equal(men.cands.find((c) => c.id === 50)!.g, "men");
+  assert.deepEqual(men.cands.map((c) => c.g), ["men", "men", "men", "men"]);
+  assert.deepEqual(women.cands.map((c) => c.g), ["women", "women", "women", "women"]);
+  assert.deepEqual(ids(men).sort((a, b) => a - b), [1, 2, 3, 50]); assert.deepEqual(ids(women).sort((a, b) => a - b), [50, 100, 101, 102]);
+  assert.equal(men.cands.filter((c) => c.id === 50).length, 1); assert.equal(women.cands.filter((c) => c.id === 50).length, 1);
+  assert.deepEqual(searchRank(many(5, { g: "women" }), Q, "men").cands, []);   // nothing of the other direction leaks in
 });
 
-test("no cap: every matching product is listed once, own gender first", () => {
+test("no cap: every matching product of the direction is listed once", () => {
   const rows = [...many(20, { g: "men" }, 1), ...many(40, { g: "women" }, 100)];
-  const r = searchRank(rows, Q, "men");
-  assert.equal(r.cands.length, 60); assert.equal(new Set(r.cands.map((c) => c.id)).size, 60);
-  assert.ok(r.cands.slice(0, 20).every((c) => c.g === "men") && r.cands.slice(20).every((c) => c.g === "women"));
+  const m = searchRank(rows, Q, "men"), w = searchRank(rows, Q, "women");
+  assert.equal(m.cands.length, 20); assert.equal(w.cands.length, 40); assert.equal(new Set(w.cands.map((c) => c.id)).size, 40);
   assert.equal(searchRank(many(500, { g: "men" }), Q, "men").cands.length, 500);
-});
-
-test("each product once: a unisex piece in both catalogues counts once, in the list and in the option counts", () => {
-  const rows = [...many(3, { g: "men" }, 1), ...many(3, { g: "women" }, 1), row(9, { g: "women" })];
-  assert.equal(uniqueRows(rows, "men").length, 4);
-  const r = searchRank(rows, Q, "men"); assert.deepEqual(ids(r).sort((a, b) => a - b), [1, 2, 3, 9]);
-  assert.deepEqual(r.cands.filter((c) => c.id <= 3).map((c) => c.g), ["men", "men", "men"]);
-  assert.equal(matchCount(buildFacets(uniqueRows(rows, "men")), { item: "shoes", family: "smart" }, 1), 4);
 });
 
 test("order is stable and follows the fit signal (neutral = default order)", () => {
@@ -75,23 +70,26 @@ test("order is stable and follows the fit signal (neutral = default order)", () 
   assert.deepEqual(top, ids(searchRank(rows, Q, "men", SEARCH_MIN_EXACT, (r) => (liked.has(r.id) ? 1 : 0.5))));
 });
 
-test("N of the Search button equals the number of products delivered, with relaxation and both genders", () => {
+test("N of the Search button equals the number of products delivered, for both directions, with relaxation", () => {
   const sets: SearchRow[][] = [
     [...many(60, { mask: 8, ex: ["rain"] }), ...many(20, { mask: 2 }, 100)],
     [...many(3, { mask: 8, ex: ["rain"] }), ...many(20, { mask: 8 }, 100), ...many(20, { mask: 2 }, 200)],
     [...many(2, { mask: 8, ex: ["rain"] }), ...many(2, { mask: 8 }, 100), ...many(30, { mask: 2 }, 200), ...many(30, { fam: "street" }, 400)],
     [...many(2, { g: "men", mask: 8 }), ...many(10, { g: "women", mask: 8 }, 100), ...many(20, { g: "men", mask: 2 }, 200), row(1, { g: "women", mask: 8 })],
+    [...many(5, { g: "women", mask: 8, ex: ["rain"] }, 300), ...many(15, { g: "women", mask: 2 }, 400), ...many(30, { g: "men", mask: 8 }, 500), row(9, { g: "men" }), row(9, { g: "women" })],
     [row(1, { fam: "soft" })],
   ];
   const sels = [{}, { season: "winter" }, { extra: "rain" }, { season: "winter", extra: "rain" }, { season: "summer", extra: "rain" }] as const;
-  for (const rows of sets) {
-    const f = buildFacets(uniqueRows(rows, "men"));
-    for (const own of ["men", "women"] as const) for (const sel of sels) {
+  for (const rows of sets) for (const own of ["men", "women"] as const) {
+    const f = facetsFor(rows, own);
+    for (const sel of sels) {
       const r = searchRank(rows, { ...Q, ...sel }, own);
-      assert.equal(matchCount(f, { item: "shoes", family: "smart", ...sel }), r.cands.length, JSON.stringify(sel));
+      assert.equal(matchCount(f, { item: "shoes", family: "smart", ...sel }), r.cands.length, `${own} ${JSON.stringify(sel)}`);
+      assert.ok(r.cands.every((c) => c.g === own));
     }
   }
-  assert.equal(matchCount(buildFacets([row(1, { fam: "soft" })]), { item: "shoes", family: "rugged" }), 0);
+  assert.equal(matchCount(facetsFor([row(1, { fam: "soft" })], "men"), { item: "shoes", family: "rugged" }), 0);
+  assert.equal(matchCount(facetsFor(many(5, { g: "women" }), "men"), { item: "shoes", family: "smart" }), 0);   // the other direction does not count
 });
 
 test("sale marker only on the searched piece", () => {
@@ -119,9 +117,10 @@ test("still thin: the season is relaxed second; family and part never", () => {
   assert.equal(searchRank(many(3, { mask: 8 }).concat(many(30, { mask: 2 }, 100)), { ...Q, season: "winter" }, "men").relaxed, "season");
 });
 
-test("relaxation counts both genders together", () => {
+test("relaxation looks at the chosen direction only", () => {
   const rows = [...many(2, { g: "men", mask: 8 }), ...many(10, { g: "women", mask: 8 }, 100), ...many(20, { g: "men", mask: 2 }, 200)];
-  assert.equal(searchRank(rows, { ...Q, season: "winter" }, "men").relaxed, "none");   // 12 exact pieces over both genders
+  assert.equal(searchRank(rows, { ...Q, season: "winter" }, "men").relaxed, "season");   // only 2 exact men's pieces
+  assert.equal(searchRank(rows, { ...Q, season: "winter" }, "women").relaxed, "none");   // 10 exact women's pieces are enough
 });
 
 test("zero results stay zero when even the family has none", () => {
@@ -135,11 +134,12 @@ test("one shop cannot fill the page when others have matches", () => {
   assert.ok(top.filter((id) => id < 100).length <= 5 + 1, `shop a took ${top.filter((id) => id < 100).length}`);
 });
 
-test("option counts: part first, then family, season, extra; both genders; only options with results", () => {
+test("option counts: part first, then family, season, extra; per direction; only options with results", () => {
   const rows = [row(1, { ex: ["rain"] }), row(2, { g: "women", fam: "street", mask: 2, item: "accessory" }), row(3, { item: "top", fam: "soft", mask: 15 })];
-  const f = sumFacets(buildFacets(rows.filter((r) => r.g === "men")), buildFacets(rows.filter((r) => r.g === "women")));
+  const f = buildFacets(rows.map((r) => ({ ...r, g: "men" as const })));   // the same pieces, all in one direction
   assert.equal(facetCount(f, {}), 3);
-  assert.equal(facetCount(f, { item: "accessory" }), 1);                                   // women's accessory counts for a men's search
+  assert.equal(facetCount(f, { item: "accessory" }), 1);
+  assert.equal(facetCount(facetsFor(rows, "men"), { item: "accessory" }), 0); assert.equal(facetCount(facetsFor(rows, "women"), { item: "accessory" }), 1);   // counts follow the direction
   assert.equal(facetCount(f, { item: "accessory", family: "street", season: "summer" }), 1);
   assert.equal(facetCount(f, { item: "accessory", family: "street", season: "winter" }), 0);
   assert.equal(facetCount(f, { item: "shoes", family: "smart", extra: "rain" }), 1);

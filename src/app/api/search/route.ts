@@ -7,7 +7,7 @@ import { searchFacets, searchPage } from "@/lib/search-server";
 
 export const dynamic = "force-dynamic";
 
-// GET  /api/search?gender=women|men  -> option counts (which options have results, and how many products a search delivers), same for everyone (CDN cache)
+// GET  /api/search?gender=women|men  -> option counts of that direction (which options have results, and how many products a search delivers), same for everyone (CDN cache)
 // POST /api/search {gender, family, item[, season][, extra][, from][, taste][, seed]} -> the next small page of outfits (each composed around one matching product,
 //      in the ranked order of ALL matching products), + total / next. taste (the device's taste string) and seed (welcome style picks) only change the order.
 // Read-only; nothing is written, nothing paid. Only the 5 style FAMILIES are accepted: an individual style name (or anything else) is a 400.

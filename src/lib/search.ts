@@ -1,6 +1,6 @@
 // Search logic (pure, shared by server and browser). Search works on PIECES: only the searched piece must match the filters (style family, season, extra);
-// the rest of the outfit is composed freely around it (src/outfits/compose-around.ts). This file ranks the matching pieces (own gender first, then the other
-// gender), relaxes the optional filters when few exact matches exist, counts what each option would return and decides which pieces are greyed out.
+// the rest of the outfit is composed freely around it (src/outfits/compose-around.ts). The direction (men / women) is the first step: only pieces of the chosen
+// direction are ever listed or counted. This file ranks the matching pieces, relaxes the optional filters when few exact matches exist, counts what each option would return and decides which pieces are greyed out.
 import { FAMILY_KEYS, type StyleFamily } from "@/config/style-families";
 import { EXTRAS, SEARCH_MIN_EXACT, SEARCH_STORE_CAP, SEASONS, type SearchExtra, type SearchItem, type SearchSeason } from "@/config/search";
 
@@ -28,13 +28,6 @@ function diversify(list: SearchRow[], cap: number): SearchRow[] {
   return [...first, ...rest];
 }
 
-/** one row per product (a unisex piece is in both catalogues): the own gender's row wins */
-export function uniqueRows(rows: SearchRow[], own: Gender): SearchRow[] {
-  const by = new Map<number, SearchRow>();
-  for (const r of rows) { const o = by.get(r.id); if (!o || (r.g === own && o.g !== own)) by.set(r.id, r); }
-  return [...by.values()];
-}
-
 /** which optional filters are dropped for a given number of exact matches: none, the extra, or the season too (see searchRank) */
 function relaxLimit(exact: number, countTier1: () => number, q: Pick<SearchQuery, "season" | "extra">, minExact: number): 0 | 1 | 2 {
   let limit: 0 | 1 | 2 = 0;
@@ -46,13 +39,13 @@ function relaxLimit(exact: number, countTier1: () => number, q: Pick<SearchQuery
 }
 
 /**
- * ALL matching products in display order (no cap): own gender first, then the other gender, each ranked exact matches first. Each product appears once
- * (a unisex piece under the own gender). Relaxation (extra first, then season) looks at both genders together. `fit` (0..1, 0.5 = neutral) is the device's
+ * ALL matching products of the chosen direction `own` in display order (no cap), exact matches first. Each product appears once (a unisex piece is one row in
+ * each gender's index, only the chosen direction's row is used). Relaxation (extra first, then season) looks at that direction only. `fit` (0..1, 0.5 = neutral) is the device's
  * taste for a piece (style picks as prior, likes); without signals it is neutral and the order is the stable default (quality, then id).
  * The caller composes the outfit around each candidate on demand, in this order.
  */
 export function searchRank(rowsIn: SearchRow[], q: SearchQuery, own: Gender, minExact = SEARCH_MIN_EXACT, fit?: (r: SearchRow) => number): { cands: Cand[]; relaxed: Relaxed; exact: number } {
-  const base = uniqueRows(rowsIn, own).filter((r) => r.fam === q.family && r.item === q.item);
+  const base = rowsIn.filter((r) => r.g === own && r.fam === q.family && r.item === q.item);
   const sb = q.season ? SEASON_BIT[q.season] : 0;
   const seasonOk = (r: SearchRow) => !q.season || (r.mask & sb) !== 0, extraOk = (r: SearchRow) => !q.extra || r.ex.includes(q.extra);
   const tierOf = (r: SearchRow) => (seasonOk(r) && extraOk(r) ? 0 : seasonOk(r) ? 1 : 2);   // 0 exact, 1 extra dropped, 2 season (and extra) dropped
@@ -60,14 +53,8 @@ export function searchRank(rowsIn: SearchRow[], q: SearchQuery, own: Gender, min
   const exact = base.filter((r) => tierOf(r) === 0).length;
   const limit = relaxLimit(exact, () => base.filter((r) => tierOf(r) <= 1).length, q, minExact);
   let relaxed: Relaxed = limit === 0 ? "none" : limit === 1 ? "extra" : "season";
-  const ranked = (g: Gender) => {
-    const mine = base.filter((r) => r.g === g && tierOf(r) <= limit);
-    return [0, 1, 2].flatMap((t) => diversify(mine.filter((r) => tierOf(r) === t).sort((a, b) => quality(b) - quality(a) || a.id - b.id), SEARCH_STORE_CAP));
-  };
-  const other: Gender = own === "women" ? "men" : "women";
-  const a = ranked(own), b = ranked(other);
-  const cands = [...a, ...b].map((r) => ({ id: r.id, g: r.g }));
-  if (!cands.length || [...a, ...b].every((r) => tierOf(r) === 0)) relaxed = "none";
+  const cands: Cand[] = [0, 1, 2].flatMap((t) => diversify(base.filter((r) => tierOf(r) <= limit && tierOf(r) === t).sort((a, b) => quality(b) - quality(a) || a.id - b.id), SEARCH_STORE_CAP)).map((r) => ({ id: r.id, g: r.g }));
+  if (!cands.length || base.filter((r) => tierOf(r) <= limit).every((r) => tierOf(r) === 0)) relaxed = "none";
   return { cands, relaxed, exact };
 }
 
@@ -81,7 +68,7 @@ export function matchCount(f: Facets, sel: { item: string; family: string; seaso
 /** the sale marker (outline + SALE label) is drawn on the searched piece only; the greyed-out pieces of a Search result never show it */
 export const showSale = (onSale: boolean, dimmed: boolean) => onSale && !dimmed;
 
-/** option counts of matching PIECES (both genders together): key "item|family|season|extra", "*" = not chosen. At most about 2000 keys. */
+/** option counts of matching PIECES of one direction: key "item|family|season|extra", "*" = not chosen. At most about 2000 keys. */
 export type Facets = Record<string, number>;
 export const facetKey = (i: string, f: string, s: string, e: string) => `${i}|${f}|${s}|${e}`;
 export function buildFacets(rows: SearchRow[]): Facets {
@@ -95,7 +82,6 @@ export function buildFacets(rows: SearchRow[]): Facets {
 /** how many pieces match these (partly unchosen) options; used to offer only options that have results */
 export const facetCount = (f: Facets, sel: { item?: string | null; family?: string | null; season?: string | null; extra?: string | null }) =>
   f[facetKey(sel.item ?? "*", sel.family ?? "*", sel.season ?? "*", sel.extra ?? "*")] ?? 0;
-export const sumFacets = (a: Facets, b: Facets): Facets => { const o = { ...a }; for (const [k, v] of Object.entries(b)) o[k] = (o[k] ?? 0) + v; return o; };
 
 /** greying: the searched item stays normal, everything else of the outfit is secondary. slot = a layout slot name (top, bottom, shoes, full, acc1 ...). */
 export function isSearchedSlot(slot: string, item: SearchItem): boolean {

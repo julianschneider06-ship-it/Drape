@@ -11,13 +11,13 @@ const Icon = ({ tab }: { tab: Tab }) => (
   </svg>
 );
 
-/** Slim bottom bar (white, thin grey line on top). Active tab black, inactive grey. Switching only toggles visibility; nothing is recorded. */
+/** Slim bottom bar (white, thin grey line on top). Active tab black, inactive grey. Switching only toggles visibility; nothing is recorded. Tapping Search while in Search is passed on too (the configurator reopens). */
 function BottomNav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   return (
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)]" style={{ height: `calc(${NAV_PX}px + env(safe-area-inset-bottom))` }}>
       <div className="mx-auto flex h-[49px] max-w-md" role="tablist">
         {([["foryou", "For You"], ["search", "Search"]] as [Tab, string][]).map(([t, label]) => (
-          <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => tab !== t && onTab(t)}
+          <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => (tab !== t || t === "search") && onTab(t)}
             className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] ${tab === t ? "font-semibold text-black" : "text-neutral-400"}`}>
             <Icon tab={t} />{label}
           </button>

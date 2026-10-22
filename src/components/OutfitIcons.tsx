@@ -24,6 +24,8 @@ const D: Record<IconId, React.ReactNode> = {
   "item-accessory": <><circle cx="7.5" cy="13" r="3" /><circle cx="16.5" cy="13" r="3" /><path d="M10.5 13h3M4.5 13L5 8.5M19.5 13L19 8.5" /></>,                    // sunglasses
   "item-shoes": <path d="M4 17h16v-2.4c-3 0-4.2-1.4-5.2-3.4l-2.4 1.2c-1.7-1-2.5-2.6-2.8-4.3L7 8.5C6.6 12 5.6 14.4 4 14.8z" />,                                      // sneaker
   "item-top": <path d="M9 5.5L4 8l1.8 3.6L8 10.5V18.5h8v-8l2.2 1.1L20 8l-5-2.5q-1.2 1.6-3 1.6T9 5.5z" />,                                                          // t-shirt
+  "dir-women": <path d="M10 4.5h4l.4 5L18 19H6l3.6-9.5z" />,                                                                                                       // dress
+  "dir-men": <path d="M10 5h4l-1 3 1.6 9-2.6 2-2.6-2L11 8z" />,                                                                                                      // tie
   "item-bottom": <path d="M7.5 5h9l1.2 14h-4.2L12 10.5 10.5 19H6.3z" />,                                                                                              // trousers                                                                                         // diamond
 };
 

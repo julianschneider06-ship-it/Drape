@@ -4,7 +4,7 @@ import type { FeedCard, FeedOutfit } from "@/lib/types";
 import type { SlotName } from "@/lib/layout/engine";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { FAMILY_KEYS, type StyleFamily } from "@/config/style-families";
-import { EXTRAS, FAMILY_INFO, ITEMS, SEASONS, extraIcon, familyIcon, itemIcon, seasonIcon, type SearchExtra, type SearchItem, type SearchSeason } from "@/config/search";
+import { DIRECTIONS, EXTRAS, FAMILY_INFO, ITEMS, SEASONS, dirIcon, extraIcon, familyIcon, itemIcon, seasonIcon, type Direction, type SearchExtra, type SearchItem, type SearchSeason } from "@/config/search";
 import { facetCount, isSearchedSlot, matchCount, type Facets, type Relaxed } from "@/lib/search";
 import { STYLES_GENDER_KEY, STYLES_KEY, cleanStyles } from "@/lib/welcome";
 import { track } from "@/lib/client/track";
@@ -14,7 +14,7 @@ import { IconGlyph } from "./OutfitIcons";
 import type { IconId } from "@/lib/outfit-icons";
 
 interface Sel { item: SearchItem | null; family: StyleFamily | null; season: SearchSeason | null; extra: SearchExtra | null }
-type Step = "A" | "B" | "C" | "D";   // A part, B style family, C season, D extra (the order of the configurator)
+type Step = "G" | "A" | "B" | "C" | "D";   // G direction (men / women), A part, B style family, C season, D extra (the order of the configurator)
 type Phase = "config" | "loading" | "results" | "error";
 interface Page { items: FeedOutfit[]; sids: number[]; relaxed: Relaxed; total: number; next: number; skipped: number }
 interface Result { items: FeedOutfit[]; relaxed: Relaxed; total: number; next: number; skipped: number; done: boolean; more: boolean; failed: boolean }
@@ -32,10 +32,10 @@ const fc = (f: Facets | null, s: Sel) => (f ? facetCount(f, s) : 1);   // no cou
 /** counts of an option depend only on the steps before it (part first, then family, season, extra) */
 const before = (s: Sel, k: keyof Sel, v: string): Sel => { const o = { ...EMPTY }; for (const x of ORDER) { if (x === k) { (o as Record<string, unknown>)[x] = v; break; } (o as Record<string, unknown>)[x] = s[x]; } return o; };
 /** after a pick, later picks that no longer have results are dropped (earlier picks never) */
-function normalize(f: Facets | null, s: Sel, k: keyof Sel): Sel {
+function normalize(f: Facets | null, s: Sel, k: keyof Sel, incl = false): Sel {
   if (!f) return s;
   const n = { ...s };
-  for (const x of ORDER.slice(ORDER.indexOf(k) + 1)) if (n[x] && fc(f, before(n, x, n[x] as string)) === 0) (n as Record<string, unknown>)[x] = null;
+  for (const x of ORDER.slice(ORDER.indexOf(k) + (incl ? 0 : 1))) if (n[x] && fc(f, before(n, x, n[x] as string)) === 0) (n as Record<string, unknown>)[x] = null;
   return n;
 }
 
@@ -57,24 +57,37 @@ function Section({ step, title, sub, children }: { step: Step; title: string; su
   );
 }
 
-function Search({ gender, canvas, onOpen, onBack }: {
-  gender: "women" | "men"; canvas: { w: number; h: number } | null;
+function Search({ gender, resetKey, canvas, onOpen, onBack }: {
+  gender: "women" | "men"; resetKey: number; canvas: { w: number; h: number } | null;
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onBack: () => void;
 }) {
+  const [dir, setDir] = useState<Direction>(gender);   // step 1: preselected with the feed's direction, can be changed
   const [sel, setSel] = useState<Sel>(EMPTY);
-  const [facets, setFacets] = useState<Facets | null>(null);
+  const [fx, setFx] = useState<{ dir: Direction; f: Facets } | null>(null);
+  const facets = fx && fx.dir === dir ? fx.f : null;   // counts of the chosen direction (null while they load: everything is offered)
   const [phase, setPhase] = useState<Phase>("config");
   const [res, setRes] = useState<Result | null>(null);
   const [shownItem, setShownItem] = useState<SearchItem>("shoes");   // the item of the results on screen (the selection may change while configuring)
   const [lastSel, setLastSel] = useState<Sel>(EMPTY);
+  const [lastDir, setLastDir] = useState<Direction>(gender);
   const scroller = useRef<HTMLDivElement>(null), cfg = useRef<HTMLDivElement>(null), run = useRef(0), tail = useRef<HTMLElement>(null);
   const job = useRef<{ q: Record<string, unknown>; sig: object; seen: Set<number> } | null>(null);   // the running search: its query, frozen signals and the products already shown (each product once)
 
-  useEffect(() => {   // option counts for this gender (read-only, CDN cached); a failure just offers everything
+  useEffect(() => {   // option counts of the chosen direction (read-only, CDN cached); a failure just offers everything. Picks without results in the new direction are dropped.
     const ac = new AbortController();
-    fetch(`/api/search?gender=${gender}`, { signal: ac.signal }).then((r) => (r.ok ? r.json() : null)).then((j: { facets: Facets } | null) => setFacets(j?.facets ?? null)).catch(() => undefined);
+    fetch(`/api/search?gender=${dir}`, { signal: ac.signal }).then((r) => (r.ok ? r.json() : null)).then((j: { facets: Facets } | null) => {
+      if (!j?.facets) return;
+      setFx({ dir, f: j.facets }); setSel((s) => normalize(j.facets, s, "item", true));
+    }).catch(() => undefined);
     return () => ac.abort();
-  }, [gender]);
+  }, [dir]);
+
+  useEffect(() => {   // tapping "Search" in the bottom bar again: a fresh configurator (new search, direction back to the feed's), leaving any results
+    if (!resetKey) return;
+    run.current++; job.current = null;
+    setDir(gender); setSel(EMPTY); setRes(null); setPhase("config");
+    requestAnimationFrame(() => cfg.current?.scrollTo({ top: 0 }));
+  }, [resetKey]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const pick = useCallback(<K extends keyof Sel>(k: K, v: Sel[K]) => setSel((s) => normalize(facets, { ...s, [k]: s[k] === v && (k === "season" || k === "extra") ? null : v }, k)), [facets]);
   const ok = (k: keyof Sel, v: string) => fc(facets, before(sel, k, v)) > 0;
@@ -90,29 +103,32 @@ function Search({ gender, canvas, onOpen, onBack }: {
     return mine === run.current ? p : null;
   }, []);
 
+  /** results of another direction than the feed's: tagged so a like carries no outfit context / taste signal (the feed's taste is per direction) */
+  const mark = useCallback((items: FeedOutfit[]) => (dir === gender ? items : items.map((o) => ({ ...o, og: dir }))), [dir, gender]);
+
   const submit = useCallback(async () => {
     if (!sel.family || !sel.item || n === 0) return;
     const mine = ++run.current, s = sel;
-    setLastSel(s); setShownItem(s.item!); setPhase("loading");
-    job.current = { q: { gender, family: s.family, item: s.item, ...(s.season ? { season: s.season } : {}), ...(s.extra ? { extra: s.extra } : {}) }, sig: signalsFor(gender), seen: new Set() };
+    setLastSel(s); setLastDir(dir); setShownItem(s.item!); setPhase("loading");
+    job.current = { q: { gender: dir, family: s.family, item: s.item, ...(s.season ? { season: s.season } : {}), ...(s.extra ? { extra: s.extra } : {}) }, sig: signalsFor(dir), seen: new Set() };
     try {
       const p = await fetchPage(0, mine); if (!p) return;
-      const items = p.items.filter((_, i) => { const id = p.sids[i]; if (job.current!.seen.has(id)) return false; job.current!.seen.add(id); return true; });
+      const items = mark(p.items.filter((_, i) => { const id = p.sids[i]; if (job.current!.seen.has(id)) return false; job.current!.seen.add(id); return true; }));
       setRes({ items, relaxed: p.relaxed, total: p.total, next: p.next, skipped: p.skipped, done: p.next >= p.total, more: false, failed: false }); setPhase("results");
-      track({ event_type: "search_submitted", gender, ctx: { sq: { f: s.family!, i: s.item!, ...(s.season ? { s: s.season } : {}), ...(s.extra ? { e: s.extra } : {}), r: p.relaxed, n: p.total } } });
+      track({ event_type: "search_submitted", gender: dir, ctx: { sq: { d: dir, f: s.family!, i: s.item!, ...(s.season ? { s: s.season } : {}), ...(s.extra ? { e: s.extra } : {}), r: p.relaxed, n: p.total } } });
       requestAnimationFrame(() => scroller.current?.scrollTo({ top: 0 }));
     } catch { if (mine === run.current) setPhase("error"); }
-  }, [sel, gender, n, fetchPage]);
+  }, [sel, dir, n, fetchPage]);
 
   const more = useCallback(async () => {
     const mine = run.current, cur = res; if (!cur || cur.done || cur.more || !job.current) return;
     setRes({ ...cur, more: true, failed: false });
     try {
       const p = await fetchPage(cur.next, mine); if (!p) return;
-      const items = p.items.filter((_, i) => { const id = p.sids[i]; if (job.current!.seen.has(id)) return false; job.current!.seen.add(id); return true; });
+      const items = mark(p.items.filter((_, i) => { const id = p.sids[i]; if (job.current!.seen.has(id)) return false; job.current!.seen.add(id); return true; }));
       setRes((r) => (r && mine === run.current ? { ...r, items: [...r.items, ...items], next: p.next, skipped: r.skipped + p.skipped, done: p.next >= r.total, more: false } : r));
     } catch { setRes((r) => (r && mine === run.current ? { ...r, more: false, failed: true } : r)); }
-  }, [res, fetchPage]);
+  }, [res, fetchPage, mark]);
 
   useEffect(() => {   // load the next page when the end of the list comes within about one screen (no polling: an observer on the last section)
     const el = tail.current, root = scroller.current;
@@ -122,7 +138,7 @@ function Search({ gender, canvas, onOpen, onBack }: {
   }, [res, more]);
 
   const edit = (step: Step) => {
-    setPhase("config"); setSel(lastSel);
+    setPhase("config"); setSel(lastSel); setDir(lastDir);
     requestAnimationFrame(() => cfg.current?.querySelector(`[data-step="${step}"]`)?.scrollIntoView({ block: "start" }));
   };
 
@@ -131,12 +147,13 @@ function Search({ gender, canvas, onOpen, onBack }: {
   const chips: { step: Step; icon: IconId | null; label: string }[] = useMemo(() => {
     const s = lastSel; if (!s.family || !s.item) return [];
     return [
+      { step: "G", icon: dirIcon(lastDir), label: DIRECTIONS.find((x) => x.id === lastDir)!.label },
       { step: "A", icon: null, label: ITEMS.find((x) => x.id === s.item)!.label },
       { step: "B", icon: familyIcon(s.family), label: FAMILY_INFO[s.family].label },
       ...(s.season ? [{ step: "C" as Step, icon: seasonIcon(s.season), label: SEASONS.find((x) => x.id === s.season)!.label }] : []),
       ...(s.extra ? [{ step: "D" as Step, icon: extraIcon(s.extra), label: EXTRAS.find((x) => x.id === s.extra)!.label }] : []),
     ];
-  }, [lastSel]);
+  }, [lastSel, lastDir]);
 
   const showResults = phase === "results" && res;
   return (
@@ -144,16 +161,19 @@ function Search({ gender, canvas, onOpen, onBack }: {
       {/* configurator (stays mounted so the choices survive a visit to the results) */}
       <div ref={cfg} className="no-scrollbar absolute inset-0 overflow-y-auto overscroll-y-contain pt-[calc(max(0.75rem,env(safe-area-inset-top))+2.75rem)]" style={{ visibility: phase === "config" || phase === "loading" || phase === "error" ? "visible" : "hidden" }}>
         <h1 className="px-4 pb-4 text-xl font-semibold tracking-tight">Find an outfit</h1>
-        <Section step="A" title="1. What are you looking for?" sub="Required. This piece stays in colour, the rest is greyed out.">
+        <Section step="G" title="1. Men or women?" sub="Required. Search shows only this direction.">
+          <div className="grid grid-cols-2 gap-2">{DIRECTIONS.map((d) => <Option key={d.id} icon={dirIcon(d.id)} label={d.label} hint={d.hint} on={dir === d.id} disabled={false} onClick={() => setDir(d.id)} />)}</div>
+        </Section>
+        <Section step="A" title="2. What are you looking for?" sub="Required. This piece stays in colour, the rest is greyed out.">
           <div className="grid grid-cols-2 gap-2">{ITEMS.map((i) => <Option key={i.id} icon={itemIcon(i.id)} label={i.label} hint={i.hint} on={sel.item === i.id} disabled={!ok("item", i.id)} onClick={() => pick("item", i.id)} />)}</div>
         </Section>
-        <Section step="B" title="2. Pick a style family" sub="Required. The piece matches this family; the rest of the outfit can be any style.">
+        <Section step="B" title="3. Pick a style family" sub="Required. The piece matches this family; the rest of the outfit can be any style.">
           <div className="grid gap-2">{FAMILY_KEYS.map((f) => <Option key={f} icon={familyIcon(f)} label={FAMILY_INFO[f].label} hint={FAMILY_INFO[f].hint} on={sel.family === f} disabled={!ok("family", f)} onClick={() => pick("family", f)} />)}</div>
         </Section>
-        <Section step="C" title="3. Pick a season" sub="Optional.">
+        <Section step="C" title="4. Pick a season" sub="Optional.">
           <div className="grid grid-cols-2 gap-2">{SEASONS.map((s) => <Option key={s.id} icon={seasonIcon(s.id)} label={s.label} hint={s.hint} on={sel.season === s.id} disabled={!ok("season", s.id) && sel.season !== s.id} onClick={() => pick("season", s.id)} />)}</div>
         </Section>
-        <Section step="D" title="4. Add one extra" sub="Optional. Only extras that have results are shown.">
+        <Section step="D" title="5. Add one extra" sub="Optional. Only extras that have results are shown.">
           <div className="grid grid-cols-2 gap-2">{EXTRAS.filter((e) => ok("extra", e.id) || sel.extra === e.id || !facets).map((e) => <Option key={e.id} icon={extraIcon(e.id)} label={e.label} hint={e.hint} on={sel.extra === e.id} disabled={false} onClick={() => pick("extra", e.id)} />)}</div>
         </Section>
         <div className="sticky bottom-0 bg-gradient-to-t from-white via-white to-white/0 px-4 pb-3 pt-4">
@@ -177,8 +197,7 @@ function Search({ gender, canvas, onOpen, onBack }: {
           <div ref={scroller} className="no-scrollbar h-full snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
             {res.items.map((o, i) => (
               <section key={o.id} data-i={i} className="relative flex h-full snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))` }}>
-                {canvas && <div className="contents" style={o.og ? { opacity: 0.72 } : undefined}><OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} shine={shineOn ? { color: o.sc ?? null } : undefined} onOpen={(c, slot) => onOpen(c, o, i, slot)} /></div>}
-                {o.og && <span className="pointer-events-none absolute left-4 top-[4.25rem] rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-500">{o.og === "women" ? "Women\u2019s" : "Men\u2019s"}</span>}
+                {canvas && <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} shine={shineOn ? { color: o.sc ?? null } : undefined} onOpen={(c, slot) => onOpen(c, o, i, slot)} />}
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-white px-4 text-xs text-neutral-400" style={{ height: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))`, paddingBottom: "var(--safe-b, 0px)" }}>
                   {i + 1} / {res.done ? res.items.length : res.total - res.skipped}{res.relaxed !== "none" ? " · Showing fewer exact matches" : ""}
                 </div>

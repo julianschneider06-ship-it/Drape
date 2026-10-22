@@ -7,6 +7,13 @@ export const SEARCH_PAGE = 4;             // outfits composed per request while 
 export const SEARCH_STORE_CAP = 5;        // per tier, at most this many pieces of one shop come first (keeps one shop from filling the page)
 export const SEARCH_MIN_EXACT = 8;        // fewer exact matches than this: the optional filters are relaxed (extra first, then season)
 
+export type Direction = "women" | "men";
+export const DIRECTIONS: { id: Direction; label: string; hint: string }[] = [
+  { id: "women", label: "Women", hint: "Women\u2019s pieces and outfits" },
+  { id: "men", label: "Men", hint: "Men\u2019s pieces and outfits" },
+];
+export const dirIcon = (d: Direction): IconId => `dir-${d}`;
+
 export type SearchItem = "accessory" | "shoes" | "top" | "bottom";
 export const ITEMS: { id: SearchItem; label: string; hint: string }[] = [
   { id: "accessory", label: "Accessory", hint: "Bags, jewellery, hats and more" },

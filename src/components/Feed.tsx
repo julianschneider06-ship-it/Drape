@@ -52,6 +52,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const [navReady, setNavReady] = useState(false);   // false until the first-visit check ran (no bar flash before the welcome flow)
   const [tab, setTab] = useState<Tab>("foryou");
   const [searchSeen, setSearchSeen] = useState(false);
+  const [searchReset, setSearchReset] = useState(0);
   const tabRef = useRef<Tab>("foryou"), awayAt = useRef(0), searchStarted = useRef(false);
   const [items, setItems] = useState<FeedOutfit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -289,7 +290,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     const want = !liked.has(card.id);
     setLiked((prev) => { const n = new Set(prev); if (want) n.add(card.id); else n.delete(card.id); return n; });
     if (outfit && tabRef.current === "foryou") interacted.current.add(index);   // a like from the Search tab counts as a normal like, but is not a feed interaction
-    const og = !!outfit?.og;   // Search, other gender's outfit: the like is stored as a normal like, but the outfit context and the taste signal are left out
+    const og = !!outfit?.og;   // Search in the other direction than the feed's: the like is stored as a normal like, but the outfit context and the taste signal are left out
     if (!og) signal({ t: want ? "like" : "unlike", p: card.id, o: outfit ? shownIds(outfit) : undefined, tg: outfit ? tg(outfit) : null });
     fetch("/api/likes", {
       method: "POST",
@@ -377,6 +378,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const navOn = searchOn && navReady && obPhase === "off";   // the bar is hidden during the welcome flow and the tutorial
   const H = "calc(100dvh - var(--nav-h, 0px))";
   const goTab = useCallback((t: Tab) => {
+    if (t === "search" && tabRef.current === "search") { setSearchReset((n) => n + 1); return; }   // Search tapped again: fresh configurator, no tab switch (nothing recorded)
     if (t === "search") { awayAt.current = Date.now(); setSearchSeen(true); if (!searchStarted.current) { searchStarted.current = true; track({ event_type: "search_started", gender: genderRef.current }); } }
     else if (awayAt.current) { const gone = Date.now() - awayAt.current; awayAt.current = 0; for (const [k, v] of enterAt.current) enterAt.current.set(k, v + gone); }   // time spent on the Search tab is not dwell time
     tabRef.current = t; setTab(t);
@@ -430,7 +432,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
 
       {navOn && searchSeen && (
         <div className="fixed inset-x-0 top-0 z-30" style={{ bottom: "var(--nav-h)", visibility: tab === "search" ? "visible" : "hidden" }}>
-          <Search key={gender ?? "women"} gender={gender ?? "women"} canvas={canvas} onOpen={openFromSearch} onBack={backToForYou} />
+          <Search key={gender ?? "women"} gender={gender ?? "women"} resetKey={searchReset} canvas={canvas} onOpen={openFromSearch} onBack={backToForYou} />
         </div>
       )}
       {navOn && <BottomNav tab={tab} onTab={goTab} />}
