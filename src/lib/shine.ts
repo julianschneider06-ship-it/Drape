@@ -35,9 +35,14 @@ export function shineColor(name: string | null | undefined, onSale: boolean, cfg
 }
 
 /** Short wobbly strokes on an ellipse around a w x h box, as SVG path strings in box coordinates (origin = box top left; they lie outside the box). Deterministic per seed. */
-export function shineStrokes(w: number, h: number, seed: number, onSale: boolean, cfg = SHINE): string[] {
+/** Seeded random numbers in [-0.5, 0.5), shared by every hand-drawn element (shine strokes, price box): same seed = same drawing. */
+export const seededRnd = (seed: number) => {
   let s = (seed >>> 0) || 1;
-  const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296 - 0.5; };
+  return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296 - 0.5; };
+};
+
+export function shineStrokes(w: number, h: number, seed: number, onSale: boolean, cfg = SHINE): string[] {
+  const rnd = seededRnd(seed);
   const d = cfg.distance + (onSale ? cfg.saleExtra : 0), cx = w / 2, cy = h / 2, start = rnd() * Math.PI;
   const f = (n: number) => n.toFixed(1);
   return Array.from({ length: cfg.count }, (_, i) => {
@@ -49,4 +54,16 @@ export function shineStrokes(w: number, h: number, seed: number, onSale: boolean
     const mx = (x0 + x1) / 2 - sa * cfg.wobble * (1 + rnd()), my = (y0 + y1) / 2 + ca * cfg.wobble * (1 + rnd());
     return `M${f(x0)} ${f(y0)}Q${f(mx)} ${f(my)} ${f(x1)} ${f(y1)}`;
   });
+}
+
+/** Hand-drawn rectangle outline w x h as SVG path strings (four wobbly sides that overshoot their corners a little), same wobble randomness as the shine strokes. Deterministic per seed. */
+export function wobblyBox(w: number, h: number, seed: number, cfg: { wobble: number; overshoot: number }): string[] {
+  const rnd = seededRnd(seed), f = (n: number) => n.toFixed(1), j = () => rnd() * 2 * cfg.wobble, o = () => cfg.overshoot * (0.5 + rnd());
+  const side = (x0: number, y0: number, x1: number, y1: number) => {
+    const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+    const a = [x0 - ux * o() + j(), y0 - uy * o() + j()], b = [x1 + ux * o() + j(), y1 + uy * o() + j()];
+    const mx = (x0 + x1) / 2 - uy * j() * 1.4, my = (y0 + y1) / 2 + ux * j() * 1.4;
+    return `M${f(a[0])} ${f(a[1])}Q${f(mx)} ${f(my)} ${f(b[0])} ${f(b[1])}`;
+  };
+  return [side(0, 0, w, 0), side(w, 0, w, h), side(w, h, 0, h), side(0, h, 0, 0)];
 }

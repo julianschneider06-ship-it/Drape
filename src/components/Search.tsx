@@ -10,6 +10,7 @@ import { STYLES_GENDER_KEY, STYLES_KEY, cleanStyles } from "@/lib/welcome";
 import { track } from "@/lib/client/track";
 import OutfitCanvas from "./OutfitCanvas";
 import { shineVisible } from "@/lib/shine";
+import { priceTagOn } from "@/lib/price-tag";
 import { EMPTY_SEL, canClear, decodeState, encodeState, freshState, tapAction, type Phase, type Sel } from "@/lib/search-state";
 import { IconGlyph } from "./OutfitIcons";
 import type { IconId } from "@/lib/outfit-icons";
@@ -159,6 +160,7 @@ function Search({ gender, tapKey, canvas, onOpen, onBack }: {
 
   const forcedOff = useMemo(() => typeof window !== "undefined" && !shineVisible(window.location.search, true), []);   // ?shine=0 forces the strokes off
   const shineOn = highlight && !forcedOff;
+  const priceOn = useMemo(() => typeof window === "undefined" || priceTagOn(window.location.search), []);   // ?price=0 hides the price boxes (link only)
   const toggleHighlight = useCallback(() => setHighlight((h) => { try { localStorage.setItem(HIGHLIGHT_KEY, h ? "0" : "1"); } catch { /* ignore */ } return !h; }), []);
   const dim = useCallback((slot: SlotName) => !isSearchedSlot(slot, shownItem), [shownItem]);
   const chips: { step: Step; icon: IconId | null; label: string }[] = useMemo(() => {
@@ -217,7 +219,7 @@ function Search({ gender, tapKey, canvas, onOpen, onBack }: {
           <div ref={scroller} className="no-scrollbar h-full snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
             {res.items.map((o, i) => (
               <section key={o.id} data-i={i} className="relative flex h-full snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))` }}>
-                {canvas && <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} shine={shineOn ? { color: o.sc ?? null } : undefined} onOpen={(c, slot) => onOpen(c, o, i, slot)} />}
+                {canvas && <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} priceTag={priceOn} shine={shineOn ? { color: o.sc ?? null } : undefined} onOpen={(c, slot) => onOpen(c, o, i, slot)} />}
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-white px-24 text-center text-xs leading-tight text-neutral-400" style={{ height: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))`, paddingBottom: "var(--safe-b, 0px)" }}>
                   {i + 1} / {res.done ? res.items.length : res.total - res.skipped}{res.relaxed !== "none" ? " · Showing fewer exact matches" : ""}
                 </div>

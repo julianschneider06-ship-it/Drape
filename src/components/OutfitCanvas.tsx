@@ -6,8 +6,9 @@ import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/form
 import { garmentClass, RULES, SALE_LABEL } from "@/lib/layout/config";
 import { isOnSale, saleMarkerOn } from "@/lib/client/sale";
 import { showSale } from "@/lib/search";
-import { shineColor, shineStrokes } from "@/lib/shine";
-import { SHINE } from "@/config/search";
+import { shineColor, shineStrokes, wobblyBox } from "@/lib/shine";
+import { PRICE_TAG, SHINE } from "@/config/search";
+import { placePriceTag, priceTagSize, priceTagText } from "@/lib/price-tag";
 import { computeLayout, hash32, pickTemplate, type AccIn, type AccSlot, type PieceIn, type SlotName } from "@/lib/layout/engine";
 import { hitCategory, HIT_DEBUG_COLORS, HIT_ICON_ZONE } from "@/config/hit-area";
 import { hitInsets } from "@/lib/hit-areas";
@@ -17,10 +18,10 @@ import { tagLine } from "@/outfits/tags";
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, shine, reserveIcons }: {
+function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, shine, reserveIcons, priceTag }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string, slots: string[]) => void;
-  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; shine?: { color: string | null }; animateLayout?: boolean; reserveIcons?: boolean;   // reserveIcons: the attribute icons sit top left (non-tappable), tap areas never extend into them;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
+  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; shine?: { color: string | null }; animateLayout?: boolean; reserveIcons?: boolean; priceTag?: boolean;   // priceTag: Search only, hand-drawn price box next to the searched (not dimmed) piece, decoration (not tappable);   // reserveIcons: the attribute icons sit top left (non-tappable), tap areas never extend into them;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
@@ -33,6 +34,15 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
     (outfit.accessories ?? []).slice(0, 8).forEach((a, i) => { if (a.card && a.card.cutout) out.push({ slot: `acc${a.slot_no ?? i + 1}` as AccSlot, acc: a, card: viewCard(a.card, cut) }); });
     return out;
   }, [outfit, cut, showAcc]);
+  // Search price tag: the searched piece = the first slot that is not greyed out; no price = no tag
+  const tagInfo = useMemo(() => {
+    if (!priceTag || !dim) return null;
+    const slots = [...(Object.keys(cards) as SlotName[]), ...accs.map((a) => a.slot)];
+    const slot = slots.find((sl) => !dim(sl));
+    const c = slot ? (cards[slot] ?? accs.find((a) => a.slot === slot)?.card) : undefined;
+    const text = c ? priceTagText(c) : null;
+    return slot && c && text ? { slot, id: c.id, text, ...priceTagSize(text) } : null;
+  }, [priceTag, dim, cards, accs]);
   const layout = useMemo(() => {
     const pieces: Partial<Record<SlotName, PieceIn>> = {};
     for (const [slot, c] of Object.entries(cards) as [SlotName, FeedCard][]) {
@@ -42,8 +52,8 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
     const seed = hash32(String(outfit.id));
     const accessories: AccIn[] = accs.map(({ slot, acc, card }) => { const g = cropGeometry(card); return { slot, type: acc.type, size: acc.size, aspect: g ? g.cw / g.ch : null, placement: acc.placement, zone: acc.zone ?? "mid", frontFlat: !!acc.front_flat, beltShape: acc.belt_shape }; });
     // rule layout by default; ?layout=A,FB forces one of the old random templates (debug)
-    return computeLayout({ kind: outfit.kind, pieces, seed, canvas, accessories, template: override?.length ? pickTemplate(outfit.kind, seed, override) : undefined });
-  }, [cards, outfit, canvas, override, accs]);
+    return computeLayout({ kind: outfit.kind, pieces, seed, canvas, accessories, template: override?.length ? pickTemplate(outfit.kind, seed, override) : undefined, priceTag: tagInfo ? { slot: tagInfo.slot, w: tagInfo.w, h: tagInfo.h } : undefined });
+  }, [cards, outfit, canvas, override, accs, tagInfo]);
 
   // invisible tap areas: visible rect + HIT_PADDING per category, split at the midpoint between neighbours, clamped to the card (src/lib/hit-areas.ts)
   const hits = useMemo(() => hitInsets(layout.pieces.map((p) => ({ slot: p.slot, rect: p.rect, cat: hitCategory(p.slot, accs.find((a) => a.slot === p.slot)?.acc.type) })), canvas, reserveIcons ? [HIT_ICON_ZONE] : []), [layout, accs, canvas, reserveIcons]);
@@ -125,6 +135,21 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
     return out;
   }, [layout, cards, accs, canvas, dim]);
 
+  // price tag spot: below the searched piece's lower-left corner, nudged to a free spot inside the card if needed (never over another piece or the SALE label)
+  const tag = useMemo(() => {
+    if (!tagInfo) return null;
+    const me = layout.pieces.find((p) => p.slot === tagInfo.slot);
+    if (!me) return null;
+    const obstacles = layout.pieces.filter((p) => p.slot !== tagInfo.slot).map((p) => p.rect);
+    const lb = labels[tagInfo.slot];
+    if (lb) {
+      const fs = SALE_LABEL.fontShare * canvas.w, lw = fs * SALE_LABEL.lineEm, lh = fs * SALE_LABEL.lenEm, gap = SALE_LABEL.gap * canvas.w;
+      obstacles.push({ x: lb.side === "right" ? me.rect.x + me.rect.w + gap : me.rect.x - gap - lw, y: me.rect.y + lb.dy, w: lw, h: lh });
+    }
+    const pl = placePriceTag(tagInfo.text, me.rect, obstacles, canvas);
+    return pl ? { ...pl, text: tagInfo.text, seed: hash32(`${outfit.id}:${tagInfo.id}:price`) } : null;
+  }, [tagInfo, layout, labels, canvas, outfit.id]);
+
   const orig = (c: FeedCard, slot: SlotName): FeedCard => (slot.startsWith("acc") ? (accs.find((a) => a.slot === slot)?.acc.card ?? c) : c.id === outfit.top.id ? outfit.top : c.id === outfit.shoes.id ? outfit.shoes : outfit.bottom ?? c);
   const { w: W, h: H } = canvas;
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
@@ -180,6 +205,17 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
           </div>
         );
       })}
+      {tag && (
+        <div aria-hidden data-price-tag={tag.spot} className="pointer-events-none absolute select-none" style={{ left: pct(tag.rect.x, W), top: pct(tag.rect.y, H), width: tag.rect.w, height: tag.rect.h, zIndex: 70 }}>
+          <svg className="absolute overflow-visible" style={{ left: 0, top: 0, width: tag.rect.w, height: tag.rect.h }} viewBox={`0 0 ${tag.rect.w} ${tag.rect.h}`} fill={PRICE_TAG.fill} stroke="none">
+            <rect x="0" y="0" width={tag.rect.w} height={tag.rect.h} rx="2" />
+            <g fill="none" stroke={PRICE_TAG.stroke} strokeWidth={PRICE_TAG.strokeWidth} strokeLinecap="round">
+              {wobblyBox(tag.rect.w, tag.rect.h, tag.seed, { wobble: PRICE_TAG.wobble * tag.scale, overshoot: PRICE_TAG.overshoot * tag.scale }).map((d, i) => <path key={i} d={d} />)}
+            </g>
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center whitespace-nowrap font-medium leading-none" style={{ fontSize: PRICE_TAG.fontPx * tag.scale, color: PRICE_TAG.text }}>{tag.text}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -16,10 +16,10 @@ export const heartAction = (active: boolean, onPress: () => void): RailAction =>
 /** Slim vertical rail at the right edge of the outfit card, vertically centred. Thin line icons like the bottom bar; no labels. */
 function ActionRail({ actions }: { actions: RailAction[] }) {
   return (
-    <div className="absolute right-0 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center" style={{ width: ACTION_RAIL_WIDTH }}>
+    <div className="pointer-events-none absolute right-0 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center" style={{ width: ACTION_RAIL_WIDTH }}>
       {actions.map((a) => (
         <button key={a.id} type="button" onClick={a.onPress} aria-label={a.label} aria-pressed={a.active}
-          className={`flex items-center justify-center text-black transition-transform duration-150 active:scale-90 ${a.active ? "" : "text-neutral-700"}`} style={{ width: ACTION_RAIL_WIDTH, height: ACTION_RAIL_WIDTH }}>
+          className={`pointer-events-auto flex items-center justify-center text-black transition-transform duration-150 active:scale-90 ${a.active ? "" : "text-neutral-700"}`} style={{ width: ACTION_RAIL_WIDTH, height: ACTION_RAIL_WIDTH }}>
           {a.icon(a.active)}
         </button>
       ))}

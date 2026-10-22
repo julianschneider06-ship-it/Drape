@@ -1,5 +1,6 @@
 // Pure layout engine: (outfit pieces, template, seed, canvas size) -> rectangles in px. No React, no DOM.
 import { computeRuleLayout } from "./rules";
+import { fitSafeArea } from "./safe-fit";
 import {
   DEFAULT_ASPECT, FRAME_PAD, HEADER_PX, BUTTON_BAR_PX, JITTER, MARGIN_ZONE, MAX_CANVAS_W, OVERLAP, EDGE_PAD, pieceScale, RULES, SIZE, TEMPLATES,
   type GarmentClass, type Place, type Template,
@@ -20,7 +21,7 @@ export interface Placed { slot: SlotName; rect: Rect; rot: number; z: number }
 export interface LayoutDebug {
   mode: "stacked" | "folded" | "full"; axisX: number; centreX: number;
   hemLine?: { y: number; x0: number; x1: number }; waistLine?: { y: number; x0: number; x1: number };
-  seamMatched?: boolean; ratio?: number; binding: string[];
+  seamMatched?: boolean; ratio?: number; binding: string[]; safeScale?: number; safeShift?: number;   // safeScale / safeShift: the safe-area fit (src/lib/layout/safe-fit.ts) scaled the whole composition / moved it vertically
   acc?: { limited?: string[]; headZone: boolean; headShrink: number; placed: { slot: string; type: string; kind: string; zone: string }[]; demoted: string[]; dropped: string[]; shrunkTo: number }; // which constraints limited the size (class-cap, axis-width, height-fit, ...)
 }
 export interface Layout {
@@ -48,9 +49,9 @@ export function pickTemplate(kind: "three" | "full", seed: number, override?: st
   return forced ?? ofKind[seed % ofKind.length];
 }
 
-export function computeLayout(opts: { kind: "three" | "full"; pieces: Partial<Record<SlotName, PieceIn>>; seed: number; canvas: { w: number; h: number }; template?: Template; accessories?: AccIn[] }): Layout {
+export function computeLayout(opts: { kind: "three" | "full"; pieces: Partial<Record<SlotName, PieceIn>>; seed: number; canvas: { w: number; h: number }; template?: Template; accessories?: AccIn[]; priceTag?: { slot: SlotName; w: number; h: number } }): Layout {
   // Rule-based layout (v3) for standard outfits; the random templates only when a template is forced (?layout=A) or RULES.enabled is false.
-  if (RULES.enabled && !opts.template) return computeRuleLayout(opts);
+  if (RULES.enabled && !opts.template) return fitSafeArea(computeRuleLayout(opts), opts.priceTag);   // safe area: nothing leaves the card at the top or bottom
   const { canvas } = opts, W = canvas.w, H = canvas.h;
   const t = opts.template ?? pickTemplate(opts.kind, opts.seed);
   const rnd = mulberry32(opts.seed ^ 0x9e3779b9);

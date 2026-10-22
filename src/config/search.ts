@@ -68,6 +68,24 @@ export const SHINE = {
   redTolerance: 28,      // degrees of hue around red that count as "close to red" next to the sale outline
 };
 
+/** Hand-drawn price box next to the searched piece in Search results (decoration only, not tappable). ?price=0 hides it (link only). Edit here to tweak the look. */
+export const PRICE_TAG = {
+  fontPx: 11,            // price text size
+  charEm: 0.6,           // estimated text width per character, in em (sizes the box before it is drawn)
+  padX: 6,               // px between text and box outline, left/right
+  padY: 3,               // px between text and box outline, top/bottom
+  strokeWidth: 1.4,      // outline width in px (thin, like the shine strokes)
+  wobble: 1.3,           // px of hand-drawn wobble on the outline
+  overshoot: 2.5,        // px the sides overshoot their corners (child-drawing look)
+  gap: 3,                // px between the piece's lower edge / left edge and the box
+  offsetX: 0,            // extra px shift of the preferred spot (bottom left of the piece), + = right
+  offsetY: 0,            // extra px shift of the preferred spot, + = down
+  stroke: "#262626",     // outline colour (dark grey)
+  text: "#171717",       // text colour
+  fill: "rgba(255,255,255,0.85)",   // fill (white, slightly see-through)
+  minScale: 0.7,         // the box may shrink down to this share when there is no room
+};
+
 /** the Search selection is kept for the session in sessionStorage (selection only) */
 export const SEARCH_STATE_KEY = "drape.search.state";
 /** Highlight chip: the shine strokes show only while it is on (localStorage, default off) */

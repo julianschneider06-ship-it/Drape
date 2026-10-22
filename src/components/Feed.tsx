@@ -8,6 +8,7 @@ import OutfitCanvas, { pieceClass } from "./OutfitCanvas";
 import { canvasSize } from "@/lib/layout/engine";
 import ProductSheet from "./ProductSheet";
 import ActionRail, { heartAction } from "./ActionRail";
+import { railIndex } from "@/lib/rail-state";
 import { ACTION_RAIL_WIDTH } from "@/config/action-rail";
 import { heartState, heartToggle, outfitPieces } from "@/lib/outfit-heart";
 import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
@@ -64,6 +65,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const [wishTab, setWishTab] = useState<WishTab>("products");   // Wishlist view (Products | Generate Outfits), kept while the app is open
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [current, setCurrent] = useState(0);
+  const [railIdx, setRailIdx] = useState(0);   // outfit the fixed action rail belongs to (nearest snap position, flips at the halfway point of a scroll)
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
   const [feedCanvas, setFeedCanvas] = useState<{ w: number; h: number } | null>(null);   // the feed card: no button bar below, the action rail's width kept free on the right (Search keeps `canvas`)
   const [placed, setPlaced] = useState<Record<number, string>>({});   // slots the layout placed per outfit (the heart only touches pieces that are visible)
@@ -247,6 +249,18 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     if (obActive.current) pendingLoad.current = true; else loadMore();
   }, [gender, loadMore]);
 
+  // the action rail is a fixed overlay: only its state follows the outfit that is in view (passive scroll listener, one frame at a time)
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || obPhase !== "off") return;
+    let raf = 0;
+    const sync = () => { raf = 0; const sec = el.querySelector("section[data-i]") as HTMLElement | null; if (sec) setRailIdx(railIndex(el.scrollTop, sec.offsetHeight, itemsRef.current.length)); };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(sync); };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    sync();
+    return () => { el.removeEventListener("scroll", onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, [obPhase, items.length]);
+
   // impressions, dwell time, scroll-past (IntersectionObserver on each outfit screen)
   useEffect(() => {
     const root = scroller.current;
@@ -417,10 +431,9 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         {obPhase === "off" && shown.map((o, i) => (
           <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)" }}>
             {feedCanvas && (
-              <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>
+              <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>   {/* the right ACTION_RAIL_WIDTH px stay empty: the fixed rail overlay sits there */}
                 <OutfitCanvas outfit={o} canvas={feedCanvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
                   onLayout={(layout, mode, slots) => { layoutInfo.current.set(o.id, { layout, mode }); const k = slots.join(","); setPlaced((p) => (p[o.id] === k ? p : { ...p, [o.id]: k })); }} />
-                <ActionRail actions={[heartAction(heartState(outfitPieces(o, placed[o.id]?.split(",")).map((c) => c.id), liked) === "all", () => heartOutfit(o, i))]} />
               </div>
             )}
             {iconsOn && <OutfitIcons icons={outfitIcons(o.tags)} />}
@@ -433,6 +446,14 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
           </section>
         )}
       </div>
+
+      {obPhase === "off" && feedCanvas && shown[railIdx] && (   // fixed action rail: never moves with the cards; acts on the outfit in view
+        <div className="pointer-events-none fixed inset-x-0 top-0 z-20 flex flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)", ...hideFeed }}>
+          <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>
+            <ActionRail actions={[heartAction(heartState(outfitPieces(shown[railIdx], placed[shown[railIdx].id]?.split(",")).map((c) => c.id), liked) === "all", () => heartOutfit(shown[railIdx], railIdx))]} />
+          </div>
+        </div>
+      )}
 
       {navOn && searchOn && searchSeen && (
         <div className="fixed inset-x-0 top-0 z-30" style={{ bottom: "var(--nav-h)", visibility: tab === "search" ? "visible" : "hidden" }}>
