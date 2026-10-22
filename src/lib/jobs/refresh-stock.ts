@@ -3,8 +3,9 @@
 // (every 5 minutes while the job is open) continues where it stopped. Phases: main (all shops, 2 at a time) -> retry (shops that answered 429, once, slowly,
 // not before RETRY_AFTER_S after the first pass) -> snapshot (rebuild the composer catalogue when something changed) -> done.
 import { rpc } from "@/ingest/gateway";
-import { refreshShop, type ShopResult } from "@/ingest/refresh";
+import { refreshShop, REFRESH_COUNTRY, type ShopResult } from "@/ingest/refresh";
 import { SOURCES } from "@/ingest/sources";
+import type { SourceConfig } from "@/ingest/types";
 import { buildSnapshot } from "@/outfits/build-snapshot";
 
 const CHUNK_MS = 200_000;          // stop starting new shops after this (the function may run 300 s)
@@ -15,18 +16,29 @@ const CONC = 2;
 
 interface Progress {
   phase: "main" | "retry" | "snapshot"; done: string[]; retry: string[]; retried: string[]; pass1_end?: string;
-  tot: Record<string, number>; skipped: Record<string, string>; started?: string; invocations: number; snapshot?: string; last_error?: string; force_prices?: boolean; only?: string[]; market?: boolean;   // false = no country parameter (tests only)
+  tot: Record<string, number>; skipped: Record<string, string>; started?: string; invocations: number; snapshot?: string; last_error?: string; force_prices?: boolean; only?: string[]; 
 }
 const ZERO = () => ({ shops_ok: 0, shops_skipped: 0, offers_checked: 0, became_sold_out: 0, back_in_stock: 0, price_changed: 0, sale_started: 0, sale_ended: 0, delisted: 0, feed_ready_changed: 0, changed: 0, retried_429: 0, recovered_429: 0 });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 type Job = { id: number; progress: Partial<Progress>; attempts: number };
+/** overridable for tests (a mocked shop, no waiting minutes) */
+export interface RunOpts { sources?: SourceConfig[]; chunkMs?: number; retryAfterS?: number; retryGapMs?: number; retryDelayMs?: number; snapshot?: typeof buildSnapshot }
+interface MarketRow { shop: string; country: string | null; frozen: boolean; reason: string | null }
 
-export async function runRefreshChunk(job: Job) {
-  const t0 = Date.now();
+export async function runRefreshChunk(job: Job, o: RunOpts = {}) {
+  const t0 = Date.now(), CHUNK = o.chunkMs ?? CHUNK_MS, RETRY_AFTER = o.retryAfterS ?? RETRY_AFTER_S, RETRY_GAP = o.retryGapMs ?? RETRY_GAP_MS, SRC = o.sources ?? SOURCES, snap = o.snapshot ?? buildSnapshot;
   const p: Progress = { phase: "main", done: [], retry: [], retried: [], tot: ZERO(), skipped: {}, invocations: 0, ...job.progress } as Progress;
   p.invocations++; p.started ??= new Date().toISOString();
   const save = (leaseS: number) => rpc("job_progress", { p_id: job.id, p_progress: p, p_lease_s: leaseS });
-  const log = (rs: ShopResult[], attempt: number) => rpc("shop_log_add", { p_rows: rs.map((r) => ({ shop: r.slug, job_id: job.id, attempt, status: r.status, http_code: r.http, products_seen: r.seen, skipped_reason: r.reason })) });
+  const markets = new Map<string, MarketRow>();      // shop_market: other country than the default, or a frozen shop
+  const marketOf = (slug: string) => (markets.has(slug) ? markets.get(slug)!.country : REFRESH_COUNTRY);
+  const log = (rs: ShopResult[], attempt: number) => rpc("shop_log_add", { p_rows: rs.map((r) => ({ shop: r.slug, job_id: job.id, attempt, status: r.status, http_code: r.http, products_seen: r.seen, skipped_reason: r.reason, market: marketOf(r.slug) ?? "NONE" })) });
+  // a frozen shop (no market reproduces its ingested prices) is not fetched; it is logged every run with the reason
+  const run = async (cfg: SourceConfig, extra: { minDelayMs?: number } = {}): Promise<ShopResult> => {
+    const m = markets.get(cfg.slug);
+    if (m?.frozen) return { slug: cfg.slug, status: "skipped", http: null, seen: 0, reason: `frozen: ${m.reason ?? "no market reproduces the ingested prices"}`.slice(0, 120), counts: {}, changed: 0 };
+    return refreshShop(cfg, { ...extra, force: p.force_prices, country: marketOf(cfg.slug) });
+  };
   const add = (r: ShopResult, retry: boolean) => {
     if (r.status === "ok") {
       p.tot.shops_ok++; p.tot.changed += r.changed; p.tot.offers_checked += r.counts.checked ?? 0;
@@ -37,12 +49,13 @@ export async function runRefreshChunk(job: Job) {
   };
 
   try {
+    for (const m of await rpc<MarketRow[]>("shop_market_list", {})) markets.set(m.shop, m);
     if (p.phase === "main") {
-      const todo = SOURCES.filter((s) => s.kind === "shopify" && !p.done.includes(s.slug) && (!p.only?.length || p.only.includes(s.slug)));
+      const todo = SRC.filter((s) => s.kind === "shopify" && !p.done.includes(s.slug) && (!p.only?.length || p.only.includes(s.slug)));
       let i = 0, sinceSave = 0;
       await Promise.all(Array.from({ length: CONC }, async () => {
-        while (i < todo.length && Date.now() - t0 < CHUNK_MS) {
-          const cfg = todo[i++], r = await refreshShop(cfg, { force: p.force_prices, market: p.market });
+        while (i < todo.length && Date.now() - t0 < CHUNK) {
+          const cfg = todo[i++], r = await run(cfg);
           await log([r], 1); add(r, false); p.done.push(cfg.slug);
           if (++sinceSave % 10 === 0) await save(LEASE_S);
         }
@@ -51,22 +64,22 @@ export async function runRefreshChunk(job: Job) {
       else { await save(0); return "continue"; }
     }
     if (p.phase === "retry") {
-      const wait = RETRY_AFTER_S - (Date.now() - Date.parse(p.pass1_end ?? new Date().toISOString())) / 1000;
+      const wait = RETRY_AFTER - (Date.now() - Date.parse(p.pass1_end ?? new Date().toISOString())) / 1000;
       if (wait > 0) { await save(Math.ceil(wait)); return "waiting"; }   // not before: the next tick after this time continues
       for (const slug of p.retry.filter((s) => !p.retried.includes(s))) {
-        if (Date.now() - t0 > CHUNK_MS) { await save(0); return "continue"; }
-        const cfg = SOURCES.find((s) => s.slug === slug); if (!cfg) { p.retried.push(slug); continue; }
-        const r = await refreshShop(cfg, { minDelayMs: 6000, force: p.force_prices, market: p.market });       // slow: 6 s between requests to that host
+        if (Date.now() - t0 > CHUNK) { await save(0); return "continue"; }
+        const cfg = SRC.find((s) => s.slug === slug); if (!cfg) { p.retried.push(slug); continue; }
+        const r = await run(cfg, { minDelayMs: o.retryDelayMs ?? 6000 });       // slow: 6 s between requests to that host
         await log([r], 2); add(r, true); p.retried.push(slug); p.tot.retried_429++;
         if (r.status === "ok") delete p.skipped[slug];
-        await save(LEASE_S); await sleep(RETRY_GAP_MS);
+        await save(LEASE_S); await sleep(RETRY_GAP);
       }
       p.phase = "snapshot";
     }
     if (p.phase === "snapshot") {
       if (p.tot.changed > 0) {
-        if (Date.now() - t0 > CHUNK_MS - 60_000) { await save(0); return "continue"; }   // the snapshot needs about a minute: give it a fresh invocation
-        const s = await buildSnapshot({}); p.snapshot = `rebuilt ${s.version} (${s.pieces} pieces, ${s.accs} accessories)`;
+        if (Date.now() - t0 > CHUNK - 60_000) { await save(0); return "continue"; }   // the snapshot needs about a minute: give it a fresh invocation
+        const s = await snap({}); p.snapshot = `rebuilt ${s.version} (${s.pieces} pieces, ${s.accs} accessories)`;
       } else p.snapshot = "unchanged (nothing changed)";
     }
     const t = p.tot, still = Object.entries(p.skipped);

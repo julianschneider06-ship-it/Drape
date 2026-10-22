@@ -6,6 +6,7 @@ import { gatewayRpc } from "@/lib/gateway";
 import { clientIp, limited } from "@/lib/ratelimit";
 import { rpc, useToken } from "@/ingest/gateway";
 import { runRefreshChunk, JOB_LEASE_S } from "@/lib/jobs/refresh-stock";
+import { runProbeChunk } from "@/lib/jobs/probe-market";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
       const job = await rpc<{ id: number; job: string; progress: Record<string, unknown>; attempts: number } | null>("job_claim", { p_lease_s: JOB_LEASE_S });
       if (!job) return;
       if (job.job === "refresh_stock") await runRefreshChunk(job);
+      else if (job.job === "probe_market") await runProbeChunk(job);
     } finally { useToken(null); }
   });
   return NextResponse.json({ accepted: true }, { status: 202 });

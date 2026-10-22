@@ -13,14 +13,15 @@ export interface ShopResult {
   changed: number;
 }
 interface Item { external_id: string; availability: string; price_cents: number | null; compare_at_cents: number | null }
-/** The offers were ingested from the US, where every shop showed its US market. Shopify Markets price by visitor country (the runner runs in Dublin), so refreshes ask for the same market. */
+/** Default market of a refresh: the offers were ingested from the US, where every shop showed its US market. Shopify Markets price by visitor country (the runner runs in Dublin), so refreshes ask for a market; shops that need another one have a row in shop_market. */
 export const REFRESH_COUNTRY = "US";
 const SKIP_CODES = new Set([401, 403, 404, 410, 429, 503]);
 
-export async function refreshShop(cfg: SourceConfig, o: { dry?: boolean; minDelayMs?: number; force?: boolean; market?: boolean } = {}): Promise<ShopResult> {
+export async function refreshShop(cfg: SourceConfig, o: { dry?: boolean; minDelayMs?: number; force?: boolean; country?: string | null } = {}): Promise<ShopResult> {
   const { exclude: _e, only: _o, ...opts } = (cfg.options ?? {}) as Record<string, unknown>;       // every category: availability and price do not depend on it
   if (o.minDelayMs) opts.minDelayMs = Math.max(Number(opts.minDelayMs ?? 0), o.minDelayMs);
-  if (o.market !== false) opts.country = REFRESH_COUNTRY;
+  const country = o.country === undefined ? REFRESH_COUNTRY : o.country;   // undefined = default market, null = send no parameter
+  if (country) opts.country = country;
   const adapter = createAdapter({ ...cfg, options: opts });
   const items = new Map<string, Item>();
   let cursor: Record<string, unknown> | null = null, complete = false, lastLen = 0;
