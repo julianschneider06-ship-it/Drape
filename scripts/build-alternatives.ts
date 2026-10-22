@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import { rpc } from "../src/ingest/gateway";
 import { scoreOutfit, toPiece, type Piece, type RawPiece, type Slot } from "../src/outfits/score";
-import { BAG, HEAD, NECK, ACC, outfitCtx, reject, scoreAcc, toAcc, type Acc, type OutfitCtx, type RawAcc } from "../src/outfits/accessories";
+import { BAG, HEAD, NECK, ACC, WOMEN_ACC, isJewelry, singleKind, outfitCtx, reject, scoreAcc, toAcc, type Acc, type OutfitCtx, type RawAcc } from "../src/outfits/accessories";
 import { RULES } from "../src/lib/layout/config";
 import { pickPair, type Cnd } from "../src/outfits/alt-shared";
 
@@ -14,6 +14,7 @@ const VERSION = "alt3";   // alt3: ranks 1 and 2 are the swap-loop pair (visibly
 // alt2:   // alt2: a bottom is replaced by a bottom of the same length class (shorts / short skirt stay short, long stays long)
 const args = process.argv.slice(2);
 const FORCE = args.includes("--force"), DRY = args.includes("--dry");
+const W2 = args.includes("--w2");   // women's accessory set revision 2: only the accessory slots, stored as w2acc1.. (the old acc1..3 rows and alt_state are not touched)
 const LIMIT = Number(args[args.indexOf("--limit") + 1] || Infinity);
 const MAX_ALTS = 6, MIN_SCORE = 0.78;
 
@@ -43,7 +44,7 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
 
 (async () => {
   const t0 = Date.now();
-  const pool = await paged<PoolRow>("outfit_pool_list", 2000);
+  const pool = (await paged<PoolRow>("outfit_pool_list", 2000)).filter((o) => !W2 || o.gender === "women");
   const raw: RawPiece[] = []; { let after = 0; for (;;) { const p = await rpc<RawPiece[]>("outfit_inputs", { p_after: after, p_limit: 1000 }); if (!p.length) break; raw.push(...p); after = p[p.length - 1].id; } }
   const info = new Map((await paged<Info>("alt_pieces", 1000)).map((i) => [i.id, i]));
   const pieces = new Map<number, Piece>(); const names = new Map<number, string>();
@@ -51,7 +52,7 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
   const accs = (await paged<RawAcc & { id: number }>("acc_inputs", 1000)).map(toAcc);
   const accById = new Map(accs.map((a) => [a.id, a]));
   const accRows = new Map<number, AccRow[]>();
-  { let after = 0; for (;;) { const page = await rpc<AccRow[]>("outfit_acc_all", { p_after: after, p_limit: 5000 }); if (!page.length) break;
+  { let after = 0; for (;;) { const page = await rpc<AccRow[]>(W2 ? "outfit_acc_w2_all" : "outfit_acc_all", { p_after: after, p_limit: 5000 }); if (!page.length) break;
       for (const r of page) { const l = accRows.get(r.outfit_id) ?? []; if (!l.some((x) => x.slot_no === r.slot_no)) l.push(r); accRows.set(r.outfit_id, l); }
       if (page.length < 5000) break; after = page[page.length - 1].outfit_id - 1; } }
   const state = new Map<number, string>();
@@ -66,7 +67,7 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
 
   const items: object[] = []; let done = 0, skipped = 0, slotsTotal = 0, altsTotal = 0, under3 = 0;
   const perKind: Record<string, { n: number; alts: number; under3: number }> = {};
-  const flush = async () => { if (items.length && !DRY) await rpc("alt_upsert", { p_items: items.splice(0) }); else items.length = 0; };
+  const flush = async () => { if (items.length && !DRY) await rpc(W2 ? "alt_upsert_slots" : "alt_upsert", { p_items: items.splice(0) }); else items.length = 0; };
 
   for (const o of pool) {
     if (done >= LIMIT) break;
@@ -75,7 +76,7 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
     const ps = outfitPieces as Piece[];
     const myAccs = (accRows.get(o.id) ?? []).sort((a, b) => a.slot_no - b.slot_no);
     const hash = createHash("sha1").update([o.id, o.top, o.bottom, o.shoes, ...myAccs.map((a) => a.product_id), VERSION, sig].join("|")).digest("hex").slice(0, 16);
-    if (!FORCE && state.get(o.id) === hash) { skipped++; continue; }
+    if (!FORCE && !W2 && state.get(o.id) === hash) { skipped++; continue; }
     done++;
     const slots: { slot_key: string; alts: { product_id: number; score: number }[] }[] = [];
     const g = o.gender, isFull = o.bottom === 0;
@@ -86,7 +87,7 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
     const mainSlots: { key: string; slot: Slot; idx: number; id: number }[] = [{ key: "top", slot: isFull ? "full_body" : "top", idx: 0, id: o.top }];
     if (!isFull) mainSlots.push({ key: "bottom", slot: "bottom", idx: 1, id: o.bottom });
     mainSlots.push({ key: "shoes", slot: "shoes", idx: ps.length - 1, id: o.shoes });
-    for (const ms of mainSlots) {
+    for (const ms of W2 ? [] : mainSlots) {
       const cur = ps[ms.idx]; const curFold = folded(ms.slot, info.get(cur.id));
       const sc: Cnd[] = [];
       for (const c of cand[`${g}:${ms.slot}`] ?? []) {
@@ -119,6 +120,7 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
       for (const c of accs) {
         if (c.id === cur.id || accObjs.some((a) => a.id === c.id) || reject(c, ctx)) continue;
         if (types.has(c.type)) continue;
+        if (W2 && (singleKind(c.type) && others.some((a) => singleKind(a.type) === singleKind(c.type)) || isJewelry(c.type) && others.filter((a) => isJewelry(a.type)).length >= WOMEN_ACC.jewelry.max || c.type === "belt" && others.some((a) => a.type === "belt"))) continue;   // women's slot limits hold for alternatives too
         if (HEAD.has(c.type) && head || BAG.has(c.type) && bag || NECK.has(c.type) && neck) continue;
         if (c.statement >= ACC.statementMin && statement) continue;
         if (c.accent && accents.size && ![...accents].every((x) => x === c.accent) && others.some((a) => a.accent)) continue;   // no second strong accent colour
@@ -130,13 +132,13 @@ function diversify<T extends { brand: string; score: number }>(sorted: T[]): T[]
       let list: Cnd[] = [...pair, ...restSame];
       if (list.length < 3) list = [...list, ...diversify(otherType).filter((x) => !list.some((y) => y.product_id === x.product_id))];
       list = list.slice(0, MAX_ALTS);
-      slots.push({ slot_key: `acc${r.slot_no}`, alts: list.map((x) => ({ product_id: x.product_id, score: +x.score.toFixed(4) })) });
+      slots.push({ slot_key: `${W2 ? "w2acc" : "acc"}${r.slot_no}`, alts: list.map((x) => ({ product_id: x.product_id, score: +x.score.toFixed(4) })) });
       void i;
     });
 
     for (const sl of slots) {
       slotsTotal++; altsTotal += sl.alts.length; if (sl.alts.length < 3) under3++;
-      const k = sl.slot_key.startsWith("acc") ? "acc" : sl.slot_key; const e = (perKind[k] ??= { n: 0, alts: 0, under3: 0 }); e.n++; e.alts += sl.alts.length; if (sl.alts.length < 3) e.under3++;
+      const k = /^(w2)?acc/.test(sl.slot_key) ? "acc" : sl.slot_key; const e = (perKind[k] ??= { n: 0, alts: 0, under3: 0 }); e.n++; e.alts += sl.alts.length; if (sl.alts.length < 3) e.under3++;
     }
     items.push({ outfit_id: o.id, input_hash: hash, version: VERSION, slots });
     if (items.length >= 40) await flush();

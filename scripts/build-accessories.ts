@@ -8,6 +8,7 @@ import { chooseAccessories, outfitCtx, toAcc, type Acc, type RawAcc, type Usage 
 const args = process.argv.slice(2);
 let twoAccent = 0;
 const DRY = args.includes("--dry");
+const W2 = args.includes("--w2");   // women only, writes outfit_accessories_w2 (new revision, insert-only; the old set is untouched)
 const outIdx = args.indexOf("--out");
 
 interface PoolRow { id: number; gender: "women" | "men"; kind: string; top: number; bottom: number; shoes: number; order: number }
@@ -30,10 +31,10 @@ async function paged<T>(fn: string, limit: number, extra: Record<string, unknown
   const accs = (await paged<RawAcc>("acc_inputs", 1000)).map(toAcc);
   console.log(`outfits ${pool.length}, main pieces ${pieces.size}, accessories ${accs.length}`);
 
-  const run = DRY ? 0 : await rpc<number>("outfit_acc_run_next");
+  const run = DRY ? 0 : await rpc<number>(W2 ? "outfit_acc_w2_run_next" : "outfit_acc_run_next");
   const rows: object[] = []; const stats: Record<string, Record<string, number>> = { women: {}, men: {} };
   const placements: Record<string, number> = {}; const byType: Record<string, number> = {};
-  for (const gender of ["women", "men"] as const) {
+  for (const gender of (W2 ? ["women"] : ["women", "men"]) as ("women" | "men")[]) {
     const usage: Usage = { uses: new Map(), recentIds: [], recentStores: [] };
     const cands = accs.filter((a) => a.genders.includes(gender));
     for (const o of pool.filter((x) => x.gender === gender).sort((a, b) => a.order - b.order)) {
@@ -55,8 +56,8 @@ async function paged<T>(fn: string, limit: number, extra: Record<string, unknown
   console.log("accessories per outfit", JSON.stringify(stats)); console.log("placements", JSON.stringify(placements)); console.log("by type", JSON.stringify(byType)); console.log("outfits with two strong accent colours in the accessories", twoAccent);
   if (outIdx >= 0) writeFileSync(args[outIdx + 1], JSON.stringify(rows));
   if (!DRY) {
-    for (let i = 0; i < rows.length; i += 500) await rpc("outfit_acc_upsert", { p_run: run, p_items: rows.slice(i, i + 500) });
-    const removed = await rpc<number>("outfit_acc_finish", { p_run: run });
-    console.log(`run ${run}: ${rows.length} rows stored, ${removed} older rows removed`);
+    for (let i = 0; i < rows.length; i += 500) await rpc(W2 ? "outfit_acc_w2_upsert" : "outfit_acc_upsert", { p_run: run, p_items: rows.slice(i, i + 500) });
+    if (W2) console.log(`run ${run}: ${rows.length} rows stored (insert-only; readers use the latest run)`);
+    else { const removed = await rpc<number>("outfit_acc_finish", { p_run: run }); console.log(`run ${run}: ${rows.length} rows stored, ${removed} older rows removed`); }
   }
 })();

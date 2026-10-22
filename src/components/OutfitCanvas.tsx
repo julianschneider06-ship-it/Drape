@@ -21,11 +21,11 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
     const v = (c: FeedCard) => viewCard(c, cut);
     return (outfit.kind === "full" ? { full: v(outfit.top), shoes: v(outfit.shoes) } : { top: v(outfit.top), bottom: outfit.bottom ? v(outfit.bottom) : undefined, shoes: v(outfit.shoes) }) as Partial<Record<SlotName, ReturnType<typeof v>>>;
   }, [outfit, cut]);
-  // accessories: up to three, each with its cutout card; slot names acc1..acc3 follow the cached order
+  // accessories: up to eight (the composer limit is WOMEN_ACC.maxTotal), each with its cutout card; slot names acc1..acc8 follow the cached order
   const accs = useMemo(() => {
     const out: { slot: AccSlot; acc: FeedAccessory; card: ReturnType<typeof viewCard> }[] = [];
     if (!showAcc) return out;
-    (outfit.accessories ?? []).slice(0, 3).forEach((a, i) => { if (a.card && a.card.cutout) out.push({ slot: `acc${a.slot_no ?? i + 1}` as AccSlot, acc: a, card: viewCard(a.card, cut) }); });
+    (outfit.accessories ?? []).slice(0, 8).forEach((a, i) => { if (a.card && a.card.cutout) out.push({ slot: `acc${a.slot_no ?? i + 1}` as AccSlot, acc: a, card: viewCard(a.card, cut) }); });
     return out;
   }, [outfit, cut, showAcc]);
   const layout = useMemo(() => {
