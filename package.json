@@ -13,7 +13,8 @@
     "ingest:all": "bash scripts/pipeline.sh",
     "cutout": "scripts/cutout/run_all.sh",
     "image-check": "tsx scripts/image-check.ts",
-    "outfits": "tsx scripts/build-outfits.ts"
+    "outfits": "tsx scripts/build-outfits.ts",
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "ajv": "^8.20.0",
