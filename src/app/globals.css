@@ -23,8 +23,6 @@ body {
 img { -webkit-user-drag: none; }
 
 /* Swap a piece: the old piece slides out sideways, the new one slides in; at the end of the list the piece bounces */
-@keyframes likePulse { 0% { transform: scale(0.5); opacity: 0; } 30% { transform: scale(1.15); opacity: 1; } 70% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.05); opacity: 0; } }
-.like-pulse { animation: likePulse 400ms ease-out both; }
 @keyframes swapOutNext { to { transform: translateX(-55%); opacity: 0; } }
 @keyframes swapOutPrev { to { transform: translateX(55%); opacity: 0; } }
 @keyframes swapInNext { from { transform: translateX(55%); opacity: 0; } to { transform: none; opacity: 1; } }

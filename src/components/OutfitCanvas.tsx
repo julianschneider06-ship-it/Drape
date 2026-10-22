@@ -13,7 +13,8 @@ import { computeLayout, hash32, pickTemplate, type AccIn, type AccSlot, type Pie
 import { hitCategory, HIT_DEBUG_COLORS, HIT_ICON_ZONE } from "@/config/hit-area";
 import { hitInsets } from "@/lib/hit-areas";
 import { ProductGesture } from "@/lib/product-gesture";
-import { DOUBLE_TAP_MS, LIKE_PULSE_COLORS, LIKE_PULSE_MS } from "@/config/product-gesture";
+import { DOUBLE_TAP_MS } from "@/config/product-gesture";
+import LikePop, { type LikePopHandle } from "./LikePop";
 import FeedImage from "./FeedImage";
 import { tagLine } from "@/outfits/tags";
 
@@ -90,10 +91,9 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
   // ---- product gestures (only with onLike): single tap = open (after the double-tap window), double tap = like ----
   const pg = useRef(new ProductGesture());
   const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);   // pending single tap
-  const [pulse, setPulse] = useState<{ slot: string; seq: number; liked: boolean } | null>(null);
+  const pops = useRef<Record<string, LikePopHandle | null>>({});   // double-tap like animation per piece: played imperatively, no state
   const clearLp = () => { if (lpTimer.current) { clearTimeout(lpTimer.current); lpTimer.current = null; } };
   useEffect(() => () => clearLp(), []);
-  useEffect(() => { if (!pulse) return; const t = setTimeout(() => setPulse(null), LIKE_PULSE_MS); return () => clearTimeout(t); }, [pulse]);
   const gDown = (c: FeedCard, slot: SlotName) => (e: React.PointerEvent) => {
     if (!onLike || (e.pointerType === "mouse" && e.button !== 0)) return;
     pg.current.down(`${slot}:${c.id}`, Date.now(), e.clientX, e.clientY);
@@ -103,7 +103,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
     if (!onLike) return;
     const a = pg.current.up(Date.now());
     clearLp();
-    if (a === "like") { const now = onLike(orig(c, slot), slot); setPulse({ slot, seq: Date.now(), liked: now !== false }); }
+    if (a === "like") { const now = onLike(orig(c, slot), slot); pops.current[slot]?.play(now !== false); }
     else if (a === "tap") lpTimer.current = setTimeout(() => { lpTimer.current = null; onOpen(orig(c, slot), slot); }, DOUBLE_TAP_MS);
   };
   const gCancel = () => { if (!onLike) return; pg.current.cancel(); };
@@ -206,12 +206,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
               className={`absolute inset-0 select-none ${isNew ? (swapEvt!.dir === "next" ? "swap-in-next" : "swap-in-prev") : ""} ${debug ? "outline outline-1 outline-red-400" : ""}`} style={{ touchAction: "pan-y", WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}>
               <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} noSale={dimmed} />
               {!dimmed && hits[p.slot] && (hits[p.slot].l || hits[p.slot].t || hits[p.slot].r || hits[p.slot].b) ? <span aria-hidden data-hit="1" className="absolute" style={{ left: -hits[p.slot].l, top: -hits[p.slot].t, right: -hits[p.slot].r, bottom: -hits[p.slot].b }} /> : null}
-              {pulse && pulse.slot === p.slot && (
-                <svg aria-hidden key={pulse.seq} className="like-pulse pointer-events-none absolute" data-like-pulse="1" width="40" height="40" viewBox="0 0 24 24" style={{ left: "50%", top: "50%", marginLeft: -20, marginTop: -20, animationDuration: `${LIKE_PULSE_MS}ms`, zIndex: 80 }}
-                  fill={pulse.liked ? LIKE_PULSE_COLORS.liked : "none"} stroke={pulse.liked ? LIKE_PULSE_COLORS.liked : LIKE_PULSE_COLORS.unliked} strokeWidth="1.6" strokeLinejoin="round">
-                  <path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7C19.5 15.9 12 20.5 12 20.5z" />
-                </svg>
-              )}
+              {onLike && !dimmed && <LikePop ref={(h) => { pops.current[p.slot] = h; }} />}
               {shine && !dimmed && c.cut && (() => {
                 const sale = saleMarkerOn() && isOnSale(c), m = SHINE.distance + (sale ? SHINE.saleExtra : 0) + SHINE.length * 1.5 + SHINE.width + 2, w = p.rect.w, h = p.rect.h;
                 return (
