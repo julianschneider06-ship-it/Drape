@@ -1,0 +1,49 @@
+// Search tab: options and limits (display text in English, plain words). Edit here only.
+// The user picks a style FAMILY, never a single style: no individual style name appears anywhere in the search UI, texts or link parameters.
+import type { StyleFamily } from "@/config/style-families";
+import type { IconId } from "@/lib/outfit-icons";
+
+export const SEARCH_MAX_RESULTS = 30;     // a search shows at most this many outfits, then an end card (no endless scroll)
+export const SEARCH_MIN_EXACT = 8;        // fewer exact matches than this: the optional filters are relaxed (extra first, then season)
+
+export type SearchItem = "accessory" | "shoes" | "top" | "bottom";
+export const ITEMS: { id: SearchItem; label: string; hint: string }[] = [
+  { id: "accessory", label: "Accessory", hint: "Bags, jewellery, hats and more" },
+  { id: "shoes", label: "Shoes", hint: "Sneakers, boots, sandals" },
+  { id: "top", label: "Top", hint: "Shirts, knits, jackets" },
+  { id: "bottom", label: "Bottom", hint: "Trousers, jeans, skirts" },
+];
+
+export const FAMILY_INFO: Record<StyleFamily, { label: string; hint: string }> = {
+  smart: { label: "Smart", hint: "Clean, elegant and calm" },
+  street: { label: "Street", hint: "Urban and edgy" },
+  active: { label: "Active", hint: "Sport and outdoor" },
+  rugged: { label: "Rugged", hint: "Hard-wearing and worn-in" },
+  soft: { label: "Soft", hint: "Romantic, flowy, holiday" },
+};
+
+export type SearchSeason = "spring" | "summer" | "autumn" | "winter";
+export const SEASONS: { id: SearchSeason; label: string; hint: string }[] = [
+  { id: "spring", label: "Spring", hint: "Light layers, fresh days" },
+  { id: "summer", label: "Summer", hint: "Warm and airy" },
+  { id: "autumn", label: "Autumn", hint: "Cosy layers, cooler days" },
+  { id: "winter", label: "Winter", hint: "Warm and covered up" },
+];
+
+/** the extras are exactly the ones the outfit icons already show (src/lib/outfit-icons.ts) */
+export type SearchExtra = "rain" | "evening" | "office" | "resort" | "contrast" | "bold" | "tonal" | "colourful" | "formal";
+export const EXTRAS: { id: SearchExtra; label: string; hint: string }[] = [
+  { id: "rain", label: "Rain", hint: "Ready for wet weather" },
+  { id: "evening", label: "Evening", hint: "Dressy looks for after dark" },
+  { id: "office", label: "Office", hint: "Smart looks for work" },
+  { id: "resort", label: "Holiday", hint: "Relaxed looks for warm trips" },
+  { id: "contrast", label: "Pattern break", hint: "A print or pattern breaks up the look" },
+  { id: "bold", label: "Bold", hint: "Statement pieces that stand out" },
+  { id: "tonal", label: "Tonal", hint: "One colour family, head to toe" },
+  { id: "colourful", label: "Colourful", hint: "Several colours together" },
+  { id: "formal", label: "Formal", hint: "Very dressed up" },
+];
+
+export const familyIcon = (f: StyleFamily): IconId => `family-${f}`;
+export const seasonIcon = (s: SearchSeason): IconId => `season-${s}`;
+export const extraIcon = (e: SearchExtra): IconId => e;   // every extra id is also an icon id

@@ -23,6 +23,11 @@ const D: Record<IconId, React.ReactNode> = {
   formal: <path d="M12 5l5 7-5 7-5-7z" />,                                                                                         // diamond
 };
 
+/** one icon glyph (the same marks the outfit cards use; the Search tab reuses it so both speak the same visual language) */
+export function IconGlyph({ id, size = 16, stroke = "#8b9099", width = 1.5 }: { id: IconId; size?: number; stroke?: string; width?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{D[id]}</svg>;
+}
+
 /** small see-through circles at the top left of an outfit card (display only, no taps) */
 function OutfitIcons({ icons }: { icons: IconId[] }) {
   if (!icons.length) return null;

@@ -13,6 +13,8 @@ import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
 import TutorialFeed from "./TutorialFeed";
 import Welcome from "./Welcome";
+import BottomNav, { NAV_PX, type Tab } from "./BottomNav";
+import Search from "./Search";
 import OutfitIcons from "./OutfitIcons";
 import { outfitIcons } from "@/lib/outfit-icons";
 import { STYLES_GENDER_KEY, STYLES_KEY, cleanStyles } from "@/lib/welcome";
@@ -41,10 +43,16 @@ function pickedStyles(g: Gender): string[] {
   try { return store.get(STYLES_GENDER_KEY) === g ? cleanStyles(JSON.parse(store.get(STYLES_KEY) ?? "[]")) : []; } catch { return []; }
 }
 
-export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynamic" | "hybrid"; sale: boolean; icons?: boolean } }) {
+export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynamic" | "hybrid"; sale: boolean; icons?: boolean; search?: boolean } }) {
   setSaleDefault(defaults?.sale);   // app_settings.sale_marker_enabled (?sale=on|off still overrides)
   const [gender, setGender] = useState<Gender | null>(null);
   const [iconsOn, setIconsOn] = useState(defaults?.icons !== false);   // app_settings.icons_enabled; ?icons=0 / ?icons=1 override it
+  // bottom bar + Search tab (app_settings.search_enabled; ?search=0 hides both). Both tabs stay mounted: switching only toggles visibility, so For You keeps its scroll position and records nothing.
+  const [searchOn, setSearchOn] = useState(defaults?.search !== false);
+  const [navReady, setNavReady] = useState(false);   // false until the first-visit check ran (no bar flash before the welcome flow)
+  const [tab, setTab] = useState<Tab>("foryou");
+  const [searchSeen, setSearchSeen] = useState(false);
+  const tabRef = useRef<Tab>("foryou"), awayAt = useRef(0), searchStarted = useRef(false);
   const [items, setItems] = useState<FeedOutfit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -86,6 +94,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
 
   // onboarding: only on the first visit (flag in localStorage) or when forced with ?onboarding=1; any failure just skips it
   useEffect(() => {
+    const sp = new URLSearchParams(location.search).get("search"); if (sp === "0") setSearchOn(false); else if (sp === "1") setSearchOn(true);
+    setNavReady(true);
     if (new URLSearchParams(location.search).get("onboarding") !== "1" && store.get(ONBOARDING_KEY) === "1") return;
     obActive.current = true; welcomeOpen.current = true; setObPhase("welcome");
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -133,8 +143,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     if (!el) return;
     // the phone's bottom safe area (home indicator) is resolved by the browser; read it through a probe element
     const probe = document.createElement("div");
-    probe.style.cssText = "position:fixed;left:0;bottom:0;visibility:hidden;pointer-events:none;padding-bottom:env(safe-area-inset-bottom)";
-    document.body.appendChild(probe);
+    probe.style.cssText = "position:fixed;left:0;bottom:0;visibility:hidden;pointer-events:none;padding-bottom:var(--safe-b,env(safe-area-inset-bottom))";
+    (el.parentElement ?? document.body).appendChild(probe);   // inside <main>: it sees --safe-b (0 while the bottom bar covers the safe area)
     const measure = () => setCanvas((p) => { const safe = parseFloat(getComputedStyle(probe).paddingBottom) || 0; const n = canvasSize(el.clientWidth, el.clientHeight, safe); return p && p.w === n.w && p.h === n.h ? p : n; });
     measure();
     const ro = new ResizeObserver(measure);
@@ -278,7 +288,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const toggleLike = useCallback((card: FeedCard, outfit: FeedOutfit | null, index: number, slot: SlotName | "sheet") => {
     const want = !liked.has(card.id);
     setLiked((prev) => { const n = new Set(prev); if (want) n.add(card.id); else n.delete(card.id); return n; });
-    if (outfit) interacted.current.add(index);
+    if (outfit && tabRef.current === "foryou") interacted.current.add(index);   // a like from the Search tab counts as a normal like, but is not a feed interaction
     signal({ t: want ? "like" : "unlike", p: card.id, o: outfit ? shownIds(outfit) : undefined, tg: outfit ? tg(outfit) : null });
     fetch("/api/likes", {
       method: "POST",
@@ -363,6 +373,17 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     return () => { cancelled = true; clearTimeout(t); for (const i of inflight) if (!i.complete) i.src = ""; };
   }, [current, shown.length, dbg.cut, dbg.preload]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const navOn = searchOn && navReady && obPhase === "off";   // the bar is hidden during the welcome flow and the tutorial
+  const H = "calc(100dvh - var(--nav-h, 0px))";
+  const goTab = useCallback((t: Tab) => {
+    if (t === "search") { awayAt.current = Date.now(); setSearchSeen(true); if (!searchStarted.current) { searchStarted.current = true; track({ event_type: "search_started", gender: genderRef.current }); } }
+    else if (awayAt.current) { const gone = Date.now() - awayAt.current; awayAt.current = 0; for (const [k, v] of enterAt.current) enterAt.current.set(k, v + gone); }   // time spent on the Search tab is not dwell time
+    tabRef.current = t; setTab(t);
+  }, []);
+  useEffect(() => { if (!navOn && tabRef.current !== "foryou") goTab("foryou"); }, [navOn, goTab]);
+  const openFromSearch = useCallback((card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => setSheet({ card, outfit, index, slot }), []);   // no tap event: Search only shares the like path with the feed
+  const backToForYou = useCallback(() => goTab("foryou"), [goTab]);
+  const hideFeed = tab === "search" ? ({ visibility: "hidden" } as const) : undefined;   // visibility keeps the scroll position
   const obHeader = obPhase !== "off";   // header controls rest during the tutorial
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
@@ -372,9 +393,9 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   };
 
   return (
-    <main className="h-dvh bg-white">
+    <main className="h-dvh bg-white" style={{ "--nav-h": navOn ? `calc(${NAV_PX}px + env(safe-area-inset-bottom))` : "0px", "--safe-b": navOn ? "0px" : "env(safe-area-inset-bottom)" } as React.CSSProperties}>
       <SaleInkDefs />
-      <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
+      <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur" style={hideFeed}>
         <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
         <div className="flex rounded-full bg-neutral-100 p-0.5 text-sm" role="tablist" aria-label="Section" style={obHeader ? { pointerEvents: "none" } : undefined}>
           {(["women", "men"] as Gender[]).map((g) => (
@@ -389,22 +410,29 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         </Link>
       </header>
 
-      <div ref={scroller} className="no-scrollbar h-dvh snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
+      <div ref={scroller} className="no-scrollbar snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ height: H, ...hideFeed }}>
         {obPhase === "off" && shown.map((o, i) => (
-          <section key={o.id} data-i={i} className="relative flex h-dvh snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + env(safe-area-inset-bottom))` }}>
+          <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: `calc(${BUTTON_BAR_PX}px + var(--safe-b))` }}>
             {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
               onLayout={(layout, mode) => layoutInfo.current.set(o.id, { layout, mode })} />}
             {iconsOn && <OutfitIcons icons={outfitIcons(o.tags)} />}
             <OutfitButtons value={reactions[o.id] ?? null} onPress={(d) => pressOutfit(o, i, d)} />
           </section>
         ))}
-        {obPhase === "loading" && <section className="flex h-dvh items-center justify-center text-sm text-neutral-400">Loading…</section>}
+        {obPhase === "loading" && <section style={{ height: H }} className="flex items-center justify-center text-sm text-neutral-400">Loading…</section>}
         {obPhase === "off" && !items.length && (
-          <section className="flex h-dvh items-center justify-center text-sm text-neutral-400">
+          <section style={{ height: H }} className="flex items-center justify-center text-sm text-neutral-400">
             {error ? <button onClick={() => loadMore()} className="rounded-full border border-neutral-300 px-4 py-2 text-neutral-700">Try again</button> : loading || !gender ? "Loading…" : "No outfits yet."}
           </section>
         )}
       </div>
+
+      {navOn && searchSeen && (
+        <div className="fixed inset-x-0 top-0 z-30" style={{ bottom: "var(--nav-h)", visibility: tab === "search" ? "visible" : "hidden" }}>
+          <Search key={gender ?? "women"} gender={gender ?? "women"} canvas={canvas} iconsOn={iconsOn} onOpen={openFromSearch} onBack={backToForYou} />
+        </div>
+      )}
+      {navOn && <BottomNav tab={tab} onTab={goTab} />}
 
       {obPhase === "welcome" && <Welcome onDone={finishWelcome} onGender={fetchOb} />}
       {obPhase === "on" && canvas && <TutorialFeed items={obItems} canvas={canvas} onFinish={finishOb} onSkip={skipOb} onWarm={warmFeed} />}

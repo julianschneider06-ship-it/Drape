@@ -5,7 +5,7 @@ import { clientIp, isUuid, limited } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
-const TYPES = new Set(["impression", "dwell_ms", "like", "unlike", "tap_product", "view_product_click", "scroll_past", "outfit_up", "outfit_down", "outfit_clear", "swap"]);
+const TYPES = new Set(["impression", "dwell_ms", "like", "unlike", "tap_product", "view_product_click", "scroll_past", "outfit_up", "outfit_down", "outfit_clear", "swap", "search_started", "search_submitted"]);
 const SLOTS = new Set(["top", "bottom", "shoes", "full", "sheet", "accessory"]);
 const int = (v: unknown, max = 2_000_000_000) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? Math.round(v) : null);
 
@@ -18,6 +18,7 @@ function cleanCtx(c: unknown) {
   const prevId = int(o.out), rank = int(o.rank, 100), alt = int(o.alt, 2), from = int(o.from, 2);
   if (prevId !== null) out.out = prevId; if (rank !== null) out.rank = rank; if (alt !== null) out.alt = alt; if (from !== null) out.from = from;   // alt / from = loop position after / before the swap (0 = original) if (o.dir === "next" || o.dir === "prev") out.dir = o.dir;   // swap: product that left, direction, alternative rank (0 = the original)
   if (Array.isArray(o.canvas) && o.canvas.length === 2) { const a = int(o.canvas[0], 5000), b = int(o.canvas[1], 5000); if (a !== null && b !== null) out.canvas = [a, b]; }
+  if (o.sq && typeof o.sq === "object") { const sq = o.sq as Record<string, unknown>, c: Record<string, string | number> = {}; for (const k of ["f", "i", "s", "e", "r"]) if (typeof sq[k] === "string" && (sq[k] as string).length <= 16) c[k] = sq[k] as string; const n = int(sq.n, 1000); if (n !== null) c.n = n; if (Object.keys(c).length) out.sq = c; }   // search choices (family / item / season / extra / relaxed / result count), nothing personal
   const tg = cleanCompactTags(o.tags); if (tg) out.tags = tg;   // compact outfit tags (payload only, no schema change)
   return Object.keys(out).length ? out : null;
 }

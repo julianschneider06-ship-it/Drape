@@ -30,7 +30,7 @@ export default function OutfitButtons({ value, onPress }: { value: Reaction | nu
     );
   };
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center justify-center gap-6 bg-white pb-[env(safe-area-inset-bottom)]" style={{ height: `calc(${BUTTON_BAR_PX}px + env(safe-area-inset-bottom))` }}>
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center justify-center gap-6 bg-white pb-[var(--safe-b,env(safe-area-inset-bottom))]" style={{ height: `calc(${BUTTON_BAR_PX}px + var(--safe-b, env(safe-area-inset-bottom)))` }}>
       <div className="pointer-events-auto"><Btn dir="up" label="I like this outfit" /></div>
       <div className="pointer-events-auto"><Btn dir="down" label="I do not like this outfit" /></div>
     </div>
