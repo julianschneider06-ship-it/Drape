@@ -11,6 +11,8 @@ import ProductSheet from "./ProductSheet";
 import OutfitButtons, { type Reaction } from "./OutfitButtons";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
+import TutorialFeed from "./TutorialFeed";
+import { ONBOARDING_KEY } from "@/lib/onboarding";
 import { compactTags } from "@/outfits/tags";
 import type { Signal } from "@/outfits/taste-codec";
 import { TASTE } from "@/lib/personalization/config";
@@ -44,6 +46,11 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const layoutInfo = useRef(new Map<number, { layout: string; mode: string }>());
   const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean; preload: boolean; feed: "default" | "dynamic" | "hybrid" }>({ debug: false, cut: "auto", acc: true, preload: true, feed: "default" });
 
+  // first-visit tutorial (3 steps): two pinned outfits instead of the feed. Nothing from it is recorded: no events, no likes, no taste signals.
+  const [obPhase, setObPhase] = useState<"off" | "loading" | "on">("off");
+  const [obItems, setObItems] = useState<FeedOutfit[]>([]);
+  const obActive = useRef(false), pendingLoad = useRef(false), loadMoreRef = useRef<() => void>(() => undefined);   // while the tutorial runs, the real feed is not loaded yet (no competing requests / decoding)
+
   const device = useRef("");
   const scroller = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<FeedOutfit[]>([]);
@@ -65,6 +72,22 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const exhausted = useRef(false);
   const shown = useMemo(() => items.map((o) => applySwaps(o, swaps[o.id])), [items, swaps]);   // the outfits as the user sees them after swaps
   itemsRef.current = shown;
+
+  // onboarding: only on the first visit (flag in localStorage) or when forced with ?onboarding=1; any failure just skips it
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("onboarding") !== "1" && store.get(ONBOARDING_KEY) === "1") return;
+    obActive.current = true; setObPhase("loading");
+    fetch("/api/onboarding", { signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.json() : null)).then((j: { items: FeedOutfit[] } | null) => {
+      if (j?.items?.length === 2) { setObItems(j.items); setObPhase("on"); } else { setObPhase("off"); warmFeed(); }
+    }).catch(() => { setObPhase("off"); warmFeed(); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const warmFeed = useCallback(() => { obActive.current = false; if (pendingLoad.current) { pendingLoad.current = false; loadMoreRef.current(); } }, []);
+  const finishOb = useCallback(() => {
+    store.set(ONBOARDING_KEY, "1");
+    setObPhase("off"); setObItems([]); warmFeed();
+    requestAnimationFrame(() => scroller.current?.scrollTo({ top: 0 }));
+  }, [warmFeed]);
+  const skipOb = useCallback(() => { setObPhase("off"); setObItems([]); warmFeed(); }, [warmFeed]);   // not marked as done: the next visit tries again
 
   // remembered outfit reactions (this device)
   useEffect(() => { try { const r = JSON.parse(store.get("drape.reactions") ?? "{}"); if (r && typeof r === "object") setReactions(r); } catch { /* ignore */ } }, []);
@@ -161,6 +184,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     finally { loadingRef.current = false; setLoading(false); }
   }, []);
 
+  loadMoreRef.current = loadMore;
+
   // (re)start the feed whenever the gender changes
   useEffect(() => {
     if (!gender) return;
@@ -173,13 +198,13 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     setItems([]); setCurrent(0);
     scroller.current?.scrollTo({ top: 0 });
     loadingRef.current = false;
-    loadMore();
+    if (obActive.current) pendingLoad.current = true; else loadMore();
   }, [gender, loadMore]);
 
   // impressions, dwell time, scroll-past (IntersectionObserver on each outfit screen)
   useEffect(() => {
     const root = scroller.current;
-    if (!root || !items.length) return;
+    if (!root || !items.length || obPhase !== "off") return;
     const obs = new IntersectionObserver((entries) => {
       for (const e of entries) {
         const i = Number((e.target as HTMLElement).dataset.i);
@@ -206,7 +231,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     }, { root, threshold: [0, 0.3, 0.6] });
     root.querySelectorAll("section[data-i]").forEach((el) => obs.observe(el));
     return () => obs.disconnect();
-  }, [items.length]);
+  }, [items.length, obPhase]);
 
   // prefetch the next 3 outfits' images; load more when close to the end
   useEffect(() => {
@@ -311,6 +336,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     return () => { cancelled = true; clearTimeout(t); for (const i of inflight) if (!i.complete) i.src = ""; };
   }, [current, shown.length, dbg.cut, dbg.preload]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const obHeader = obPhase !== "off";   // header controls rest during the tutorial (it shows the men's outfits)
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
     signal({ t: "tap_product", p: card.id, o: shownIds(outfit), tg: tg(outfit) });
@@ -323,13 +349,13 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       <SaleInkDefs />
       <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
         <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
-        <div className="flex rounded-full bg-neutral-100 p-0.5 text-sm" role="tablist" aria-label="Section">
+        <div className="flex rounded-full bg-neutral-100 p-0.5 text-sm" role="tablist" aria-label="Section" style={obHeader ? { pointerEvents: "none" } : undefined}>
           {(["women", "men"] as Gender[]).map((g) => (
-            <button key={g} role="tab" aria-selected={gender === g} onClick={() => gender !== g && setGender(g)}
-              className={`rounded-full px-4 py-1 capitalize transition-colors ${gender === g ? "bg-black text-white" : "text-neutral-600"}`}>{g === "women" ? "Women" : "Men"}</button>
+            <button key={g} role="tab" aria-selected={(obHeader ? "men" : gender) === g} onClick={() => gender !== g && setGender(g)}
+              className={`rounded-full px-4 py-1 capitalize transition-colors ${(obHeader ? "men" : gender) === g ? "bg-black text-white" : "text-neutral-600"}`}>{g === "women" ? "Women" : "Men"}</button>
           ))}
         </div>
-        <Link href="/likes" aria-label="My likes" className="flex w-16 justify-end">
+        <Link href="/likes" aria-label="My likes" className="flex w-16 justify-end" style={obHeader ? { pointerEvents: "none" } : undefined}>
           <span className="rounded-full p-1.5 text-black">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7C19.5 15.9 12 20.5 12 20.5z" /></svg>
           </span>
@@ -337,19 +363,22 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       </header>
 
       <div ref={scroller} className="no-scrollbar h-dvh snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
-        {shown.map((o, i) => (
+        {obPhase === "off" && shown.map((o, i) => (
           <section key={o.id} data-i={i} className="relative flex h-dvh snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + env(safe-area-inset-bottom))` }}>
             {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
               onLayout={(layout, mode) => layoutInfo.current.set(o.id, { layout, mode })} />}
             <OutfitButtons value={reactions[o.id] ?? null} onPress={(d) => pressOutfit(o, i, d)} />
           </section>
         ))}
-        {!items.length && (
+        {obPhase === "loading" && <section className="flex h-dvh items-center justify-center text-sm text-neutral-400">Loading…</section>}
+        {obPhase === "off" && !items.length && (
           <section className="flex h-dvh items-center justify-center text-sm text-neutral-400">
             {error ? <button onClick={() => loadMore()} className="rounded-full border border-neutral-300 px-4 py-2 text-neutral-700">Try again</button> : loading || !gender ? "Loading…" : "No outfits yet."}
           </section>
         )}
       </div>
+
+      {obPhase === "on" && canvas && <TutorialFeed items={obItems} canvas={canvas} onFinish={finishOb} onSkip={skipOb} onWarm={warmFeed} />}
 
       {dbg.debug && (
         <button onClick={() => setDbg((d) => ({ ...d, cut: d.cut === "auto" ? "off" : "auto" }))}

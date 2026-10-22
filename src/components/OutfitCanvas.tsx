@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { SwapEvt } from "@/lib/client/swap";
 import type { FeedAccessory, FeedCard, FeedOutfit } from "@/lib/types";
 import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/format";
@@ -12,10 +12,10 @@ import { tagLine } from "@/outfits/tags";
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt }: {
+function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string) => void;
-  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt;
+  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; animateLayout?: boolean;   // animateLayout=false: a swapped piece snaps to its new box (no layout animation)
 }) {
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
@@ -142,7 +142,7 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
         const isNew = swapEvt?.kind === "swap" && swapEvt.slot === p.slot && swapEvt.newId === c.id;
         const bounce = "";
         return (
-          <div key={p.slot} data-slot={p.slot} className={`absolute ${bounce}`} style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined, transition: "left .32s ease, top .32s ease, width .32s ease, height .32s ease", touchAction: "pan-y" }}>
+          <div key={p.slot} data-slot={p.slot} className={`absolute ${bounce}`} style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined, transition: animateLayout ? "left .32s ease, top .32s ease, width .32s ease, height .32s ease" : "none", touchAction: "pan-y" }}>
             <button key={`${p.slot}-${c.id}-${isNew ? swapEvt!.seq : 0}`} type="button" onClickCapture={(e) => { if (Date.now() < suppressUntil.current) { e.stopPropagation(); e.preventDefault(); } }} onClick={() => onOpen(orig(c, p.slot), p.slot)} aria-label={`${c.brand} ${c.name}`}
               className={`absolute inset-0 ${isNew ? (swapEvt!.dir === "next" ? "swap-in-next" : "swap-in-prev") : ""} ${debug ? "outline outline-1 outline-red-400" : ""}`} style={{ touchAction: "pan-y" }}>
               <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} />
@@ -159,3 +159,6 @@ export default function OutfitCanvas({ outfit, canvas, override, debug, cut = "a
     </div>
   );
 }
+
+// memo: a gesture in one outfit must not re-render the others (the tutorial passes stable props)
+export default memo(OutfitCanvas);
