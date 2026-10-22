@@ -426,3 +426,10 @@ Three interactive steps over two pinned outfits (`src/lib/onboarding.ts`): swipe
 
 ## Outfit icons (2026-10-22)
 Display only. Icons come from the existing per-outfit `tags` (computed on demand in the feed route / composer): style_primary -> family (`src/config/style-families.ts`), season_primary, then rain, occasion (evening, office, resort), contrast, boldness, palette kind (tonal, colourful), formality (formal). Generic values (everyday, neutral, regular) get no icon. Inline SVG, memoized, no requests. Setting `icons_enabled` in `app_settings`; `?icons=0` per link. Tapping an icon does nothing yet.
+
+
+## Search tab (family search over the pool)
+- Read-only rpc `search_index(gender, after, limit)` pages the active pool (ids, accessory rows; w2 set for women, old set for men). The server builds one `SearchRow` per outfit (family of `style_primary`, season, extras, strength, score, has accessory) with the shared pure `outfitTags`; index and option counts (`buildFacets`, ~1000 keys) are cached 10 min per instance. Nothing is stored per outfit, no paid call, no write.
+- Ranking: 0.45 style strength + 0.25 season fit (if season chosen) + 0.2 pool score + 0.1 extra match; exact matches first. Fewer than 8 exact matches: drop the extra, then the season. Family and item are never relaxed.
+- Rollback / switch: `app_settings.search_enabled = false` or `?search=0`. Women's index follows the w2 accessory set regardless of `ACC_REV_DEFAULT`.
+- Events table check constraint now allows `search_started` / `search_submitted` (added NOT VALID, no rows touched).
