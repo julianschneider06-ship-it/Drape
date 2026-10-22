@@ -8,7 +8,7 @@ const shopify = (slug: string, name: string, baseUrl: string, currency: string, 
 const flagged = (c: SourceConfig): SourceConfig => ({ ...c, active: false });
 
 export const SOURCES: SourceConfig[] = [
-  shopify("taylorstitch", "Taylor Stitch", "https://taylorstitch.com", "USD", { defaultGender: "men" , max: 450 }),
+  shopify("taylorstitch", "Taylor Stitch", "https://taylorstitch.com", "USD", { defaultGender: "men" , max: 800 }),
   shopify("fashionnova", "Fashion Nova", "https://fashionnova.com", "USD", { defaultGender: "women", maxPages: 2 }),
   shopify("pangaia", "PANGAIA", "https://pangaia.com", "USD", { max: 340 }),
   shopify("armedangels", "ARMEDANGELS", "https://armedangels.com", "EUR", { feeds: [{ handle: "damen", gender: "women" }, { handle: "herren", gender: "men" }] }),
@@ -31,7 +31,7 @@ export const SOURCES: SourceConfig[] = [
   shopify("thefrankieshop", "The Frankie Shop", "https://thefrankieshop.com", "USD", { defaultGender: "women", exclude: ["accessories"], max: 250 }),
   // Mixed / sporty / vintage / streetwear / basics:
   shopify("outerknown", "Outerknown", "https://outerknown.com", "USD", { brand: "Outerknown", exclude: ["accessories"], max: 300 }),
-  shopify("sportyandrich", "Sporty & Rich", "https://sportyandrich.com", "USD", { brand: "Sporty & Rich", exclude: ["accessories"], max: 300 }),
+  shopify("sportyandrich", "Sporty & Rich", "https://sportyandrich.com", "USD", { brand: "Sporty & Rich", exclude: ["accessories"], max: 700 }),
   shopify("colorfulstandard", "Colorful Standard", "https://colorfulstandard.com", "EUR", { exclude: ["accessories"], max: 250 }),
   // Men, workwear / preppy / classic / streetwear:
   shopify("noah", "Noah", "https://noahny.com", "USD", { brand: "Noah", defaultGender: "men", exclude: ["accessories"], max: 300 }),
@@ -134,4 +134,8 @@ export const SOURCES: SourceConfig[] = [
   shopify("sarahflint", "Sarah Flint", "https://sarahflint.com", "USD", { brand: "Sarah Flint", defaultGender: "women", exclude: ["accessories"], max: 70 }),
   shopify("margauxny", "Margaux", "https://margauxny.com", "USD", { brand: "Margaux", defaultGender: "women", exclude: ["accessories"], max: 70 }),
   shopify("sebago", "Sebago", "https://sebago.com", "USD", { brand: "Sebago", exclude: ["accessories"], max: 80 }),
+  // --- Round 2026-10-22 (shopify import): gaps = men's grunge / Y2K / punk, women's belts, women's retro sport. Gate decided on the real image check, see docs/architecture.md.
+  shopify("aelfriceden", "Aelfric Eden", "https://www.aelfriceden.com", "USD", { brand: "Aelfric Eden", exclude: ["accessories"], max: 800 }),
+  flagged(shopify("afflictionclothing", "Affliction", "https://afflictionclothing.com", "USD", { brand: "Affliction", defaultGender: "men", exclude: ["accessories"], max: 400 })), // 12% usable (mostly model photos): not active
+  shopify("laurelandgold", "Laurel & Gold", "https://laurelandgold.com", "USD", { brand: "Laurel & Gold", defaultGender: "women", only: ["accessories"], max: 60, inStockOnly: true }),
 ];

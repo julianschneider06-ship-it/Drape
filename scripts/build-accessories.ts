@@ -41,7 +41,7 @@ async function paged<T>(fn: string, limit: number, extra: Record<string, unknown
       const ps = [o.top, ...(o.bottom ? [o.bottom] : []), o.shoes].map((id) => pieces.get(id));
       if (ps.some((p) => !p)) { stats[gender]["?"] = (stats[gender]["?"] ?? 0) + 1; continue; }
       const ctx = outfitCtx(gender, ps as Piece[], [o.top, o.bottom, o.shoes].map((id) => names.get(id) ?? ""));
-      const picks = chooseAccessories(ctx, cands, usage);
+      const picks = chooseAccessories(ctx, cands, usage).slice(0, W2 ? 8 : 3);   // the old set (rollback, men) has 3 slots; women's wider limits only apply to the w2 set
       if (picks.filter((p) => p.acc.accent).length >= 2) twoAccent++;
       stats[gender][String(picks.length)] = (stats[gender][String(picks.length)] ?? 0) + 1;
       picks.forEach((p, i) => {

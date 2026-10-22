@@ -436,3 +436,17 @@ Display only. Icons come from the existing per-outfit `tags` (computed on demand
 - Likes of the other gender's outfits are stored as a normal like without outfit context and without a taste signal (`og`).
 - Rollback / switch: `app_settings.search_enabled = false` or `?search=0`. Women's accessories follow the catalogue (w2 set rules).
 - Events table check constraint now allows `search_started` / `search_submitted` (added NOT VALID, no rows touched).
+
+## Shopify import round (2026-10-22, branch `claude/import-shopify-shops-etbk30`, merged to main)
+**Candidates and verdicts** (usable = share of ingested products with a passed image check and cutout, i.e. the real gate; sample = 20 random first images looked at by eye before ingesting). All shops: USD, market US, `shop_market` rows set (US / USD; for each, the US and no-parameter prices were identical numbers on 5 sampled products). robots.txt allowed `/products.json` everywhere; no 403/429.
+| shop | action | products | usable | verdict |
+|---|---|---|---|---|
+| aelfriceden (www.aelfriceden.com; apex redirects) | new, max 800 | 778 | 88% (sample about 50% first images clean) | active; gender comes from the classification (3 men, 690 women/unisex): Y2K / grunge baggy denim, hoodies |
+| afflictionclothing | new, max 400 | 395 | 12% (46 products) | **flagged, `active:false`**: mostly model photos; the 46 usable ones stay live but are no longer refreshed (same as ettika) |
+| laurelandgold | new, only accessories, in stock only | 39 | 95% | active: 37 women's belts (all classified `belt`) |
+| sportyandrich | existing, max 300 -> 700 | 358 -> 524 | 71% (was 61%) | active, women's retro sport |
+| taylorstitch | existing, max 450 -> 800 | 451 -> 796 | 92% | active (lookbook worry did not apply: flat packshots) |
+| borninstockholm | skipped | 0 | 0 of 20 first images | all festival model shots, not ingested |
+| rowingblazers | skipped | (110 old) | 15% (known) | stays flagged from an earlier round, not re-ingested |
+**Numbers:** 1,724 new products (cap 3,000; no shop above 800); 18,825 products in total. Pool rebuilt: men 3,173, women 4,369 outfits; accessories (old and w2 sets), alternatives and the catalogue snapshot rebuilt. **Spend $2.56** (classification $2.15, accessory classification $0.08, image checks $0.34; the run cap stayed $10, step caps stayed at their defaults, so classification ran as three capped runs). The daily stock refresh reads `SOURCES`, so the shops are registered by this merge (dry run for aelfriceden, laurelandgold, sportyandrich, taylorstitch worked, nothing to change). No currency uncertainty: all prices are USD list prices.
+**Fix on the way:** `scripts/build-accessories.ts` crashed for the OLD accessory set (check constraint `slot_no <= 3`) since women's slot limits were widened; the old set is now cut to 3 slots (the w2 set keeps 8), so men's pool outfits get accessories again.
