@@ -3,7 +3,7 @@
 import type { StyleFamily } from "@/config/style-families";
 import type { IconId } from "@/lib/outfit-icons";
 
-export const SEARCH_MAX_RESULTS = 30;     // a search shows at most this many outfits, then an end card (no endless scroll)
+export const SEARCH_PAGE = 4;             // outfits composed per request while scrolling (the ordered product list is worked through on demand, no cap on the list)
 export const SEARCH_STORE_CAP = 5;        // per tier, at most this many pieces of one shop come first (keeps one shop from filling the page)
 export const SEARCH_MIN_EXACT = 8;        // fewer exact matches than this: the optional filters are relaxed (extra first, then season)
 

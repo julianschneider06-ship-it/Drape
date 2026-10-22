@@ -110,8 +110,8 @@ function companions(g: Gender, A: Acc, ctx: ReturnType<typeof outfitCtx>, pool: 
  * One outfit around the searched piece, or null when none can be built (the caller then skips that piece).
  * `anchorId` is a top / bottom / shoes id of the gender's catalogue, or an accessory id when `accessory` is true. Deterministic for the same catalogue.
  */
-export function composeAround(cat: Catalogue, g: Gender, anchorId: number, accessory: boolean, st: AroundState): ComposedOutfit | null {
-  const rnd = makeRnd((Math.imul(anchorId, 2654435761) + 0x9e3779b9) >>> 0);
+export function composeAround(cat: Catalogue, g: Gender, anchorId: number, accessory: boolean, st: AroundState, salt = 0): ComposedOutfit | null {
+  const rnd = makeRnd((Math.imul(anchorId + salt * 7919, 2654435761) + 0x9e3779b9) >>> 0);   // salt: another seed for a second try
   const fullShare = SHARE_FULL(cat, g);
   const kindsFor = (): ("three" | "full")[] => (rnd() < fullShare ? ["full", "three"] : ["three", "full"]);
   const accs = accPool(cat, g);

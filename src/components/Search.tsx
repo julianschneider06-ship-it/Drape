@@ -5,7 +5,8 @@ import type { SlotName } from "@/lib/layout/engine";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { FAMILY_KEYS, type StyleFamily } from "@/config/style-families";
 import { EXTRAS, FAMILY_INFO, ITEMS, SEASONS, extraIcon, familyIcon, itemIcon, seasonIcon, type SearchExtra, type SearchItem, type SearchSeason } from "@/config/search";
-import { facetCount, isSearchedSlot, type Facets, type Relaxed } from "@/lib/search";
+import { facetCount, isSearchedSlot, matchCount, type Facets, type Relaxed } from "@/lib/search";
+import { STYLES_GENDER_KEY, STYLES_KEY, cleanStyles } from "@/lib/welcome";
 import { track } from "@/lib/client/track";
 import OutfitCanvas from "./OutfitCanvas";
 import { IconGlyph } from "./OutfitIcons";
@@ -14,7 +15,15 @@ import type { IconId } from "@/lib/outfit-icons";
 interface Sel { item: SearchItem | null; family: StyleFamily | null; season: SearchSeason | null; extra: SearchExtra | null }
 type Step = "A" | "B" | "C" | "D";   // A part, B style family, C season, D extra (the order of the configurator)
 type Phase = "config" | "loading" | "results" | "error";
-interface Result { items: FeedOutfit[]; relaxed: Relaxed }
+interface Page { items: FeedOutfit[]; sids: number[]; relaxed: Relaxed; total: number; next: number; skipped: number }
+interface Result { items: FeedOutfit[]; relaxed: Relaxed; total: number; next: number; skipped: number; done: boolean; more: boolean; failed: boolean }
+const ls = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
+/** the device's signals for ordering (read once per search so the order stays stable): taste from likes + the welcome style picks as the starting prior */
+function signalsFor(g: string): { taste?: string; seed?: string[] } {
+  let seed: string[] = []; try { if (ls(STYLES_GENDER_KEY) === g) seed = cleanStyles(JSON.parse(ls(STYLES_KEY) ?? "[]")); } catch { /* none */ }
+  const taste = ls(`drape.taste.${g}`);
+  return { ...(taste ? { taste } : {}), ...(seed.length ? { seed } : {}) };
+}
 
 const EMPTY: Sel = { item: null, family: null, season: null, extra: null };
 const ORDER: (keyof Sel)[] = ["item", "family", "season", "extra"];
@@ -57,7 +66,8 @@ function Search({ gender, canvas, onOpen, onBack }: {
   const [res, setRes] = useState<Result | null>(null);
   const [shownItem, setShownItem] = useState<SearchItem>("shoes");   // the item of the results on screen (the selection may change while configuring)
   const [lastSel, setLastSel] = useState<Sel>(EMPTY);
-  const scroller = useRef<HTMLDivElement>(null), cfg = useRef<HTMLDivElement>(null), run = useRef(0);
+  const scroller = useRef<HTMLDivElement>(null), cfg = useRef<HTMLDivElement>(null), run = useRef(0), tail = useRef<HTMLElement>(null);
+  const job = useRef<{ q: Record<string, unknown>; sig: object; seen: Set<number> } | null>(null);   // the running search: its query, frozen signals and the products already shown (each product once)
 
   useEffect(() => {   // option counts for this gender (read-only, CDN cached); a failure just offers everything
     const ac = new AbortController();
@@ -68,22 +78,47 @@ function Search({ gender, canvas, onOpen, onBack }: {
   const pick = useCallback(<K extends keyof Sel>(k: K, v: Sel[K]) => setSel((s) => normalize(facets, { ...s, [k]: s[k] === v && (k === "season" || k === "extra") ? null : v }, k)), [facets]);
   const ok = (k: keyof Sel, v: string) => fc(facets, before(sel, k, v)) > 0;
   const ready = !!sel.family && !!sel.item;
+  const n = ready && facets ? matchCount(facets, { item: sel.item!, family: sel.family!, season: sel.season, extra: sel.extra }) : null;   // products this search delivers (null = counts not loaded)
+
+  /** the next small page of the running search (outfits are composed around the next products only when needed) */
+  const fetchPage = useCallback(async (from: number, mine: number): Promise<Page | null> => {
+    const j = job.current; if (!j) return null;
+    const r = await fetch("/api/search", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...j.q, from, ...j.sig }), signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(String(r.status));
+    const p = (await r.json()) as Page;
+    return mine === run.current ? p : null;
+  }, []);
 
   const submit = useCallback(async () => {
-    if (!sel.family || !sel.item) return;
+    if (!sel.family || !sel.item || n === 0) return;
     const mine = ++run.current, s = sel;
     setLastSel(s); setShownItem(s.item!); setPhase("loading");
-    const q = new URLSearchParams({ gender, family: s.family!, item: s.item! }); if (s.season) q.set("season", s.season); if (s.extra) q.set("extra", s.extra);
+    job.current = { q: { gender, family: s.family, item: s.item, ...(s.season ? { season: s.season } : {}), ...(s.extra ? { extra: s.extra } : {}) }, sig: signalsFor(gender), seen: new Set() };
     try {
-      const r = await fetch(`/api/search?${q}`, { signal: AbortSignal.timeout(15000) });
-      if (!r.ok) throw new Error(String(r.status));
-      const j = (await r.json()) as Result;
-      if (mine !== run.current) return;
-      setRes(j); setPhase("results");
-      track({ event_type: "search_submitted", gender, ctx: { sq: { f: s.family!, i: s.item!, ...(s.season ? { s: s.season } : {}), ...(s.extra ? { e: s.extra } : {}), r: j.relaxed, n: j.items.length } } });
+      const p = await fetchPage(0, mine); if (!p) return;
+      const items = p.items.filter((_, i) => { const id = p.sids[i]; if (job.current!.seen.has(id)) return false; job.current!.seen.add(id); return true; });
+      setRes({ items, relaxed: p.relaxed, total: p.total, next: p.next, skipped: p.skipped, done: p.next >= p.total, more: false, failed: false }); setPhase("results");
+      track({ event_type: "search_submitted", gender, ctx: { sq: { f: s.family!, i: s.item!, ...(s.season ? { s: s.season } : {}), ...(s.extra ? { e: s.extra } : {}), r: p.relaxed, n: p.total } } });
       requestAnimationFrame(() => scroller.current?.scrollTo({ top: 0 }));
     } catch { if (mine === run.current) setPhase("error"); }
-  }, [sel, gender]);
+  }, [sel, gender, n, fetchPage]);
+
+  const more = useCallback(async () => {
+    const mine = run.current, cur = res; if (!cur || cur.done || cur.more || !job.current) return;
+    setRes({ ...cur, more: true, failed: false });
+    try {
+      const p = await fetchPage(cur.next, mine); if (!p) return;
+      const items = p.items.filter((_, i) => { const id = p.sids[i]; if (job.current!.seen.has(id)) return false; job.current!.seen.add(id); return true; });
+      setRes((r) => (r && mine === run.current ? { ...r, items: [...r.items, ...items], next: p.next, skipped: r.skipped + p.skipped, done: p.next >= r.total, more: false } : r));
+    } catch { setRes((r) => (r && mine === run.current ? { ...r, more: false, failed: true } : r)); }
+  }, [res, fetchPage]);
+
+  useEffect(() => {   // load the next page when the end of the list comes within about one screen (no polling: an observer on the last section)
+    const el = tail.current, root = scroller.current;
+    if (!el || !root || !res || res.done || res.more || res.failed) return;
+    const io = new IntersectionObserver((e) => { if (e.some((x) => x.isIntersecting)) more(); }, { root, rootMargin: "100% 0px" });
+    io.observe(el); return () => io.disconnect();
+  }, [res, more]);
 
   const edit = (step: Step) => {
     setPhase("config"); setSel(lastSel);
@@ -121,8 +156,8 @@ function Search({ gender, canvas, onOpen, onBack }: {
         </Section>
         <div className="sticky bottom-0 bg-gradient-to-t from-white via-white to-white/0 px-4 pb-3 pt-4">
           {phase === "error" && <p className="mb-2 text-center text-xs text-neutral-500">Search is not available right now. Please try again.</p>}
-          <button type="button" disabled={!ready || phase === "loading"} onClick={submit}
-            className={`w-full rounded-full py-3 text-sm font-medium text-white transition-opacity ${ready ? "bg-black active:opacity-80" : "bg-neutral-300"}`}>{phase === "loading" ? "Searching…" : "Search"}</button>
+          <button type="button" disabled={!ready || phase === "loading" || n === 0} onClick={submit}
+            className={`w-full rounded-full py-3 text-sm font-medium text-white transition-opacity ${ready && n !== 0 ? "bg-black active:opacity-80" : "bg-neutral-300"}`}>{phase === "loading" ? "Searching…" : n === null ? "Search" : `Search (${n})`}</button>
         </div>
       </div>
 
@@ -143,11 +178,17 @@ function Search({ gender, canvas, onOpen, onBack }: {
                 {canvas && <div className="contents" style={o.og ? { opacity: 0.72 } : undefined}><OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} onOpen={(c, slot) => onOpen(c, o, i, slot)} /></div>}
                 {o.og && <span className="pointer-events-none absolute left-4 top-[4.25rem] rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-500">{o.og === "women" ? "Women\u2019s" : "Men\u2019s"}</span>}
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-white px-4 text-xs text-neutral-400" style={{ height: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))`, paddingBottom: "var(--safe-b, 0px)" }}>
-                  {i + 1} / {res.items.length}{res.relaxed !== "none" ? " · Showing fewer exact matches" : ""}
+                  {i + 1} / {res.done ? res.items.length : res.total - res.skipped}{res.relaxed !== "none" ? " · Showing fewer exact matches" : ""}
                 </div>
               </section>
             ))}
-            <section className="flex h-full snap-start flex-col items-center justify-center gap-3 px-8 text-center" data-end>
+            {!res.done && (
+              <section ref={tail} className="flex h-full snap-start flex-col items-center justify-center gap-3 px-8 text-center" data-more>
+                <p className="text-sm text-neutral-400">{res.failed ? "Could not load more." : "Loading…"}</p>
+                {res.failed && <button type="button" onClick={() => setRes({ ...res, failed: false })} className="rounded-full border border-neutral-300 px-5 py-2.5 text-sm text-neutral-700">Try again</button>}
+              </section>
+            )}
+            {res.done && <section className="flex h-full snap-start flex-col items-center justify-center gap-3 px-8 text-center" data-end>
               {res.items.length ? (
                 <>
                   <p className="text-base font-semibold">That&apos;s all for now.</p>
@@ -163,7 +204,7 @@ function Search({ gender, canvas, onOpen, onBack }: {
                 <button type="button" onClick={() => edit("B")} className="rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white">{res.items.length ? "Refine search" : "Change search"}</button>
                 {res.items.length > 0 && <button type="button" onClick={onBack} className="rounded-full border border-neutral-300 px-5 py-2.5 text-sm text-neutral-700">For You</button>}
               </div>
-            </section>
+            </section>}
           </div>
         </div>
       )}

@@ -128,6 +128,12 @@ export const tasteMatch = (t: Taste | null, p: CatPiece): number => {
   const sl = slotOf(p), s = Math.max(0, Math.min(1, cos(t.styles[sl], p.vec) - TASTE.negWeight * cos(t.neg[sl], p.vec)));
   return STEER.styleVsAttributes * s + (1 - STEER.styleVsAttributes) * (attrMatch(t, p) + 1) / 2;
 };
+/** how well a style vector (an accessory has no slot) matches the device's taste, 0..1: the mean over the three slots; 0.5 neutral when there is no history */
+export function styleMatch(t: Taste | null, vec: ArrayLike<number>): number {
+  if (!t || (t.n < 5 && !t.prior)) return 0.5;
+  let s = 0; for (const sl of ["top", "bottom", "shoes"] as const) s += Math.max(0, Math.min(1, cos(t.styles[sl], vec) - TASTE.negWeight * cos(t.neg[sl], vec)));
+  return s / 3;
+}
 /** tag match -1..1 of an outfit's tags against the device's tag preferences (mean over the tag families that have a preference) */
 export function tagMatch(t: Taste | null, tags: EventTags | null): number {
   if (!t || !tags || t.n < TASTE.personalizeFrom) return 0;

@@ -5,6 +5,7 @@ import type { FeedAccessory, FeedCard, FeedOutfit } from "@/lib/types";
 import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/format";
 import { garmentClass, RULES, SALE_LABEL } from "@/lib/layout/config";
 import { isOnSale, saleMarkerOn } from "@/lib/client/sale";
+import { showSale } from "@/lib/search";
 import { computeLayout, hash32, pickTemplate, type AccIn, type AccSlot, type PieceIn, type SlotName } from "@/lib/layout/engine";
 import FeedImage from "./FeedImage";
 import { tagLine } from "@/outfits/tags";
@@ -91,7 +92,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
     const fs = SALE_LABEL.fontShare * W, lw = fs * SALE_LABEL.lineEm, lh = fs * SALE_LABEL.lenEm, gap = SALE_LABEL.gap * W, pad = RULES.edgePad * W;
     for (const p of layout.pieces) {
       const c = cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card;
-      if (!c || !c.cut || !isOnSale(c)) continue;
+      if (!c || !c.cut || !showSale(isOnSale(c), !!dim?.(p.slot))) continue;   // Search: only the searched piece gets a label
       const others = layout.pieces.filter((q) => q.slot !== p.slot);
       const meanX = others.length ? others.reduce((a, q) => a + q.rect.x + q.rect.w / 2, 0) / others.length : W / 2;
       const order: ("left" | "right")[] = p.rect.x + p.rect.w / 2 < meanX ? ["left", "right"] : ["right", "left"];
@@ -113,7 +114,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
       }
     }
     return out;
-  }, [layout, cards, accs, canvas]);
+  }, [layout, cards, accs, canvas, dim]);
 
   const orig = (c: FeedCard, slot: SlotName): FeedCard => (slot.startsWith("acc") ? (accs.find((a) => a.slot === slot)?.acc.card ?? c) : c.id === outfit.top.id ? outfit.top : c.id === outfit.shoes.id ? outfit.shoes : outfit.bottom ?? c);
   const { w: W, h: H } = canvas;
@@ -145,7 +146,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
           <div key={p.slot} data-slot={p.slot} className={`absolute ${bounce}`} style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined, transition: animateLayout ? "left .32s ease, top .32s ease, width .32s ease, height .32s ease" : "none", touchAction: "pan-y", ...(dimmed ? { opacity: 0.4, filter: "saturate(0.35)", pointerEvents: "none" as const } : {}) }} {...(dimmed ? { "data-dim": "1" } : {})}>
             <button key={`${p.slot}-${c.id}-${isNew ? swapEvt!.seq : 0}`} type="button" onClickCapture={(e) => { if (Date.now() < suppressUntil.current) { e.stopPropagation(); e.preventDefault(); } }} onClick={() => onOpen(orig(c, p.slot), p.slot)} disabled={dimmed} tabIndex={dimmed ? -1 : undefined} aria-label={`${c.brand} ${c.name}`}
               className={`absolute inset-0 ${isNew ? (swapEvt!.dir === "next" ? "swap-in-next" : "swap-in-prev") : ""} ${debug ? "outline outline-1 outline-red-400" : ""}`} style={{ touchAction: "pan-y" }}>
-              <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} />
+              <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} noSale={dimmed} />
               {labels[p.slot] && (
                 <span aria-hidden className="pointer-events-none absolute select-none whitespace-nowrap" data-sale-label={labels[p.slot].side}
                   style={{ [labels[p.slot].side === "right" ? "left" : "right"]: "100%", [labels[p.slot].side === "right" ? "marginLeft" : "marginRight"]: SALE_LABEL.gap * W, top: labels[p.slot].dy,

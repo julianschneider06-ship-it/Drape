@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { FAMILY_KEYS, familyOf, STYLE_FAMILIES } from "../src/config/style-families";
-import { EXTRAS, FAMILY_INFO, ITEMS, SEARCH_MAX_RESULTS, SEARCH_MIN_EXACT } from "../src/config/search";
-import { buildFacets, collect, facetCount, isSearchedSlot, parseExtra, parseFamily, parseItem, searchRank, sumFacets, type SearchRow } from "../src/lib/search";
+import { EXTRAS, FAMILY_INFO, ITEMS, SEARCH_MIN_EXACT } from "../src/config/search";
+import { buildFacets, facetCount, isSearchedSlot, matchCount, parseExtra, parseFamily, parseItem, searchRank, showSale, sumFacets, uniqueRows, type SearchRow } from "../src/lib/search";
 import { extrasOfPiece, familyFacts, rowsOf } from "../src/lib/search-index";
 import { STYLE_KEYS } from "../src/classify/styles";
 import { buildCatalogue, type RawCatAcc, type RawCatPiece } from "../src/outfits/catalogue";
@@ -37,8 +37,8 @@ test("filters apply to the searched piece: family and part", () => {
 
 test("season is matched on the piece's season mask (an all-season piece matches every season)", () => {
   const rows = [row(1, { mask: 8 }), row(2, { mask: 15 }), row(3, { mask: 2 })];
-  assert.deepEqual(ids(searchRank(rows, { ...Q, season: "winter" }, "men", 30, 1)).sort(), [1, 2]);
-  assert.deepEqual(ids(searchRank(rows, { ...Q, season: "summer" }, "men", 30, 1)).sort(), [2, 3]);
+  assert.deepEqual(ids(searchRank(rows, { ...Q, season: "winter" }, "men", 1)).sort(), [1, 2]);
+  assert.deepEqual(ids(searchRank(rows, { ...Q, season: "summer" }, "men", 1)).sort(), [2, 3]);
 });
 
 test("own gender first, then the other gender; a unisex piece appears once", () => {
@@ -49,21 +49,55 @@ test("own gender first, then the other gender; a unisex piece appears once", () 
   assert.equal(men.cands.filter((c) => c.id === 50).length, 1); assert.equal(men.cands.find((c) => c.id === 50)!.g, "men");
 });
 
-test("total cap is 30 with the own gender first, one result per piece", () => {
+test("no cap: every matching product is listed once, own gender first", () => {
   const rows = [...many(20, { g: "men" }, 1), ...many(40, { g: "women" }, 100)];
   const r = searchRank(rows, Q, "men");
-  const out = collect(r.cands, (c) => c);
-  assert.equal(out.length, SEARCH_MAX_RESULTS); assert.equal(SEARCH_MAX_RESULTS, 30);
-  assert.ok(out.slice(0, 20).every((c) => c.g === "men") && out.slice(20).every((c) => c.g === "women"));
-  assert.equal(new Set(out.map((c) => c.id)).size, 30);
-  const own = collect(searchRank(many(60, { g: "men" }), Q, "men").cands, (c) => c);
-  assert.equal(own.length, 30); assert.ok(own.every((c) => c.g === "men"));   // enough own results: the other gender does not appear
+  assert.equal(r.cands.length, 60); assert.equal(new Set(r.cands.map((c) => c.id)).size, 60);
+  assert.ok(r.cands.slice(0, 20).every((c) => c.g === "men") && r.cands.slice(20).every((c) => c.g === "women"));
+  assert.equal(searchRank(many(500, { g: "men" }), Q, "men").cands.length, 500);
 });
 
-test("a piece that cannot be composed is skipped, the next one takes its place", () => {
-  const r = searchRank(many(40), Q, "men");
-  const out = collect(r.cands, (c) => (c.id % 2 ? null : c.id));
-  assert.equal(out.length, 20); assert.ok(out.every((x) => x % 2 === 0));
+test("each product once: a unisex piece in both catalogues counts once, in the list and in the option counts", () => {
+  const rows = [...many(3, { g: "men" }, 1), ...many(3, { g: "women" }, 1), row(9, { g: "women" })];
+  assert.equal(uniqueRows(rows, "men").length, 4);
+  const r = searchRank(rows, Q, "men"); assert.deepEqual(ids(r).sort((a, b) => a - b), [1, 2, 3, 9]);
+  assert.deepEqual(r.cands.filter((c) => c.id <= 3).map((c) => c.g), ["men", "men", "men"]);
+  assert.equal(matchCount(buildFacets(uniqueRows(rows, "men")), { item: "shoes", family: "smart" }, 1), 4);
+});
+
+test("order is stable and follows the fit signal (neutral = default order)", () => {
+  const rows = many(20);
+  assert.deepEqual(ids(searchRank(rows, Q, "men")), ids(searchRank([...rows].reverse(), Q, "men")));
+  assert.deepEqual(ids(searchRank(rows, Q, "men")), ids(searchRank(rows, Q, "men", SEARCH_MIN_EXACT, () => 0.5)));
+  const liked = new Set([15, 16]);
+  const top = ids(searchRank(rows, Q, "men", SEARCH_MIN_EXACT, (r) => (liked.has(r.id) ? 1 : 0.5)));
+  assert.deepEqual(top.slice(0, 2).sort((a, b) => a - b), [15, 16]);
+  assert.deepEqual(top, ids(searchRank(rows, Q, "men", SEARCH_MIN_EXACT, (r) => (liked.has(r.id) ? 1 : 0.5))));
+});
+
+test("N of the Search button equals the number of products delivered, with relaxation and both genders", () => {
+  const sets: SearchRow[][] = [
+    [...many(60, { mask: 8, ex: ["rain"] }), ...many(20, { mask: 2 }, 100)],
+    [...many(3, { mask: 8, ex: ["rain"] }), ...many(20, { mask: 8 }, 100), ...many(20, { mask: 2 }, 200)],
+    [...many(2, { mask: 8, ex: ["rain"] }), ...many(2, { mask: 8 }, 100), ...many(30, { mask: 2 }, 200), ...many(30, { fam: "street" }, 400)],
+    [...many(2, { g: "men", mask: 8 }), ...many(10, { g: "women", mask: 8 }, 100), ...many(20, { g: "men", mask: 2 }, 200), row(1, { g: "women", mask: 8 })],
+    [row(1, { fam: "soft" })],
+  ];
+  const sels = [{}, { season: "winter" }, { extra: "rain" }, { season: "winter", extra: "rain" }, { season: "summer", extra: "rain" }] as const;
+  for (const rows of sets) {
+    const f = buildFacets(uniqueRows(rows, "men"));
+    for (const own of ["men", "women"] as const) for (const sel of sels) {
+      const r = searchRank(rows, { ...Q, ...sel }, own);
+      assert.equal(matchCount(f, { item: "shoes", family: "smart", ...sel }), r.cands.length, JSON.stringify(sel));
+    }
+  }
+  assert.equal(matchCount(buildFacets([row(1, { fam: "soft" })]), { item: "shoes", family: "rugged" }), 0);
+});
+
+test("sale marker only on the searched piece", () => {
+  assert.equal(showSale(true, false), true);    // searched piece on sale
+  assert.equal(showSale(true, true), false);    // greyed-out piece on sale
+  assert.equal(showSale(false, false), false);
 });
 
 test("exact matches are enough: no relaxation", () => {
