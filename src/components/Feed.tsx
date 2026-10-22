@@ -10,7 +10,9 @@ import { canvasSize } from "@/lib/layout/engine";
 import ProductSheet from "./ProductSheet";
 import OutfitButtons, { type Reaction } from "./OutfitButtons";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
-import { SaleInkDefs, setSaleDefault } from "@/lib/client/sale";
+import { SaleInkDefs, saleMarkerOn, setSaleDefault } from "@/lib/client/sale";
+import Onboarding from "./Onboarding";
+import { ONBOARDING_KEY } from "@/lib/onboarding";
 import { compactTags } from "@/outfits/tags";
 import type { Signal } from "@/outfits/taste-codec";
 import { TASTE } from "@/lib/personalization/config";
@@ -44,6 +46,13 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const layoutInfo = useRef(new Map<number, { layout: string; mode: string }>());
   const [dbg, setDbg] = useState<{ layout?: string[]; debug: boolean; cut: CutMode; acc: boolean; preload: boolean; feed: "default" | "dynamic" | "hybrid" }>({ debug: false, cut: "auto", acc: true, preload: true, feed: "default" });
 
+  // first-visit tutorial (3 steps): two pinned outfits instead of the feed. Nothing from it is recorded: no events, no likes, no taste signals.
+  const [obPhase, setObPhase] = useState<"off" | "loading" | "on">("off");
+  const [obStep, setObStep] = useState<1 | 2 | 3>(1);
+  const [obItems, setObItems] = useState<FeedOutfit[]>([]);
+  const obRef = useRef<{ phase: "off" | "loading" | "on"; step: 1 | 2 | 3 }>({ phase: "off", step: 1 });
+  obRef.current = { phase: obPhase, step: obStep };
+
   const device = useRef("");
   const scroller = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<FeedOutfit[]>([]);
@@ -65,6 +74,32 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const exhausted = useRef(false);
   const shown = useMemo(() => items.map((o) => applySwaps(o, swaps[o.id])), [items, swaps]);   // the outfits as the user sees them after swaps
   itemsRef.current = shown;
+
+  // onboarding: only on the first visit (flag in localStorage) or when forced with ?onboarding=1; any failure just skips it
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("onboarding") !== "1" && store.get(ONBOARDING_KEY) === "1") return;
+    setObPhase("loading");
+    fetch("/api/onboarding", { signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.json() : null)).then((j: { items: FeedOutfit[] } | null) => {
+      if (j?.items?.length === 2) { setObItems(j.items); setObStep(1); setObPhase("on"); } else setObPhase("off");
+    }).catch(() => setObPhase("off"));
+  }, []);
+  const finishOb = useCallback(() => {
+    store.set(ONBOARDING_KEY, "1");
+    setObPhase("off"); setObStep(1); setObItems([]);
+    requestAnimationFrame(() => scroller.current?.scrollTo({ top: 0 }));
+  }, []);
+  // preload the tutorial images (pieces + the top alternatives) so the swap shows right away
+  useEffect(() => {
+    for (const o of obItems) {
+      const cards: [FeedCard | null | undefined, "top" | "bottom" | "shoes"][] = [[o.top, "top"], [o.bottom, "bottom"], [o.shoes, "shoes"], ...(o.accessories ?? []).map((a) => [a.card, "top"] as [FeedCard, "top"]), ...(o.alts?.top ?? []).map((a) => [a.card, "top"] as [FeedCard, "top"])];
+      for (const [c, slot] of cards) { if (!c) continue; const img = new Image(); img.referrerPolicy = "no-referrer"; img.src = feedSrc(viewCard(c, "auto"), pieceClass(slot, c)); }
+    }
+  }, [obItems]);
+  // step 1 ends when the user has really scrolled to the next outfit
+  const onScrollOb = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (obRef.current.phase === "on" && obRef.current.step === 1 && el.scrollTop >= el.clientHeight * 0.9) setObStep(2);
+  };
 
   // remembered outfit reactions (this device)
   useEffect(() => { try { const r = JSON.parse(store.get("drape.reactions") ?? "{}"); if (r && typeof r === "object") setReactions(r); } catch { /* ignore */ } }, []);
@@ -179,7 +214,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   // impressions, dwell time, scroll-past (IntersectionObserver on each outfit screen)
   useEffect(() => {
     const root = scroller.current;
-    if (!root || !items.length) return;
+    if (!root || !items.length || obPhase !== "off") return;
     const obs = new IntersectionObserver((entries) => {
       for (const e of entries) {
         const i = Number((e.target as HTMLElement).dataset.i);
@@ -206,7 +241,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     }, { root, threshold: [0, 0.3, 0.6] });
     root.querySelectorAll("section[data-i]").forEach((el) => obs.observe(el));
     return () => obs.disconnect();
-  }, [items.length]);
+  }, [items.length, obPhase]);
 
   // prefetch the next 3 outfits' images; load more when close to the end
   useEffect(() => {
@@ -256,6 +291,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const swapPiece = (o: FeedOutfit, index: number, slot: SlotName, dir: "next" | "prev") => {
     const key = slotKeyOf(slot), n = loopSize(o, key);
     if (n < 2) return;                                   // nothing to swap with
+    const tut = obRef.current.phase === "on";            // tutorial: only the top piece swaps, and nothing is recorded
+    if (tut && key !== "top") return;
     const lk = `${o.id}:${key}`;
     if (swapBusy.current.has(lk)) return;
     swapBusy.current.add(lk); setTimeout(() => swapBusy.current.delete(lk), 330);
@@ -270,6 +307,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     const seq = ++swapSeq.current;
     setSwaps((p) => { const n = { ...p, [o.id]: { ...(p[o.id] ?? {}), [key]: nxt } }; swapsRef.current = n; return n; });
     setSwapEvts((p) => ({ ...p, [o.id]: { slot, dir: dir === "next" ? "prev" : "next", seq, kind: "swap", newId: incoming.id } }));   // swipe right: the content moves right
+    if (tut) { if (obRef.current.step === 2) { if (saleMarkerOn()) setObStep(3); else finishOb(); } return; }   // step 2 done: the user really swapped the top piece
     interacted.current.add(index);
     signal({ t: "swap", x: out.id, i: incoming.id, a: nxt, f: cur, o: shownIds(itemsRef.current[index] ?? o) });
     track({ event_type: "swap", outfit_id: o.id, feed_index: index, slot: trackSlot(slot), product_id: incoming.id, gender: genderRef.current, ctx: { out: out.id, dir, rank: nxt, alt: nxt, from: cur, ...(o.tags ? { tags: compactTags(o.tags) } : {}) } });
@@ -311,6 +349,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     return () => { cancelled = true; clearTimeout(t); for (const i of inflight) if (!i.complete) i.src = ""; };
   }, [current, shown.length, dbg.cut, dbg.preload]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const tutShown = useMemo(() => obItems.map((o) => applySwaps(o, swaps[o.id])), [obItems, swaps]);
+  const obHeader = obPhase !== "off";   // header controls rest during the tutorial (it shows the men's outfits)
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
     signal({ t: "tap_product", p: card.id, o: shownIds(outfit), tg: tg(outfit) });
@@ -323,33 +363,42 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       <SaleInkDefs />
       <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
         <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
-        <div className="flex rounded-full bg-neutral-100 p-0.5 text-sm" role="tablist" aria-label="Section">
+        <div className="flex rounded-full bg-neutral-100 p-0.5 text-sm" role="tablist" aria-label="Section" style={obHeader ? { pointerEvents: "none" } : undefined}>
           {(["women", "men"] as Gender[]).map((g) => (
-            <button key={g} role="tab" aria-selected={gender === g} onClick={() => gender !== g && setGender(g)}
-              className={`rounded-full px-4 py-1 capitalize transition-colors ${gender === g ? "bg-black text-white" : "text-neutral-600"}`}>{g === "women" ? "Women" : "Men"}</button>
+            <button key={g} role="tab" aria-selected={(obHeader ? "men" : gender) === g} onClick={() => gender !== g && setGender(g)}
+              className={`rounded-full px-4 py-1 capitalize transition-colors ${(obHeader ? "men" : gender) === g ? "bg-black text-white" : "text-neutral-600"}`}>{g === "women" ? "Women" : "Men"}</button>
           ))}
         </div>
-        <Link href="/likes" aria-label="My likes" className="flex w-16 justify-end">
+        <Link href="/likes" aria-label="My likes" className="flex w-16 justify-end" style={obHeader ? { pointerEvents: "none" } : undefined}>
           <span className="rounded-full p-1.5 text-black">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7C19.5 15.9 12 20.5 12 20.5z" /></svg>
           </span>
         </Link>
       </header>
 
-      <div ref={scroller} className="no-scrollbar h-dvh snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
-        {shown.map((o, i) => (
+      <div ref={scroller} onScroll={onScrollOb} className={`no-scrollbar h-dvh snap-y snap-mandatory overscroll-y-contain ${obPhase === "on" && obStep >= 2 ? "overflow-y-hidden" : "overflow-y-scroll"}`}>
+        {obPhase === "on" && tutShown.map((o, i) => (
+          <section key={o.id} data-ob={i === 0 ? "A" : "B"} className="relative flex h-dvh snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + env(safe-area-inset-bottom))` }}>
+            {canvas && <OutfitCanvas outfit={o} canvas={canvas} cut="auto" showAcc priority onOpen={() => { /* no product sheet in the tutorial */ }} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(obItems[i], i, slot, dir)} />}
+            <OutfitButtons value={null} onPress={() => { /* not recorded in the tutorial */ }} />
+          </section>
+        ))}
+        {obPhase === "off" && shown.map((o, i) => (
           <section key={o.id} data-i={i} className="relative flex h-dvh snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + env(safe-area-inset-bottom))` }}>
             {canvas && <OutfitCanvas outfit={o} canvas={canvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} priority={i < 2}               onOpen={(c, slot) => open(c, o, i, slot)} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
               onLayout={(layout, mode) => layoutInfo.current.set(o.id, { layout, mode })} />}
             <OutfitButtons value={reactions[o.id] ?? null} onPress={(d) => pressOutfit(o, i, d)} />
           </section>
         ))}
-        {!items.length && (
+        {obPhase === "loading" && <section className="flex h-dvh items-center justify-center text-sm text-neutral-400">Loading…</section>}
+        {obPhase === "off" && !items.length && (
           <section className="flex h-dvh items-center justify-center text-sm text-neutral-400">
             {error ? <button onClick={() => loadMore()} className="rounded-full border border-neutral-300 px-4 py-2 text-neutral-700">Try again</button> : loading || !gender ? "Loading…" : "No outfits yet."}
           </section>
         )}
       </div>
+
+      {obPhase === "on" && canvas && <Onboarding step={obStep} onDone={finishOb} onNoSale={finishOb} />}
 
       {dbg.debug && (
         <button onClick={() => setDbg((d) => ({ ...d, cut: d.cut === "auto" ? "off" : "auto" }))}

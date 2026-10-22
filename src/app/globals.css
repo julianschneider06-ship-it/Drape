@@ -35,3 +35,9 @@ img { -webkit-user-drag: none; }
 .swap-in-prev { animation: swapInPrev .32s ease-out both; }
 .swap-bounce-next { animation: swapBounceNext .35s ease-out; }
 .swap-bounce-prev { animation: swapBouncePrev .35s ease-out; }
+
+/* Onboarding: the step-1 arrow nudges upwards to invite the swipe; boxes fade in */
+@keyframes obNudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+@keyframes obFade { from { opacity: 0; } to { opacity: 1; } }
+.ob-nudge { animation: obNudge 1.6s ease-in-out infinite; }
+.ob-fade { animation: obFade .3s ease-out both; }
