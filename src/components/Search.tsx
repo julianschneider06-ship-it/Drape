@@ -4,29 +4,30 @@ import type { FeedCard, FeedOutfit } from "@/lib/types";
 import type { SlotName } from "@/lib/layout/engine";
 import { BUTTON_BAR_PX } from "@/lib/layout/config";
 import { FAMILY_KEYS, type StyleFamily } from "@/config/style-families";
-import { DIRECTIONS, EXTRAS, FAMILY_INFO, ITEMS, SEASONS, dirIcon, extraIcon, familyIcon, itemIcon, seasonIcon, type Direction, type SearchExtra, type SearchItem, type SearchSeason } from "@/config/search";
+import { DIRECTIONS, EXTRAS, HIGHLIGHT_KEY, SEARCH_STATE_KEY, FAMILY_INFO, ITEMS, SEASONS, dirIcon, extraIcon, familyIcon, itemIcon, seasonIcon, type Direction, type SearchExtra, type SearchItem, type SearchSeason } from "@/config/search";
 import { facetCount, isSearchedSlot, matchCount, type Facets, type Relaxed } from "@/lib/search";
 import { STYLES_GENDER_KEY, STYLES_KEY, cleanStyles } from "@/lib/welcome";
 import { track } from "@/lib/client/track";
 import OutfitCanvas from "./OutfitCanvas";
-import { shineOn as shineParam } from "@/lib/shine";
+import { shineVisible } from "@/lib/shine";
+import { EMPTY_SEL, canClear, decodeState, encodeState, freshState, tapAction, type Phase, type Sel } from "@/lib/search-state";
 import { IconGlyph } from "./OutfitIcons";
 import type { IconId } from "@/lib/outfit-icons";
 
-interface Sel { item: SearchItem | null; family: StyleFamily | null; season: SearchSeason | null; extra: SearchExtra | null }
 type Step = "G" | "A" | "B" | "C" | "D";   // G direction (men / women), A part, B style family, C season, D extra (the order of the configurator)
-type Phase = "config" | "loading" | "results" | "error";
 interface Page { items: FeedOutfit[]; sids: number[]; relaxed: Relaxed; total: number; next: number; skipped: number }
 interface Result { items: FeedOutfit[]; relaxed: Relaxed; total: number; next: number; skipped: number; done: boolean; more: boolean; failed: boolean }
 const ls = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
-/** the device's signals for ordering (read once per search so the order stays stable): taste from likes + the welcome style picks as the starting prior */
-function signalsFor(g: string): { taste?: string; seed?: string[] } {
+/** the device's signals for ordering (read once per search so the order stays stable): taste from likes + the likes not yet folded into it (the feed's outbox) + the welcome style picks as the starting prior */
+function signalsFor(g: string): { taste?: string; seed?: string[]; signals?: unknown[] } {
   let seed: string[] = []; try { if (ls(STYLES_GENDER_KEY) === g) seed = cleanStyles(JSON.parse(ls(STYLES_KEY) ?? "[]")); } catch { /* none */ }
   const taste = ls(`drape.taste.${g}`);
-  return { ...(taste ? { taste } : {}), ...(seed.length ? { seed } : {}) };
+  let signals: unknown[] = []; try { const ob = JSON.parse(ls(`drape.outbox.${g}`) ?? "[]"); if (Array.isArray(ob)) signals = ob.slice(-80); } catch { /* none */ }
+  return { ...(taste ? { taste } : {}), ...(seed.length ? { seed } : {}), ...(signals.length ? { signals } : {}) };
 }
 
-const EMPTY: Sel = { item: null, family: null, season: null, extra: null };
+const EMPTY: Sel = EMPTY_SEL;
+const ss = { get: (k: string) => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k: string, v: string | null) => { try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch { /* ignore */ } } };
 const ORDER: (keyof Sel)[] = ["item", "family", "season", "extra"];
 const fc = (f: Facets | null, s: Sel) => (f ? facetCount(f, s) : 1);   // no counts yet (or failed): everything is offered
 /** counts of an option depend only on the steps before it (part first, then family, season, extra) */
@@ -57,19 +58,21 @@ function Section({ step, title, sub, children }: { step: Step; title: string; su
   );
 }
 
-function Search({ gender, resetKey, canvas, onOpen, onBack }: {
-  gender: "women" | "men"; resetKey: number; canvas: { w: number; h: number } | null;
+function Search({ gender, tapKey, canvas, onOpen, onBack }: {
+  gender: "women" | "men"; tapKey: number; canvas: { w: number; h: number } | null;
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onBack: () => void;
 }) {
-  const [dir, setDir] = useState<Direction>(gender);   // step 1: preselected with the feed's direction, can be changed
-  const [sel, setSel] = useState<Sel>(EMPTY);
+  const saved = useMemo(() => (typeof window === "undefined" ? null : decodeState(ss.get(SEARCH_STATE_KEY))), []);   // the selection survives a reload of the page (this session only, selection without results)
+  const [dir, setDir] = useState<Direction>(saved?.dir ?? gender);   // step 1: preselected with the feed's direction, can be changed
+  const [sel, setSel] = useState<Sel>(saved?.sel ?? EMPTY);
   const [fx, setFx] = useState<{ dir: Direction; f: Facets } | null>(null);
   const facets = fx && fx.dir === dir ? fx.f : null;   // counts of the chosen direction (null while they load: everything is offered)
   const [phase, setPhase] = useState<Phase>("config");
   const [res, setRes] = useState<Result | null>(null);
   const [shownItem, setShownItem] = useState<SearchItem>("shoes");   // the item of the results on screen (the selection may change while configuring)
-  const [lastSel, setLastSel] = useState<Sel>(EMPTY);
+  const [lastSel, setLastSel] = useState<Sel>(EMPTY);   // the selection of the results on screen / stored
   const [lastDir, setLastDir] = useState<Direction>(gender);
+  const [highlight, setHighlight] = useState(() => ls(HIGHLIGHT_KEY) === "1");   // Highlight chip: shine strokes only while on (default off)
   const scroller = useRef<HTMLDivElement>(null), cfg = useRef<HTMLDivElement>(null), run = useRef(0), tail = useRef<HTMLElement>(null);
   const job = useRef<{ q: Record<string, unknown>; sig: object; seen: Set<number> } | null>(null);   // the running search: its query, frozen signals and the products already shown (each product once)
 
@@ -82,12 +85,23 @@ function Search({ gender, resetKey, canvas, onOpen, onBack }: {
     return () => ac.abort();
   }, [dir]);
 
-  useEffect(() => {   // tapping "Search" in the bottom bar again: a fresh configurator (new search, direction back to the feed's), leaving any results
-    if (!resetKey) return;
+  useEffect(() => { ss.set(SEARCH_STATE_KEY, encodeState(dir, sel)); }, [dir, sel]);
+
+  const phaseRef = useRef<Phase>(phase), hasRes = useRef(false);
+  phaseRef.current = phase; hasRes.current = !!res;
+  useEffect(() => {   // "Search" tapped again in the bottom bar: results <-> configurator (the selection is pre-filled; an unsubmitted change is dropped when going back)
+    if (!tapKey) return;
+    const act = tapAction(phaseRef.current, hasRes.current);
+    if (act === "open-config") { setPhase("config"); requestAnimationFrame(() => cfg.current?.scrollTo({ top: 0 })); }
+    else if (act === "back-to-results") { setSel(lastSel); setDir(lastDir); setPhase("results"); }
+  }, [tapKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const clear = useCallback(() => {   // fresh configurator: direction back to the feed's, nothing selected, stored results discarded
     run.current++; job.current = null;
-    setDir(gender); setSel(EMPTY); setRes(null); setPhase("config");
+    const f = freshState(gender);
+    setDir(f.dir); setSel(f.sel); setLastSel(f.sel); setLastDir(f.dir); setRes(null); setPhase("config");
     requestAnimationFrame(() => cfg.current?.scrollTo({ top: 0 }));
-  }, [resetKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gender]);
 
   const pick = useCallback(<K extends keyof Sel>(k: K, v: Sel[K]) => setSel((s) => normalize(facets, { ...s, [k]: s[k] === v && (k === "season" || k === "extra") ? null : v }, k)), [facets]);
   const ok = (k: keyof Sel, v: string) => fc(facets, before(sel, k, v)) > 0;
@@ -104,21 +118,22 @@ function Search({ gender, resetKey, canvas, onOpen, onBack }: {
   }, []);
 
   /** results of another direction than the feed's: tagged so a like carries no outfit context / taste signal (the feed's taste is per direction) */
-  const mark = useCallback((items: FeedOutfit[]) => (dir === gender ? items : items.map((o) => ({ ...o, og: dir }))), [dir, gender]);
+  const mark = useCallback((items: FeedOutfit[]) => { const d = job.current?.q.gender; return d === gender || !d ? items : items.map((o) => ({ ...o, og: d as Direction })); }, [gender]);
 
   const submit = useCallback(async () => {
     if (!sel.family || !sel.item || n === 0) return;
-    const mine = ++run.current, s = sel;
-    setLastSel(s); setLastDir(dir); setShownItem(s.item!); setPhase("loading");
+    const mine = ++run.current, s = sel, prevJob = job.current;
+    setPhase("loading");
     job.current = { q: { gender: dir, family: s.family, item: s.item, ...(s.season ? { season: s.season } : {}), ...(s.extra ? { extra: s.extra } : {}) }, sig: signalsFor(dir), seen: new Set() };
     try {
       const p = await fetchPage(0, mine); if (!p) return;
       const items = mark(p.items.filter((_, i) => { const id = p.sids[i]; if (job.current!.seen.has(id)) return false; job.current!.seen.add(id); return true; }));
+      setLastSel(s); setLastDir(dir); setShownItem(s.item!);
       setRes({ items, relaxed: p.relaxed, total: p.total, next: p.next, skipped: p.skipped, done: p.next >= p.total, more: false, failed: false }); setPhase("results");
       track({ event_type: "search_submitted", gender: dir, ctx: { sq: { d: dir, f: s.family!, i: s.item!, ...(s.season ? { s: s.season } : {}), ...(s.extra ? { e: s.extra } : {}), r: p.relaxed, n: p.total } } });
       requestAnimationFrame(() => scroller.current?.scrollTo({ top: 0 }));
-    } catch { if (mine === run.current) setPhase("error"); }
-  }, [sel, dir, n, fetchPage]);
+    } catch { if (mine === run.current) { job.current = prevJob; setPhase("error"); } }   // a failed search leaves the previous results (and their paging) as they were
+  }, [sel, dir, n, fetchPage, mark]);
 
   const more = useCallback(async () => {
     const mine = run.current, cur = res; if (!cur || cur.done || cur.more || !job.current) return;
@@ -132,17 +147,19 @@ function Search({ gender, resetKey, canvas, onOpen, onBack }: {
 
   useEffect(() => {   // load the next page when the end of the list comes within about one screen (no polling: an observer on the last section)
     const el = tail.current, root = scroller.current;
-    if (!el || !root || !res || res.done || res.more || res.failed) return;
+    if (!el || !root || !res || phase !== "results" || res.done || res.more || res.failed) return;
     const io = new IntersectionObserver((e) => { if (e.some((x) => x.isIntersecting)) more(); }, { root, rootMargin: "100% 0px" });
     io.observe(el); return () => io.disconnect();
-  }, [res, more]);
+  }, [res, more, phase]);
 
   const edit = (step: Step) => {
     setPhase("config"); setSel(lastSel); setDir(lastDir);
     requestAnimationFrame(() => cfg.current?.querySelector(`[data-step="${step}"]`)?.scrollIntoView({ block: "start" }));
   };
 
-  const shineOn = useMemo(() => typeof window === "undefined" || shineParam(window.location.search), []);   // ?shine=0 turns the strokes off
+  const forcedOff = useMemo(() => typeof window !== "undefined" && !shineVisible(window.location.search, true), []);   // ?shine=0 forces the strokes off
+  const shineOn = highlight && !forcedOff;
+  const toggleHighlight = useCallback(() => setHighlight((h) => { try { localStorage.setItem(HIGHLIGHT_KEY, h ? "0" : "1"); } catch { /* ignore */ } return !h; }), []);
   const dim = useCallback((slot: SlotName) => !isSearchedSlot(slot, shownItem), [shownItem]);
   const chips: { step: Step; icon: IconId | null; label: string }[] = useMemo(() => {
     const s = lastSel; if (!s.family || !s.item) return [];
@@ -155,11 +172,12 @@ function Search({ gender, resetKey, canvas, onOpen, onBack }: {
     ];
   }, [lastSel, lastDir]);
 
-  const showResults = phase === "results" && res;
+  const showing = phase === "results";   // results stay mounted (hidden) while the configurator is open, so the scroll position is kept
+  const clearable = canClear(dir, gender, sel, !!res);
   return (
     <div className="absolute inset-0 bg-white">
       {/* configurator (stays mounted so the choices survive a visit to the results) */}
-      <div ref={cfg} className="no-scrollbar absolute inset-0 overflow-y-auto overscroll-y-contain pt-[calc(max(0.75rem,env(safe-area-inset-top))+2.75rem)]" style={{ visibility: phase === "config" || phase === "loading" || phase === "error" ? "visible" : "hidden" }}>
+      <div ref={cfg} className="no-scrollbar absolute inset-0 overflow-y-auto overscroll-y-contain pt-[calc(max(0.75rem,env(safe-area-inset-top))+2.75rem)]" style={{ visibility: showing ? "hidden" : "inherit" }}>
         <h1 className="px-4 pb-4 text-xl font-semibold tracking-tight">Find an outfit</h1>
         <Section step="G" title="1. Men or women?" sub="Required. Search shows only this direction.">
           <div className="grid grid-cols-2 gap-2">{DIRECTIONS.map((d) => <Option key={d.id} icon={dirIcon(d.id)} label={d.label} hint={d.hint} on={dir === d.id} disabled={false} onClick={() => setDir(d.id)} />)}</div>
@@ -178,13 +196,15 @@ function Search({ gender, resetKey, canvas, onOpen, onBack }: {
         </Section>
         <div className="sticky bottom-0 bg-gradient-to-t from-white via-white to-white/0 px-4 pb-3 pt-4">
           {phase === "error" && <p className="mb-2 text-center text-xs text-neutral-500">Search is not available right now. Please try again.</p>}
+          <button type="button" disabled={!clearable || phase === "loading"} onClick={clear}
+            className="mb-2 w-full rounded-full border border-neutral-300 bg-white py-2 text-sm text-neutral-600 transition-opacity active:bg-neutral-50 disabled:opacity-40">Clear</button>
           <button type="button" disabled={!ready || phase === "loading" || n === 0} onClick={submit}
             className={`w-full rounded-full py-3 text-sm font-medium text-white transition-opacity ${ready && n !== 0 ? "bg-black active:opacity-80" : "bg-neutral-300"}`}>{phase === "loading" ? "Searching…" : n === null ? "Search" : `Search (${n})`}</button>
         </div>
       </div>
 
-      {showResults && (
-        <div className="absolute inset-0 bg-white">
+      {res && (
+        <div className="absolute inset-0 bg-white" style={{ visibility: showing ? "inherit" : "hidden" }}>
           <div className="absolute inset-x-0 top-0 z-20 bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
             <div className="no-scrollbar flex h-9 items-center gap-2 overflow-x-auto" role="list" aria-label="Your search (tap to change)">
               {chips.map((c) => (
@@ -198,7 +218,7 @@ function Search({ gender, resetKey, canvas, onOpen, onBack }: {
             {res.items.map((o, i) => (
               <section key={o.id} data-i={i} className="relative flex h-full snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ paddingBottom: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))` }}>
                 {canvas && <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dim} shine={shineOn ? { color: o.sc ?? null } : undefined} onOpen={(c, slot) => onOpen(c, o, i, slot)} />}
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-white px-4 text-xs text-neutral-400" style={{ height: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))`, paddingBottom: "var(--safe-b, 0px)" }}>
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-white px-24 text-center text-xs leading-tight text-neutral-400" style={{ height: `calc(${BUTTON_BAR_PX}px + var(--safe-b, 0px))`, paddingBottom: "var(--safe-b, 0px)" }}>
                   {i + 1} / {res.done ? res.items.length : res.total - res.skipped}{res.relaxed !== "none" ? " · Showing fewer exact matches" : ""}
                 </div>
               </section>
@@ -227,6 +247,11 @@ function Search({ gender, resetKey, canvas, onOpen, onBack }: {
               </div>
             </section>}
           </div>
+          {!forcedOff && (   // Highlight chip: bottom left inside the white strip under the card (above the bottom bar), centred in its height; the counter text keeps clear of it (side padding)
+            <button type="button" aria-pressed={highlight} onClick={toggleHighlight} onPointerDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}
+              className={`absolute left-4 z-20 flex items-center rounded-2xl border px-3 py-2 text-sm font-medium transition-colors [touch-action:manipulation] ${highlight ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-black active:bg-neutral-50"}`}
+              style={{ bottom: `calc(${(BUTTON_BAR_PX - 36) / 2}px + var(--safe-b, 0px))` }}>Highlight</button>
+          )}
         </div>
       )}
     </div>

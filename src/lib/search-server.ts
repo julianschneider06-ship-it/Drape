@@ -7,7 +7,7 @@ import { rowsOf } from "@/lib/search-index";
 import { buildFacets, searchRank, type Facets, type Gender, type Relaxed, type SearchQuery, type SearchRow } from "@/lib/search";
 import { SEARCH_PAGE } from "@/config/search";
 import { composeAround, newAround } from "@/outfits/compose-around";
-import { decodeTaste } from "@/outfits/taste-codec";
+import { applySignals, decodeTaste, type Signal } from "@/outfits/taste-codec";
 import { newTaste, styleMatch, tasteMatch, withPrior } from "@/outfits/taste";
 import type { Catalogue } from "@/outfits/catalogue";
 import type { FeedOutfit } from "@/lib/types";
@@ -28,13 +28,16 @@ export async function searchFacets(g: Gender): Promise<Facets> {
   return f;
 }
 
-export interface SearchSignals { taste?: string | null; seed?: string[] }
+/** taste = the device's stored taste, signals = likes etc. not yet folded into it (the feed's outbox), seed = welcome style picks */
+export interface SearchSignals { taste?: string | null; seed?: string[]; signals?: Signal[] }
 export interface SearchPage { items: FeedOutfit[]; sids: number[]; relaxed: Relaxed; exact: number; total: number; next: number; skipped: number }
 
 /** how well a piece suits the device: style picks as the starting prior plus the taste learned from likes (same pure functions as the hybrid feed); null = no signals */
 function fitFor(cat: Catalogue, sig: SearchSignals | undefined): ((r: SearchRow) => number) | undefined {
-  if (!sig || (!sig.taste && !sig.seed?.length)) return undefined;
-  const taste = decodeTaste(sig.taste) ?? newTaste(), t = withPrior(taste, sig.seed ?? []) ?? taste;
+  if (!sig || (!sig.taste && !sig.seed?.length && !sig.signals?.length)) return undefined;
+  const taste = decodeTaste(sig.taste) ?? newTaste();
+  if (sig.signals?.length) applySignals(cat, taste, sig.signals);   // likes made since the taste was last stored count at once
+  const t = withPrior(taste, sig.seed ?? []) ?? taste;
   if (t.n < 5 && !t.prior) return undefined;
   return (r) => {
     if (r.item === "accessory") { const a = cat.accById.get(r.id); return a ? styleMatch(t, a.vec) : 0.5; }

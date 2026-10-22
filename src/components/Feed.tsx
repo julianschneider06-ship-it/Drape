@@ -21,6 +21,7 @@ import { STYLES_GENDER_KEY, STYLES_KEY, cleanStyles } from "@/lib/welcome";
 import { ONBOARDING_KEY } from "@/lib/onboarding";
 import { compactTags } from "@/outfits/tags";
 import type { Signal } from "@/outfits/taste-codec";
+import { likeSignal } from "@/lib/like-signal";
 import { TASTE } from "@/lib/personalization/config";
 import { applySwaps, loopSize, slotKeyOf, type SwapEvt, type SwapState } from "@/lib/client/swap";
 import type { SlotName } from "@/lib/layout/engine";
@@ -52,7 +53,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const [navReady, setNavReady] = useState(false);   // false until the first-visit check ran (no bar flash before the welcome flow)
   const [tab, setTab] = useState<Tab>("foryou");
   const [searchSeen, setSearchSeen] = useState(false);
-  const [searchReset, setSearchReset] = useState(0);
+  const [searchTap, setSearchTap] = useState(0);
   const tabRef = useRef<Tab>("foryou"), awayAt = useRef(0), searchStarted = useRef(false);
   const [items, setItems] = useState<FeedOutfit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -165,8 +166,13 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   }, []);
 
   // hybrid: every signal also goes to the outbox; the next page request takes the outbox along and the server folds it into the taste
-  const signal = useCallback((x: Signal) => {
+  const signal = useCallback((x: Signal, dir?: Gender | null) => {
     if (!hybridRef.current) return;
+    if (dir && dir !== genderRef.current) {   // a like in the other direction (Search): it goes to that direction's own outbox and counts at its next feed page or search
+      const k = `drape.outbox.${dir}`;
+      try { const ob = JSON.parse(store.get(k) ?? "[]"); store.set(k, JSON.stringify([...(Array.isArray(ob) ? ob : []), { ...x, at: Date.now() }].slice(-OUTBOX_MAX))); } catch { /* ignore */ }
+      return;
+    }
     outbox.current = [...outbox.current, { ...x, at: Date.now() }].slice(-OUTBOX_MAX);
     store.set(`drape.outbox.${genderRef.current}`, JSON.stringify(outbox.current));
   }, []);
@@ -290,11 +296,12 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     const want = !liked.has(card.id);
     setLiked((prev) => { const n = new Set(prev); if (want) n.add(card.id); else n.delete(card.id); return n; });
     if (outfit && tabRef.current === "foryou") interacted.current.add(index);   // a like from the Search tab counts as a normal like, but is not a feed interaction
-    const og = !!outfit?.og;   // Search in the other direction than the feed's: the like is stored as a normal like, but the outfit context and the taste signal are left out
-    if (!og) signal({ t: want ? "like" : "unlike", p: card.id, o: outfit ? shownIds(outfit) : undefined, tg: outfit ? tg(outfit) : null });
+    const og = outfit?.og;   // Search in the other direction than the feed's: the like counts for THAT direction's taste, from the product alone (the rest of such an outfit is arbitrary)
+    const ls = likeSignal(want, card.id, outfit ? { ids: shownIds(outfit), tg: tg(outfit), og } : null);
+    signal(ls.signal, ls.dir);
     fetch("/api/likes", {
       method: "POST",
-      body: JSON.stringify({ device_id: device.current, product_id: card.id, liked: want, outfit_id: outfit?.id, feed_index: index, slot: slot === "sheet" ? "sheet" : slot, gender: genderRef.current, tags: !og && outfit?.tags ? compactTags(outfit.tags) : undefined, product_ids: !og && outfit ? shownIds(outfit) : undefined }),
+      body: JSON.stringify({ device_id: device.current, product_id: card.id, liked: want, outfit_id: outfit?.id, feed_index: index, slot: slot === "sheet" ? "sheet" : slot, gender: og ?? genderRef.current, tags: !og && outfit?.tags ? compactTags(outfit.tags) : undefined, product_ids: !og && outfit ? shownIds(outfit) : undefined }),
     }).then((r) => { if (!r.ok) throw new Error(); }).catch(() => {
       setLiked((prev) => { const n = new Set(prev); if (want) n.delete(card.id); else n.add(card.id); return n; }); // revert
     });
@@ -378,7 +385,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const navOn = searchOn && navReady && obPhase === "off";   // the bar is hidden during the welcome flow and the tutorial
   const H = "calc(100dvh - var(--nav-h, 0px))";
   const goTab = useCallback((t: Tab) => {
-    if (t === "search" && tabRef.current === "search") { setSearchReset((n) => n + 1); return; }   // Search tapped again: fresh configurator, no tab switch (nothing recorded)
+    if (t === "search" && tabRef.current === "search") { setSearchTap((n) => n + 1); return; }   // Search tapped again: Search switches between results and configurator, no tab switch (nothing recorded)
     if (t === "search") { awayAt.current = Date.now(); setSearchSeen(true); if (!searchStarted.current) { searchStarted.current = true; track({ event_type: "search_started", gender: genderRef.current }); } }
     else if (awayAt.current) { const gone = Date.now() - awayAt.current; awayAt.current = 0; for (const [k, v] of enterAt.current) enterAt.current.set(k, v + gone); }   // time spent on the Search tab is not dwell time
     tabRef.current = t; setTab(t);
@@ -432,7 +439,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
 
       {navOn && searchSeen && (
         <div className="fixed inset-x-0 top-0 z-30" style={{ bottom: "var(--nav-h)", visibility: tab === "search" ? "visible" : "hidden" }}>
-          <Search key={gender ?? "women"} gender={gender ?? "women"} resetKey={searchReset} canvas={canvas} onOpen={openFromSearch} onBack={backToForYou} />
+          <Search key={gender ?? "women"} gender={gender ?? "women"} tapKey={searchTap} canvas={canvas} onOpen={openFromSearch} onBack={backToForYou} />
         </div>
       )}
       {navOn && <BottomNav tab={tab} onTab={goTab} />}

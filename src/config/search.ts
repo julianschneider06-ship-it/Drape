@@ -67,3 +67,8 @@ export const SHINE = {
   minContrast: 3,        // WCAG contrast against white a stroke colour must reach (lighter colours are darkened)
   redTolerance: 28,      // degrees of hue around red that count as "close to red" next to the sale outline
 };
+
+/** the Search selection is kept for the session in sessionStorage (selection only) */
+export const SEARCH_STATE_KEY = "drape.search.state";
+/** Highlight chip: the shine strokes show only while it is on (localStorage, default off) */
+export const HIGHLIGHT_KEY = "drape.highlight";

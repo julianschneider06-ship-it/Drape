@@ -9,6 +9,9 @@ const HEX: Record<string, string> = {
 /** ?shine=0 turns the strokes off (anything else = on) */
 export const shineOn = (search: string): boolean => new URLSearchParams(search).get("shine") !== "0";
 
+/** the strokes show only while the Highlight chip is on; ?shine=0 forces them off whatever the chip says */
+export const shineVisible = (search: string, highlight: boolean): boolean => highlight && shineOn(search);
+
 const rgb = (h: string): [number, number, number] => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
 const hex = (c: number[]) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
 const lin = (v: number) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
