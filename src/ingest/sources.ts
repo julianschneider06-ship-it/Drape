@@ -141,4 +141,6 @@ export const SOURCES: SourceConfig[] = [
   // --- Awin affiliate feed (2026-10-22, brands feed AWIN_FEED_URL_BRANDS; products picked by scripts/awin-select.ts, see docs/awin-brands-probe.md). Prices GBP, market GB. No daily stock refresh yet (refresh.ts skips kind awin with a logged reason).
   { slug: "brianjames", name: "Brian James", kind: "awin", baseUrl: "https://www.brianjamesmenswear.com", options: { merchant: "Brian James", currency: "GBP", country: "GB", trustRrp: true } },
   { slug: "tooledup", name: "Tooled Up", kind: "awin", baseUrl: "https://www.tooled-up.com", options: { merchant: "Tooled Up", currency: "GBP", country: "GB", trustRrp: false } },
+  // Bennimarceau (Nike + adidas footwear, 2026-10-23, same brands feed): GBP, market GB, no daily stock refresh (kind awin).
+  { slug: "bennimarceau", name: "Bennimarceau", kind: "awin", baseUrl: "https://bennimarceau.com", options: { merchant: "Bennimarceau.com", currency: "GBP", country: "GB", trustRrp: false } },
 ];

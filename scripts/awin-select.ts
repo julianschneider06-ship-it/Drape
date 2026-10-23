@@ -10,13 +10,17 @@ import type { AwinItem } from "../src/ingest/adapters/awin";
 
 // Brand groups (case-insensitive variants merged) with their caps and the one merchant each is taken from (clothing shops only: watch shops, perfume and
 // the Fashiontamers / Aussui rows are left out: no usable images, mixed currencies). Brian James lists every product twice (EUR + GBP): GBP rows only.
-const GROUPS: { name: string; brands: string[]; cap: number; merchant: string; currency: string }[] = [
+const GROUPS: { name: string; brands: string[]; cap: number; merchant: string; currency: string; shoes?: boolean }[] = [
   { name: "Tommy", brands: ["tommy hilfiger", "tommy jeans"], cap: 400, merchant: "Brian James", currency: "GBP" },
   { name: "Boss", brands: ["boss", "hugo boss"], cap: 300, merchant: "Brian James", currency: "GBP" },
   { name: "Bugatti", brands: ["bugatti"], cap: 250, merchant: "Brian James", currency: "GBP" },
   { name: "Helly Hansen", brands: ["helly hansen"], cap: 31, merchant: "Brian James", currency: "GBP" },
   { name: "Dickies", brands: ["dickies"], cap: 98, merchant: "Tooled Up", currency: "GBP" },
+  // Bennimarceau (sneaker shop): Nike + adidas footwear only, one product per page (a page = one colourway, sizes are separate rows), no cap in practice. Kids' items are dropped.
+  { name: "Bennimarceau", brands: ["nike", "adidas"], cap: 5000, merchant: "Bennimarceau.com", currency: "GBP", shoes: true },
 ];
+const FOOTWEAR = new Set(["trainers", "boots", "sandals", "slippers"]);   // merchant_category values of the shoe rows
+const ONLY = (process.env.AWIN_GROUPS ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);   // optional: limit to these group names
 const MAX_COLOURS = 2;                                     // colours of one product (same brand + name)
 const NOT_WANTED = /\b(socks?|underwear|boxers?|briefs?|trunks?|3 pack|2 pack|gift|perfume|fragrance|watch(?:es)?|trainers?|sneakers?|shoes?|boots?|loafers?|slippers?|sandals?|flip flops?|overalls?|coveralls?|hi[- ]?vis[a-z]*)\b/i;
 const SIZE = /^(?:[2-5]?X{0,2}[SL]|M|XXS|XS|XXL|XXXL|ONE SIZE|OS|\d{1,3}(?:[\/.]\d{1,3})?(?:\s?(?:cm|in|"|r|s|l))?|\d{1,2}-\d{1,2}|\d+\s?(?:to|-)\s?\d+)$/i;
@@ -68,6 +72,7 @@ function splitTitle(title: string, feedColour: string): { name: string; colour: 
   const selection: AwinItem[] = [], links: Record<string, unknown>[] = [];
   const report: Record<string, unknown> = {};
   for (const [gi, g] of GROUPS.entries()) {
+    if (ONLY.length && !ONLY.includes(g.name.toLowerCase())) continue;
     // one unit = one product page (Brian James: the colour is in the page) or page + colour (Tooled Up); sizes are separate rows, a unit counts as in stock when any row is
     const units = new Map<string, Record<string, string>>();
     let skipped = { notStock: 0, noLink: 0, noImage: 0, notWanted: 0, other: 0 };
@@ -76,7 +81,7 @@ function splitTitle(title: string, feedColour: string): { name: string; colour: 
       if (r.in_stock !== "1") { skipped.notStock++; continue; }
       if (!r.aw_deep_link.startsWith("https://www.awin1.com/") || !r.merchant_deep_link) { skipped.noLink++; continue; }
       if (!r.merchant_image_url) { skipped.noImage++; continue; }
-      if (NOT_WANTED.test(`${r.merchant_category} ${r.product_name}`)) { skipped.notWanted++; continue; }
+      if (g.shoes ? !FOOTWEAR.has(r.merchant_category.toLowerCase()) || inferGender(null, r.product_name, r.merchant_deep_link) === "kids" : NOT_WANTED.test(`${r.merchant_category} ${r.product_name}`)) { skipped.notWanted++; continue; }
       const path = r.merchant_deep_link.split(/[?#]/)[0];
       const key = g.merchant === "Tooled Up" ? `${path}|${normKey(r.colour)}|${r.merchant_image_url}` : path;
       if (!units.has(key)) units.set(key, r);
@@ -85,7 +90,7 @@ function splitTitle(title: string, feedColour: string): { name: string; colour: 
     for (const r of units.values()) {
       const { name, colour } = g.merchant === "Brian James" ? splitTitle(r.product_name, r.colour) : { name: r.product_name, colour: r.colour || null };
       const cat = inferCategory(r.merchant_category, name);
-      if (cat === "other" || cat === "shoes") { skipped.other++; continue; }
+      if (cat === "other" || (cat === "shoes") !== !!g.shoes) { skipped.other++; continue; }
       (byCat.get(cat) ?? byCat.set(cat, []).get(cat)!).push({ r, base: normKey(`${r.brand_name} ${name}`), colour, name });
     }
     // spread over categories (round robin over shuffled lists), at most MAX_COLOURS colours per product, until the cap
@@ -95,20 +100,20 @@ function splitTitle(title: string, feedColour: string): { name: string; colour: 
       let any = false;
       for (const [c, l] of lists) {
         if (picked.length >= g.cap) break;
-        while (l.length) { const x = l.shift()!; if ((perBase.get(x.base) ?? 0) >= MAX_COLOURS) continue; perBase.set(x.base, (perBase.get(x.base) ?? 0) + 1); picked.push(x); catCount[c] = (catCount[c] ?? 0) + 1; any = true; break; }
+        while (l.length) { const x = l.shift()!; if (!g.shoes && (perBase.get(x.base) ?? 0) >= MAX_COLOURS) continue; perBase.set(x.base, (perBase.get(x.base) ?? 0) + 1); picked.push(x); catCount[c] = (catCount[c] ?? 0) + 1; any = true; break; }
       }
       if (!any) break;
     }
     for (const x of picked) {
       const r = x.r, price = num(r.search_price), rrp = num(r.rrp_price);
       const m = /\/m-(\d+)\.aspx/.exec(r.merchant_deep_link);
-      const id = g.merchant === "Brian James" ? `bj:${m?.[1] ?? r.merchant_product_id}` : `tu:${r.merchant_product_id}`;
+      const id = g.merchant === "Brian James" ? `bj:${m?.[1] ?? r.merchant_product_id}` : g.shoes ? `bm:${r.merchant_deep_link.split(/[?#]/)[0].split("/").pop()}` : `tu:${r.merchant_product_id}`;
       if (!isFinite(price)) continue;
       const brand = r.brand_name.trim().replace(/^hugo boss$/i, "Hugo Boss");
       selection.push({ id, merchant: g.merchant, brand, name: x.name, colour: x.colour, url: r.merchant_deep_link.split(/[?#]/)[0], categoryText: r.merchant_category,
         image: r.merchant_image_url, price, rrp: isFinite(rrp) ? rrp : null, currency: g.currency,
-        gender: inferGender(g.merchant === "Brian James" ? "men" : "men", r.merchant_category, x.name) });
-      links.push({ source: g.merchant === "Brian James" ? "brianjames" : "tooledup", external_id: id, merchant: g.merchant, aw_deep_link: r.aw_deep_link, feed_product_id: r.aw_product_id,
+        gender: g.shoes ? inferGender(null, x.name, r.merchant_deep_link) : inferGender("men", r.merchant_category, x.name) });
+      links.push({ source: g.shoes ? "bennimarceau" : g.merchant === "Brian James" ? "brianjames" : "tooledup", external_id: id, merchant: g.merchant, aw_deep_link: r.aw_deep_link, feed_product_id: r.aw_product_id,
         feed_price: price, feed_currency: g.currency, feed_rrp: isFinite(rrp) ? rrp : null, feed_in_stock: true });
     }
     report[g.name] = { cap: g.cap, units: units.size, picked: picked.length, byCategory: catCount, skipped };
