@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsx scripts/preselect-images.ts:*)",
+      "Bash(npx tsx scripts/classify.ts:*)"
+    ]
+  }
+}
