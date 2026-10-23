@@ -15,6 +15,9 @@ import { newTaste, withPrior } from "@/outfits/taste";
 import { mixFor, TASTE } from "@/lib/personalization/config";
 import { makeRnd } from "@/outfits/pool-shared";
 import { parseShopPrefs, shopWeights } from "@/lib/shop-pref";
+import { getBrandFactors } from "@/lib/popularity-server";
+import { brandBoostOn } from "@/lib/popularity";
+import { getSettings } from "@/lib/settings";
 import { gatewayRpc } from "@/lib/gateway";
 import type { FeedAccessory, FeedAlt, FeedCard, FeedOutfit } from "@/lib/types";
 
@@ -85,7 +88,9 @@ export interface PageInput { banB64?: string | null; device: string; gender: "wo
   /** Profile > Shops, compact string "slug:L,slug:M" from the device (validated and capped here, unknown shops ignored); nothing is stored */
   shops?: unknown;
   /** optional fixed random seed (reproducible measurements, scripts/sim-shop-pref.ts); default random */
-  rs?: number }
+  rs?: number;
+  /** false = brand boost off for this request (link ?brand=0, comparison); the app setting brand_boost_enabled switches it for everyone */
+  brand?: boolean }
 export interface TasteOut { taste: string; n: number; personalized: boolean; applied: number; skipped: number; bytes: number; thin: string[]; mix: Record<string, number> }
 export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number; taste?: number; cat?: typeof catalogueLoad & { coldMs: number }; up?: number }; taste?: TasteOut }> {
   const t0 = performance.now(); const countBefore = catalogueLoad.count; const cat = await getCat(inp.gender); const tCat = performance.now() - t0;
@@ -110,7 +115,8 @@ export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items:
   const tc = performance.now();
   const seed = inp.rs ?? Math.floor(Math.random() * 2 ** 31);
   const prefs = parseShopPrefs(inp.shops, knownStores(cat));
-  const { outfits, ban: ban2, stats } = compose(cat, { gender: inp.gender, taste: prior ?? taste, prior: !!prior, ...(prefs.size ? { shopMult: shopWeights(prefs) } : {}), ...(inp.contrast ? { mix: { match: 0, near: 0, new: 1 - inp.contrast, contrast: inp.contrast } } : {}) }, ban, 6, session, makeRnd(seed));
+  const brandMult = brandBoostOn((await getSettings()).brand_boost_enabled, inp.brand === false) ? await getBrandFactors(inp.gender, defer) : undefined;   // in-memory (settings 45 s, factors 5 min): no database read per page
+  const { outfits, ban: ban2, stats } = compose(cat, { gender: inp.gender, taste: prior ?? taste, prior: !!prior, ...(prefs.size ? { shopMult: shopWeights(prefs) } : {}), ...(brandMult?.size ? { brandMult } : {}), ...(inp.contrast ? { mix: { match: 0, near: 0, new: 1 - inp.contrast, contrast: inp.contrast } } : {}) }, ban, 6, session, makeRnd(seed));
   const eff = ban2.effective(cat, inp.gender);
   const alts = outfits.map((o) => alternativesFor(cat, inp.gender, o, eff, prior ?? taste));
   if (tasteOut && taste) { const t1 = performance.now(); tasteOut.taste = encodeTaste(taste); tasteOut.bytes = tasteOut.taste.length; tasteOut.thin = stats.thin ?? []; tt += performance.now() - t1; }

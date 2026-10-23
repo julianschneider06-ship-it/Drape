@@ -12,6 +12,7 @@ import { saleGlobalOn } from "@/lib/client/sale";
 import type { ShopLevel } from "@/lib/shop-pref";
 import Segmented from "./Segmented";
 import Switch from "./Switch";
+import DeviceDebug from "./DeviceDebug";
 
 // The live shop list is the same for everyone; keep it for the visit so reopening the tab is instant.
 let shopsCache: ShopRowInfo[] | null = null;
@@ -108,6 +109,7 @@ export default function ProfileView() {
             </>
           )}
           {!searching && <p className="py-3 text-xs text-neutral-400">{T.hint}</p>}
+          <DeviceDebug />
         </div>
       </div>
     </m.div>

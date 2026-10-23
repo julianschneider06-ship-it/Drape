@@ -16,9 +16,10 @@ import { outfitSeason, seasonRole, type SeasonResult, type SeasonPiece } from ".
 import { connBonus, tagMatch, tasteMatch, type Taste } from "./taste";
 import { mixFor, priorMixFor, STEER, TASTE } from "../lib/personalization/config";
 import { outfitTags } from "./tags";
+import { brandKey, combinedMult } from "../lib/popularity";
 import { STYLE_KEYS as SK } from "../classify/styles";
 
-export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number; banOverall?: number; legacy?: boolean; prior?: boolean; shopMult?: ReadonlyMap<string, number> }
+export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number; banOverall?: number; legacy?: boolean; prior?: boolean; shopMult?: ReadonlyMap<string, number>; brandMult?: ReadonlyMap<string, number> }
 export interface ComposedAcc { id: number; type: string; placement: string; zone: string; score: number }
 export interface ComposedOutfit {
   kind: "three" | "full"; ids: number[]; acc: ComposedAcc[]; score: number; style: string; season: SeasonResult; bucket: Bucket; pattern?: string; hash: number;
@@ -115,7 +116,8 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
     return kept.length >= POLISH.subCapMinPool ? kept : list;
   };
   const fresh = (p: CatPiece) => 1 / (1 + COMPOSE.freshnessPerUse * (session.uses.get(p.id) ?? 0));
-  const shopMult = profile.shopMult, sw = (p: { store: string }) => (shopMult ? shopMult.get(p.store) ?? 1 : 1);   // Profile > Shops: Less / More multiplier on the selection weight (never a filter)
+  const shopMult = profile.shopMult, brandMult = profile.brandMult, shopW = (p: { store: string }) => (shopMult ? shopMult.get(p.store) ?? 1 : 1);   // Profile > Shops: Less / More multiplier on the selection weight (never a filter)
+  const sw = brandMult?.size ? (p: { store: string; brand: string }) => combinedMult(shopW(p), brandMult.get(brandKey(p.brand)) ?? 1) : shopW;   // live-feed brand popularity factor x shop multiplier, kept inside COMBINED_MULT (src/config/popularity.ts)
   const tasteW = (p: CatPiece) => (guest ? 1 - COMPOSE.tasteWeight * 0.5 : Math.pow(1 - COMPOSE.tasteWeight + COMPOSE.tasteWeight * tm(p), STEER.tasteExponent));
   // tag preferences: final pick weight x (1 + tagWeight x tag match) - outfit tags without accessories (cheap; the accessories are chosen afterwards)
   const tagF = (ps: CatPiece[], bucket: Bucket): number => { if (!taste) return 1; const t = outfitTags(cat, { pieces: ps, accs: [], bucket }); return 1 + STEER.tagWeight * tagMatch(taste, { se: t.season_primary, oc: t.occasion, pk: t.palette.kind, si: t.silhouette, fo: t.formality_level, w: t.weather, ct: t.contrast ? 1 : 0 }); };
@@ -216,7 +218,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
       let acc: ComposedAcc[] = [];
       if (accPool.length) {
         const ctx = outfitCtx(g, b.ps as Piece[], b.ps.map((p) => `${p.name} ${p.sub}`));
-        const picks = chooseAccessories(ctx, accPool, session.acc, shopMult ? (id) => sw(cat.accById.get(id)!) ** 0.15 : undefined);   // accessories: the boost multiplies a score that is then compared with thresholds, so it acts stronger than on a pick weight: only a small power (0.15); the greedy pick by score would otherwise hand a shop's few accessories to every outfit
+        const picks = chooseAccessories(ctx, accPool, session.acc, shopMult ? (id) => shopW(cat.accById.get(id)!) ** 0.15 : undefined);   // accessories: the boost multiplies a score that is then compared with thresholds, so it acts stronger than on a pick weight: only a small power (0.15); the greedy pick by score would otherwise hand a shop's few accessories to every outfit
         acc = picks.map((p) => ({ id: p.acc.id, type: p.acc.type, placement: p.placement, zone: p.zone, score: +p.score.toFixed(3) }));
       }
       if (!layoutCheck(cat, b.kind, b.ps, acc)) { rej("layout"); continue; }
