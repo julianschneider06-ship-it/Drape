@@ -2,7 +2,7 @@
 // the share of pieces from three shops of different size. No DB writes, no AI, no cost. Two ways to get the composer:
 //   offline : DRAPE_PIPELINE_TOKEN=... npx tsx scripts/sim-shop-pref.ts            (reads the catalogue snapshot, composes in this process)
 //   online  : npx tsx scripts/sim-shop-pref.ts --url https://<deployment>         (drives the public POST /api/dynamic like the app does, fixed seed per page)
-// Options: --n 300 (outfits per case)  --seed 1  --shops a,b,c (default: large / medium / small picked per gender)  --extra tiny  (also test the smallest shop)
+// Options: --n 300 (outfits per case)  --seed 1  --women a,b,c / --men a,b,c (shop ids; default: large / medium / small picked per gender from the Normal run)  --extra (also test the smallest shop)
 import { randomUUID } from "node:crypto";
 import { rpc } from "../src/ingest/gateway";
 import { buildCatalogue, unpackSnapshot, type Catalogue } from "../src/outfits/catalogue";
@@ -77,9 +77,11 @@ async function main() {
   console.log(`# Shop preference simulation (${URL_ ? "online " + URL_ : "offline"}), ${N} outfits per case, seed ${SEED}, multipliers less ${SHOP_PREF.less} / more ${SHOP_PREF.more}`);
   for (const g of ["women", "men"] as const) {
     const size = (s: (typeof live)[number]) => s.g[g];
-    const pool = live.filter((s) => size(s) >= 1).sort((a, b) => size(b) - size(a));
-    const chosen = opt("shops")?.split(",") ?? [pool[Math.floor(pool.length * 0.08)], pool[Math.floor(pool.length * 0.4)], pool[Math.floor(pool.length * 0.75)], ...(args.includes("--extra") ? [pool[pool.length - 1]] : [])].filter(Boolean).map((s) => (typeof s === "string" ? s : s.id));
+    const pool = live.filter((s) => size(s) >= 1).sort((a, b) => size(a) - size(b));
     const normal = await runCase(runFor(g), "normal", null);
+    // shops that really supply main pieces (not accessory-only ones): large / medium / small by their share of main pieces in the Normal run, plus (--extra) the smallest shop of the direction
+    const byMain = [...normal.main].sort((a, b) => b[1] - a[1]).map(([id]) => id);
+    const chosen = opt(g)?.split(",") ?? opt("shops")?.split(",") ?? [byMain[0], byMain[Math.floor(byMain.length * 0.2)], byMain[Math.floor(byMain.length * 0.6)], ...(args.includes("--extra") ? [pool[0].id] : [])].filter(Boolean);
     console.log(`\n## ${g}: ${live.length} live shops, ${pool.length} with ${g} products; normal run composed ${normal.outfits} outfits`);
     console.log("| shop | products (this direction) | level | share of all pieces | vs Normal | share of main pieces | vs Normal |\n|---|---|---|---|---|---|---|");
     for (const id of chosen) {
