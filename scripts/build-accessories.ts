@@ -9,6 +9,7 @@ const args = process.argv.slice(2);
 let twoAccent = 0;
 const DRY = args.includes("--dry");
 const W2 = args.includes("--w2");   // women only, writes outfit_accessories_w2 (new revision, insert-only; the old set is untouched)
+const MISSING = args.includes("--missing");   // only outfits without accessory rows yet (e.g. reserved outfits), written into the latest run; no other row is touched or removed
 const outIdx = args.indexOf("--out");
 
 interface PoolRow { id: number; gender: "women" | "men"; kind: string; top: number; bottom: number; shoes: number; order: number }
@@ -31,13 +32,16 @@ async function paged<T>(fn: string, limit: number, extra: Record<string, unknown
   const accs = (await paged<RawAcc>("acc_inputs", 1000)).map(toAcc);
   console.log(`outfits ${pool.length}, main pieces ${pieces.size}, accessories ${accs.length}`);
 
-  const run = DRY ? 0 : await rpc<number>(W2 ? "outfit_acc_w2_run_next" : "outfit_acc_run_next");
+  const have = new Set<number>();
+  if (MISSING) for (let after = 0;;) { const page = await rpc<{ outfit_id: number }[]>(W2 ? "outfit_acc_w2_all" : "outfit_acc_all", { p_after: after, p_limit: 5000 }); if (!page.length) break; for (const r of page) have.add(r.outfit_id); after = page[page.length - 1].outfit_id; }
+  const next = DRY ? 1 : await rpc<number>(W2 ? "outfit_acc_w2_run_next" : "outfit_acc_run_next");
+  const run = MISSING ? next - 1 : next;
   const rows: object[] = []; const stats: Record<string, Record<string, number>> = { women: {}, men: {} };
   const placements: Record<string, number> = {}; const byType: Record<string, number> = {};
   for (const gender of (W2 ? ["women"] : ["women", "men"]) as ("women" | "men")[]) {
     const usage: Usage = { uses: new Map(), recentIds: [], recentStores: [] };
     const cands = accs.filter((a) => a.genders.includes(gender));
-    for (const o of pool.filter((x) => x.gender === gender).sort((a, b) => a.order - b.order)) {
+    for (const o of pool.filter((x) => x.gender === gender && !have.has(x.id)).sort((a, b) => a.order - b.order)) {
       const ps = [o.top, ...(o.bottom ? [o.bottom] : []), o.shoes].map((id) => pieces.get(id));
       if (ps.some((p) => !p)) { stats[gender]["?"] = (stats[gender]["?"] ?? 0) + 1; continue; }
       const ctx = outfitCtx(gender, ps as Piece[], [o.top, o.bottom, o.shoes].map((id) => names.get(id) ?? ""));
@@ -58,6 +62,7 @@ async function paged<T>(fn: string, limit: number, extra: Record<string, unknown
   if (!DRY) {
     for (let i = 0; i < rows.length; i += 500) await rpc(W2 ? "outfit_acc_w2_upsert" : "outfit_acc_upsert", { p_run: run, p_items: rows.slice(i, i + 500) });
     if (W2) console.log(`run ${run}: ${rows.length} rows stored (insert-only; readers use the latest run)`);
+    else if (MISSING) console.log(`run ${run}: ${rows.length} rows added for outfits without accessories (nothing removed)`);
     else { const removed = await rpc<number>("outfit_acc_finish", { p_run: run }); console.log(`run ${run}: ${rows.length} rows stored, ${removed} older rows removed`); }
   }
 })();
