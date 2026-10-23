@@ -1,4 +1,4 @@
-import { AXIS_LOCK_PX, HORIZONTAL_BIAS, SHEET_DISMISS_RATIO, SHEET_DISMISS_VELOCITY, SWAP_FLICK_MIN_PX, SWAP_MIN_PX, SWAP_MIN_VELOCITY } from "@/config/gestures";
+import { AXIS_LOCK_PX, HORIZONTAL_BIAS, SHEET_CLOSE_FLICK_MIN_PX, SHEET_CLOSE_MIN_PX, SHEET_CLOSE_MIN_VELOCITY, SWAP_FLICK_MIN_PX, SWAP_MIN_PX, SWAP_MIN_VELOCITY } from "@/config/gestures";
 
 export type Axis = "x" | "y" | null;
 
@@ -16,13 +16,13 @@ export function swapOnRelease(dx: number, dtMs: number): boolean {
   return ax >= SWAP_FLICK_MIN_PX && dtMs > 0 && ax / dtMs >= SWAP_MIN_VELOCITY;
 }
 
-/** Product sheet: start dragging only on a downward move, and only when the content is at the top (or the drag began on the handle / image). */
-export function sheetDragStarts(dx: number, dy: number, scrollTop: number, onHandleOrImage: boolean): boolean {
-  return decideAxis(dx, dy) === "y" && dy > 0 && (scrollTop <= 0 || onHandleOrImage);
-}
-
-/** Product sheet release: dismiss past the ratio of its height or with a fast downward flick (vy in px per ms, positive = down). */
-export function sheetDismiss(dy: number, heightPx: number, vy: number): boolean {
-  if (dy <= 0) return false;
-  return dy >= heightPx * SHEET_DISMISS_RATIO || vy >= SHEET_DISMISS_VELOCITY;
+/**
+ * Product sheet: should this move (finger offset from the press, dtMs since the press) close the sheet? Downward, vertically dominant, and either far enough
+ * or a short fast flick. When the content is scrolled, only a swipe that began on the handle / image counts (scrolling wins otherwise).
+ */
+export function sheetCloseSwipe(dx: number, dy: number, dtMs: number, scrollTop: number, onHandleOrImage: boolean): boolean {
+  if (dy <= 0 || decideAxis(dx, dy) !== "y") return false;
+  if (scrollTop > 0 && !onHandleOrImage) return false;
+  if (dy >= SHEET_CLOSE_MIN_PX) return true;
+  return dy >= SHEET_CLOSE_FLICK_MIN_PX && dtMs > 0 && dy / dtMs >= SHEET_CLOSE_MIN_VELOCITY;
 }

@@ -47,6 +47,11 @@ export function pieceIdAt(o: FeedOutfit, slot: string): number | undefined {
 /** filler = a piece that is not one of the outfit's liked products: greyed out, not tappable, not likeable */
 export const isFiller = (o: FeedOutfit, slot: string): boolean => { const id = pieceIdAt(o, slot); return id === undefined || !o.wl?.includes(id); };
 
+/** Generate Outfits display: a filler piece is greyed only while it is not liked right now (liking it turns it into a normal piece, unliking greys it again); the outfit itself never changes. */
+export const isGrey = (o: FeedOutfit, slot: string, liked: ReadonlySet<number>): boolean => { const id = pieceIdAt(o, slot); return isFiller(o, slot) && !(id !== undefined && liked.has(id)); };
+/** What a gesture on a piece does: a greyed piece only reacts to a double tap (like); a single tap does nothing. Normal pieces keep tap = open, double tap = like. */
+export const greyGesture = (a: "tap" | "like" | null | undefined, grey: boolean): "open" | "like" | "none" => a === "like" ? "like" : a === "tap" && !grey ? "open" : "none";
+
 /** the liked ids that count for one direction: pieces (and accessories) of that direction that are in the catalogue with a usable card; anything else is ignored */
 export function usableLiked(cat: Catalogue, g: "women" | "men", ids: number[]): { mains: number[]; accs: number[] } {
   const u = [...new Set(ids)];

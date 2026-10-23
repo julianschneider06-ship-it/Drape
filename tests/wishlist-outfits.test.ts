@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { anchorSequence, avoidIds, isFiller, nextAnchor, pieceIdAt, usableLiked } from "../src/lib/wishlist-outfits";
+import { anchorSequence, avoidIds, greyGesture, isFiller, isGrey, nextAnchor, pieceIdAt, usableLiked } from "../src/lib/wishlist-outfits";
 import { WISHLIST_REUSE_RATE } from "../src/config/wishlist";
 import { makeRnd } from "../src/outfits/pool-shared";
 import { buildCatalogue, type RawCatPiece } from "../src/outfits/catalogue";
@@ -51,6 +51,20 @@ test("filler is flagged: not liked pieces are greyed (non-interactive), liked on
   assert.equal(pieceIdAt(o, "acc2"), 21);
   assert.deepEqual(["top", "bottom", "shoes", "acc1", "acc2"].map((s) => isFiller(o, s)), [false, true, true, true, false]);
   assert.equal(isFiller(o, "acc7"), true);
+});
+
+test("liking a greyed filler removes the grey, unliking greys it again; outfit untouched", () => {
+  const slots = ["top", "bottom", "shoes", "acc1", "acc2"];
+  assert.deepEqual(slots.map((s) => isGrey(o, s, new Set())), [false, true, true, true, false]);
+  assert.deepEqual(slots.map((s) => isGrey(o, s, new Set([11, 20]))), [false, false, true, false, false]);
+  assert.deepEqual(slots.map((s) => isGrey(o, s, new Set())), [false, true, true, true, false]);
+});
+test("grey piece: only double tap reacts, single tap does nothing", () => {
+  assert.equal(greyGesture("like", true), "like");
+  assert.equal(greyGesture("tap", true), "none");
+  assert.equal(greyGesture("tap", false), "open");
+  assert.equal(greyGesture("like", false), "like");
+  assert.equal(greyGesture(null, false), "none");
 });
 
 let pid = 0;

@@ -12,9 +12,7 @@ import FeedImage from "./FeedImage";
 import Heart from "./Heart";
 import LikePop, { type LikePopHandle } from "./LikePop";
 import { ProductGesture } from "@/lib/product-gesture";
-import { animate } from "motion/react";
-import { sheetDismiss, sheetDragStarts } from "@/lib/gestures";
-import { DURATION_MS, SPRING } from "@/config/motion";
+import { sheetCloseSwipe } from "@/lib/gestures";
 
 export default function ProductSheet({ card, liked, onLike, onClose, onViewProduct, feedVariant }: {
   card: FeedCard; liked: boolean; onLike: () => void; onClose: () => void; onViewProduct: () => void; feedVariant?: "base" | "dynamic" | "hybrid";
@@ -34,34 +32,22 @@ export default function ProductSheet({ card, liked, onLike, onClose, onViewProdu
     onPointerUp: () => { if (pg.current.up(Date.now()) === "like") { pop.current?.play(!liked); onLike(); } },
     onPointerCancel: () => pg.current.cancel(),
   };
-  // swipe down to close: the wrapper follows the finger (transform only), released past SHEET_DISMISS_RATIO / with a fast flick it leaves, else it springs back.
-  // Drag starts only when the content is at the top, or when the press began on the handle / image; the native non-passive touchmove keeps the feed behind out of it.
+  // swipe down = close COMMAND (no drag-follow, no spring-back): once a clear downward swipe is recognised the normal exit animation runs, once.
+  // Only when the content is at the top, or the press began on the handle / image; the native non-passive touchmove keeps the feed behind out of it.
   const wrap = useRef<HTMLDivElement>(null), panelEl = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ x: number; y: number; zone: boolean; on: boolean; dy: number; s: { t: number; y: number }[] } | null>(null);
+  const swipe = useRef<{ x: number; y: number; t: number; zone: boolean; done: boolean } | null>(null);
   const sheetDown = (e: React.PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    const zone = !!(e.target as HTMLElement).closest("[data-sheet-grab]");
-    drag.current = { x: e.clientX, y: e.clientY, zone, on: false, dy: 0, s: [{ t: Date.now(), y: e.clientY }] };
+    swipe.current = { x: e.clientX, y: e.clientY, t: Date.now(), zone: !!(e.target as HTMLElement).closest("[data-sheet-grab]"), done: false };
   };
   const sheetMove = (e: React.PointerEvent) => {
-    const d = drag.current; if (!d) return;
-    const dx = e.clientX - d.x, dy = e.clientY - d.y;
-    if (!d.on) { if (!sheetDragStarts(dx, dy, panelEl.current?.scrollTop ?? 0, d.zone)) return; d.on = true; pg.current.cancel(); }
-    d.dy = Math.max(0, dy);
-    const now = Date.now(); d.s.push({ t: now, y: e.clientY }); while (d.s.length > 2 && now - d.s[1].t > 80) d.s.shift();
-    if (wrap.current) wrap.current.style.transform = `translate3d(0, ${d.dy}px, 0)`;
-  };
-  const sheetUp = () => {
-    const d = drag.current; drag.current = null;
-    if (!d || !d.on || !wrap.current) return;
-    const first = d.s[0], last = d.s[d.s.length - 1], vy = last.t > first.t ? (last.y - first.y) / (last.t - first.t) : 0;
-    const h = wrap.current.offsetHeight, el = wrap.current;
-    if (sheetDismiss(d.dy, h, vy)) animate(el, { y: h }, reduced ? { duration: DURATION_MS.reducedFade / 1000 } : { duration: DURATION_MS.sheetOut / 1000, ease: "easeIn" }).then(onClose);
-    else animate(el, { y: 0 }, reduced ? { duration: DURATION_MS.reducedFade / 1000 } : SPRING.settle).then(() => { el.style.transform = ""; });
+    const d = swipe.current; if (!d || d.done) return;
+    if (!sheetCloseSwipe(e.clientX - d.x, e.clientY - d.y, Date.now() - d.t, panelEl.current?.scrollTop ?? 0, d.zone)) return;
+    d.done = true; pg.current.cancel(); onClose();
   };
   useEffect(() => {
     const el = wrap.current; if (!el) return;
-    const stop = (e: TouchEvent) => { if (drag.current?.on && e.cancelable) e.preventDefault(); };
+    const stop = (e: TouchEvent) => { if (swipe.current?.done && e.cancelable) e.preventDefault(); };
     el.addEventListener("touchmove", stop, { passive: false });
     return () => el.removeEventListener("touchmove", stop);
   }, []);
@@ -71,7 +57,7 @@ export default function ProductSheet({ card, liked, onLike, onClose, onViewProdu
   return (
     <div className={`fixed inset-0 z-40 touch-none ${present ? "" : "pointer-events-none"}`} role="dialog" aria-modal="true" aria-label={`${card.brand} ${card.name}`}>
       <m.button aria-label="Close" onClick={onClose} {...mo.backdrop} className="absolute inset-0 bg-black/30" />
-      <div ref={wrap} className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-md" onPointerDown={sheetDown} onPointerMove={sheetMove} onPointerUp={sheetUp} onPointerCancel={() => { drag.current = null; if (wrap.current) wrap.current.style.transform = ""; }}>
+      <div ref={wrap} className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-md" onPointerDown={sheetDown} onPointerMove={sheetMove} onPointerUp={() => { swipe.current = null; }} onPointerCancel={() => { swipe.current = null; }}>
       <m.div ref={panelEl} {...mo.panel} className="max-h-[90dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1 shadow-2xl" style={{ touchAction: "pan-y" }}>
         <div data-sheet-grab className="-mx-5 flex h-6 items-center justify-center"><div className="h-1 w-10 rounded-full bg-neutral-300" /></div>
         <div data-sheet-grab className="relative h-[52dvh] select-none bg-white [-webkit-touch-callout:none]" style={{ touchAction: "pan-y" }} onContextMenu={(e) => e.preventDefault()} {...imgGesture}>

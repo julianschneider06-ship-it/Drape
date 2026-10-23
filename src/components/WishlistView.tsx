@@ -47,7 +47,7 @@ export default function WishlistView({ gender, liked, tab, onTab, onToggle, onOp
         <AnimatePresence>
           {tab === "outfits" && (
             <m.div key="outfits" className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn) }}>
-              <GenerateOutfits gender={gender} likedIds={entryIds} shuffleKey={shuffle} onOpen={onOpen} onLike={onLike} />
+              <GenerateOutfits gender={gender} likedIds={entryIds} liked={liked} shuffleKey={shuffle} onOpen={onOpen} onLike={onLike} />
             </m.div>
           )}
         </AnimatePresence>

@@ -6,6 +6,7 @@ import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/form
 import { garmentClass, RULES, SALE_LABEL } from "@/lib/layout/config";
 import { isOnSale, useSaleMarker } from "@/lib/client/sale";
 import { showSale } from "@/lib/search";
+import { greyGesture } from "@/lib/wishlist-outfits";
 import { shineColor, shineStrokes, wobblyBox } from "@/lib/shine";
 import { PRICE_TAG, SHINE } from "@/config/search";
 import { placePriceTag, priceTagSize, priceTagText } from "@/lib/price-tag";
@@ -22,10 +23,10 @@ import { tagLine } from "@/outfits/tags";
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, shine, reserveIcons, priceTag, onLike }: {
+function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, likeDim, shine, reserveIcons, priceTag, onLike }: {
   outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string, slots: string[]) => void;
-  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; shine?: { color: string | null }; animateLayout?: boolean; reserveIcons?: boolean; priceTag?: boolean; onLike?: (c: FeedCard, slot: SlotName) => boolean | void;   // onLike given = product gestures: single tap opens (after the double-tap window), double tap toggles the like (returns the new state); without it the old single tap opens (welcome tutorial);   // priceTag: Search only, hand-drawn price box next to the searched (not dimmed) piece, decoration (not tappable);   // reserveIcons: the attribute icons sit top left (non-tappable), tap areas never extend into them;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
+  onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; likeDim?: boolean; shine?: { color: string | null }; animateLayout?: boolean; reserveIcons?: boolean; priceTag?: boolean; onLike?: (c: FeedCard, slot: SlotName) => boolean | void;   // likeDim (Generate Outfits only): greyed pieces still take a double tap = like (single tap does nothing);   // onLike given = product gestures: single tap opens (after the double-tap window), double tap toggles the like (returns the new state); without it the old single tap opens (welcome tutorial);   // priceTag: Search only, hand-drawn price box next to the searched (not dimmed) piece, decoration (not tappable);   // reserveIcons: the attribute icons sit top left (non-tappable), tap areas never extend into them;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
 }) {
   const saleOn = useSaleMarker();   // app setting AND the Profile choice (re-renders when the user flips it)
   const cards = useMemo(() => {
@@ -119,7 +120,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
     const held = pendingOpen.current;   // first tap whose open was held by the second press
     clearLp();
     if (a === "like") { const now = onLike(orig(c, slot), slot); pops.current[slot]?.play(now !== false); }   // double tap: like, never open
-    else if (a === "tap") {
+    else if (greyGesture(a, !!(likeDim && dim?.(slot))) === "open") {
       const open = () => { lpTimer.current = null; pendingOpen.current = null; onOpen(orig(c, slot), slot); };
       pendingOpen.current = open; lpTimer.current = setTimeout(open, openDelay.current);
     } else held?.();   // the second press turned into a scroll: the first tap still counts
@@ -218,13 +219,13 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
         const isNew = swapEvt?.kind === "swap" && swapEvt.slot === p.slot && swapEvt.newId === c.id;
         const bounce = "", dimmed = !!dim?.(p.slot);
         return (
-          <div key={p.slot} data-slot={p.slot} className={`absolute ${bounce}`} style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined, transition: animateLayout ? "left .32s ease, top .32s ease, width .32s ease, height .32s ease" : "none", touchAction: "pan-y", ...(dimmed ? { opacity: 0.4, filter: "saturate(0.35)", pointerEvents: "none" as const } : {}) }} {...(dimmed ? { "data-dim": "1" } : {})}>
-            <button key={`${p.slot}-${c.id}-${isNew ? swapEvt!.seq : 0}`} type="button" onClickCapture={(e) => { if (Date.now() < suppressUntil.current) { e.stopPropagation(); e.preventDefault(); } }} onClick={(e) => { if (!onLike) onOpen(orig(c, p.slot), p.slot); else if (e.detail === 0) onOpen(orig(c, p.slot), p.slot); }}
-              {...(onLike ? { onPointerDown: gDown(c, p.slot), onPointerMove: gMove, onPointerUp: gUp(c, p.slot), onPointerCancel: gCancel, onContextMenu: (e: React.MouseEvent) => e.preventDefault() } : {})} disabled={dimmed} tabIndex={dimmed ? -1 : undefined} aria-label={`${c.brand} ${c.name}`}
+          <div key={p.slot} data-slot={p.slot} className={`absolute ${bounce}`} style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined, transition: animateLayout ? "left .32s ease, top .32s ease, width .32s ease, height .32s ease" : "none", touchAction: "pan-y", ...(dimmed ? { opacity: 0.4, filter: "saturate(0.35)", ...(likeDim ? {} : { pointerEvents: "none" as const }) } : {}) }} {...(dimmed ? { "data-dim": "1" } : {})}>
+            <button key={`${p.slot}-${c.id}-${isNew ? swapEvt!.seq : 0}`} type="button" onClickCapture={(e) => { if (Date.now() < suppressUntil.current) { e.stopPropagation(); e.preventDefault(); } }} onClick={(e) => { if (!onLike) onOpen(orig(c, p.slot), p.slot); else if (e.detail === 0 && !dimmed) onOpen(orig(c, p.slot), p.slot); }}
+              {...(onLike ? { onPointerDown: gDown(c, p.slot), onPointerMove: gMove, onPointerUp: gUp(c, p.slot), onPointerCancel: gCancel, onContextMenu: (e: React.MouseEvent) => e.preventDefault() } : {})} disabled={dimmed && !likeDim} tabIndex={dimmed ? -1 : undefined} aria-label={`${c.brand} ${c.name}`}
               className={`absolute inset-0 select-none ${isNew ? (swapEvt!.dir === "next" ? "swap-in-next" : "swap-in-prev") : ""} ${debug ? "outline outline-1 outline-red-400" : ""}`} style={{ touchAction: "pan-y", WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}>
               <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} noSale={dimmed} />
               {!dimmed && hits[p.slot] && (hits[p.slot].l || hits[p.slot].t || hits[p.slot].r || hits[p.slot].b) ? <span aria-hidden data-hit="1" className="absolute" style={{ left: -hits[p.slot].l, top: -hits[p.slot].t, right: -hits[p.slot].r, bottom: -hits[p.slot].b }} /> : null}
-              {onLike && !dimmed && <LikePop ref={(h) => { pops.current[p.slot] = h; }} />}
+              {onLike && (!dimmed || likeDim) && <LikePop ref={(h) => { pops.current[p.slot] = h; }} />}
               {shine && !dimmed && c.cut && (() => {
                 const sale = saleOn && isOnSale(c), m = SHINE.distance + (sale ? SHINE.saleExtra : 0) + SHINE.length * 1.5 + SHINE.width + 2, w = p.rect.w, h = p.rect.h;
                 return (
