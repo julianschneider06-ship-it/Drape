@@ -16,7 +16,7 @@ const skipped: string[] = [], logRows: Record<string, unknown>[] = [];
 let changedAny = 0;
 
 (async () => {
-  const list = SOURCES.filter((s) => s.kind === "shopify" && (!only.length || only.includes(s.slug)));
+  const list = SOURCES.filter((s) => (s.kind === "shopify" || s.kind === "awin") && (!only.length || only.includes(s.slug)));
   console.log(`stock refresh: ${list.length} shops, concurrency ${CONC}${DRY ? ", DRY RUN" : ""}`);
   let i = 0;
   await Promise.all(Array.from({ length: CONC }, async () => { while (i < list.length) {

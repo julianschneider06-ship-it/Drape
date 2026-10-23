@@ -18,6 +18,8 @@ export const REFRESH_COUNTRY = "US";
 const SKIP_CODES = new Set([401, 403, 404, 410, 429, 503]);
 
 export async function refreshShop(cfg: SourceConfig, o: { dry?: boolean; minDelayMs?: number; force?: boolean; country?: string | null } = {}): Promise<ShopResult> {
+  // Affiliate-feed shops (kind awin) have no public product feed to re-read: stock and price come from the Awin feed file, which the runner does not hold. Not refreshed yet, and said so in shop_refresh_log every run (never silently stale).
+  if (cfg.kind === "awin") return { slug: cfg.slug, status: "skipped", http: null, seen: 0, reason: "awin feed shop: no daily stock refresh yet (offers stay as imported)", counts: {}, changed: 0 };
   const { exclude: _e, only: _o, ...opts } = (cfg.options ?? {}) as Record<string, unknown>;       // every category: availability and price do not depend on it
   if (o.minDelayMs) opts.minDelayMs = Math.max(Number(opts.minDelayMs ?? 0), o.minDelayMs);
   const country = o.country === undefined ? REFRESH_COUNTRY : o.country;   // undefined = default market, null = send no parameter

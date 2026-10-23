@@ -138,4 +138,7 @@ export const SOURCES: SourceConfig[] = [
   shopify("aelfriceden", "Aelfric Eden", "https://www.aelfriceden.com", "USD", { brand: "Aelfric Eden", exclude: ["accessories"], max: 800 }),
   flagged(shopify("afflictionclothing", "Affliction", "https://afflictionclothing.com", "USD", { brand: "Affliction", defaultGender: "men", exclude: ["accessories"], max: 400 })), // 12% usable (mostly model photos): not active
   shopify("laurelandgold", "Laurel & Gold", "https://laurelandgold.com", "USD", { brand: "Laurel & Gold", defaultGender: "women", only: ["accessories"], max: 60, inStockOnly: true }),
+  // --- Awin affiliate feed (2026-10-22, brands feed AWIN_FEED_URL_BRANDS; products picked by scripts/awin-select.ts, see docs/awin-brands-probe.md). Prices GBP, market GB. No daily stock refresh yet (refresh.ts skips kind awin with a logged reason).
+  { slug: "brianjames", name: "Brian James", kind: "awin", baseUrl: "https://www.brianjamesmenswear.com", options: { merchant: "Brian James", currency: "GBP", country: "GB", trustRrp: true } },
+  { slug: "tooledup", name: "Tooled Up", kind: "awin", baseUrl: "https://www.tooled-up.com", options: { merchant: "Tooled Up", currency: "GBP", country: "GB", trustRrp: false } },
 ];

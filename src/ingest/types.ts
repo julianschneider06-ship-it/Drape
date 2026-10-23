@@ -46,7 +46,7 @@ export interface SourceAdapter {
 export interface SourceConfig {
   slug: string;
   name: string;
-  kind: "shopify" | "zalando";
+  kind: "shopify" | "zalando" | "awin";
   baseUrl: string;
   active?: boolean;
   /** kind-specific options */

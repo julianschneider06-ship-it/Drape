@@ -51,7 +51,7 @@ export async function runRefreshChunk(job: Job, o: RunOpts = {}) {
   try {
     for (const m of await rpc<MarketRow[]>("shop_market_list", {})) markets.set(m.shop, m);
     if (p.phase === "main") {
-      const todo = SRC.filter((s) => s.kind === "shopify" && !p.done.includes(s.slug) && (!p.only?.length || p.only.includes(s.slug)));
+      const todo = SRC.filter((s) => (s.kind === "shopify" || s.kind === "awin") && !p.done.includes(s.slug) && (!p.only?.length || p.only.includes(s.slug)));
       let i = 0, sinceSave = 0;
       await Promise.all(Array.from({ length: CONC }, async () => {
         while (i < todo.length && Date.now() - t0 < CHUNK) {
