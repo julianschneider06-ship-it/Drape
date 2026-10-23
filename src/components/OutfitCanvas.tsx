@@ -12,8 +12,8 @@ import { placePriceTag, priceTagSize, priceTagText } from "@/lib/price-tag";
 import { computeLayout, hash32, pickTemplate, type AccIn, type AccSlot, type PieceIn, type SlotName } from "@/lib/layout/engine";
 import { hitCategory, HIT_DEBUG_COLORS, HIT_ICON_ZONE } from "@/config/hit-area";
 import { hitInsets } from "@/lib/hit-areas";
-import { ProductGesture } from "@/lib/product-gesture";
-import { DOUBLE_TAP_MS } from "@/config/product-gesture";
+import { ProductGesture, doubleTapWindow, parseTapDelay } from "@/lib/product-gesture";
+import { TAP_OPEN_DELAY_MS } from "@/config/product-gesture";
 import LikePop, { type LikePopHandle } from "./LikePop";
 import FeedImage from "./FeedImage";
 import { tagLine } from "@/outfits/tags";
@@ -92,22 +92,32 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
   // ---- product gestures (only with onLike): single tap = open (after the double-tap window), double tap = like ----
   const pg = useRef(new ProductGesture());
   const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);   // pending single tap
+  const pendingOpen = useRef<(() => void) | null>(null);   // the open the timer would run
+  const openDelay = useRef(TAP_OPEN_DELAY_MS);
+  useEffect(() => {   // ?tap=<ms>: debug override of the open delay (link parameter only)
+    try { const d = parseTapDelay(location.search); if (d != null) { openDelay.current = d; pg.current = new ProductGesture(doubleTapWindow(d)); } } catch { /* ignore */ }
+  }, []);
   const pops = useRef<Record<string, LikePopHandle | null>>({});   // double-tap like animation per piece: played imperatively, no state
-  const clearLp = () => { if (lpTimer.current) { clearTimeout(lpTimer.current); lpTimer.current = null; } };
+  const clearLp = () => { if (lpTimer.current) { clearTimeout(lpTimer.current); lpTimer.current = null; } pendingOpen.current = null; };
   useEffect(() => () => clearLp(), []);
   const gDown = (c: FeedCard, slot: SlotName) => (e: React.PointerEvent) => {
     if (!onLike || (e.pointerType === "mouse" && e.button !== 0)) return;
+    if (lpTimer.current) { clearTimeout(lpTimer.current); lpTimer.current = null; }   // a second press started inside the open delay: hold the open until we know if it is a double tap
     pg.current.down(`${slot}:${c.id}`, Date.now(), e.clientX, e.clientY);
   };
   const gMove = (e: React.PointerEvent) => { if (onLike) pg.current.move(e.clientX, e.clientY); };
   const gUp = (c: FeedCard, slot: SlotName) => () => {
     if (!onLike) return;
     const a = pg.current.up(Date.now());
+    const held = pendingOpen.current;   // first tap whose open was held by the second press
     clearLp();
-    if (a === "like") { const now = onLike(orig(c, slot), slot); pops.current[slot]?.play(now !== false); }
-    else if (a === "tap") lpTimer.current = setTimeout(() => { lpTimer.current = null; onOpen(orig(c, slot), slot); }, DOUBLE_TAP_MS);
+    if (a === "like") { const now = onLike(orig(c, slot), slot); pops.current[slot]?.play(now !== false); }   // double tap: like, never open
+    else if (a === "tap") {
+      const open = () => { lpTimer.current = null; pendingOpen.current = null; onOpen(orig(c, slot), slot); };
+      pendingOpen.current = open; lpTimer.current = setTimeout(open, openDelay.current);
+    } else held?.();   // the second press turned into a scroll: the first tap still counts
   };
-  const gCancel = () => { if (!onLike) return; pg.current.cancel(); };
+  const gCancel = () => { if (!onLike) return; pg.current.cancel(); pendingOpen.current?.(); };
 
   // ghosts: the piece that was swapped out slides away while the new one slides in
   const prevPieces = useRef<Record<string, { card: ReturnType<typeof viewCard>; rect: { x: number; y: number; w: number; h: number } }>>({});

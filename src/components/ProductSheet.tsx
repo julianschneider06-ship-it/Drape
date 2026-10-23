@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as m from "motion/react-m";
 import { useIsPresent } from "motion/react";
 import { useReducedMotion } from "@/lib/motion";
@@ -10,6 +10,8 @@ import { feedSrc, viewCard } from "@/lib/client/format";
 import { outHref } from "@/lib/client/out-url";
 import FeedImage from "./FeedImage";
 import Heart from "./Heart";
+import LikePop, { type LikePopHandle } from "./LikePop";
+import { ProductGesture } from "@/lib/product-gesture";
 
 export default function ProductSheet({ card, liked, onLike, onClose, onViewProduct, feedVariant }: {
   card: FeedCard; liked: boolean; onLike: () => void; onClose: () => void; onViewProduct: () => void; feedVariant?: "base" | "dynamic" | "hybrid";
@@ -21,6 +23,14 @@ export default function ProductSheet({ card, liked, onLike, onClose, onViewProdu
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  // double tap on the product image = same like toggle as the heart button (single tap does nothing here, so there is no delay); movement cancels, so scrolling stays free
+  const pg = useRef(new ProductGesture()), pop = useRef<LikePopHandle | null>(null);
+  const imgGesture = {
+    onPointerDown: (e: React.PointerEvent) => { if (e.pointerType === "mouse" && e.button !== 0) return; pg.current.down("sheet", Date.now(), e.clientX, e.clientY); },
+    onPointerMove: (e: React.PointerEvent) => { pg.current.move(e.clientX, e.clientY); },
+    onPointerUp: () => { if (pg.current.up(Date.now()) === "like") { pop.current?.play(!liked); onLike(); } },
+    onPointerCancel: () => pg.current.cancel(),
+  };
   const view = useMemo(() => viewCard(card, "auto"), [card]);   // the feed's cutout when there is one, else the photo as before
   const price = formatPrice(card.price_cents, card.currency);
   const was = card.compare_at_cents && card.compare_at_cents > (card.price_cents ?? 0) ? formatPrice(card.compare_at_cents, card.currency) : null;
@@ -29,8 +39,9 @@ export default function ProductSheet({ card, liked, onLike, onClose, onViewProdu
       <m.button aria-label="Close" onClick={onClose} {...mo.backdrop} className="absolute inset-0 bg-black/30" />
       <m.div {...mo.panel} className="absolute inset-x-0 bottom-0 mx-auto max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl">
         <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-neutral-300" />
-        <div className="relative h-[52dvh] bg-white">
+        <div className="relative h-[52dvh] select-none bg-white [-webkit-touch-callout:none]" style={{ touchAction: "pan-y" }} onContextMenu={(e) => e.preventDefault()} {...imgGesture}>
           <FeedImage card={view} src={view.cut ? feedSrc(view, "top") : undefined} blend={!view.cut} noSale fill={0.96} minW={1000} priority />
+          <LikePop ref={pop} />
         </div>
         <div className="mt-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
