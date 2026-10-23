@@ -53,11 +53,14 @@ test("filler is flagged: not liked pieces are greyed (non-interactive), liked on
   assert.equal(isFiller(o, "acc7"), true);
 });
 
-test("liking a greyed filler removes the grey, unliking greys it again; outfit untouched", () => {
+test("one rule: liked = colour, not liked = grey, also for pieces liked long ago; outfit untouched", () => {
   const slots = ["top", "bottom", "shoes", "acc1", "acc2"];
-  assert.deepEqual(slots.map((s) => isGrey(o, s, new Set())), [false, true, true, true, false]);
-  assert.deepEqual(slots.map((s) => isGrey(o, s, new Set([11, 20]))), [false, false, true, false, false]);
-  assert.deepEqual(slots.map((s) => isGrey(o, s, new Set())), [false, true, true, true, false]);
+  const t = pieceIdAt(o, "top")!, a2 = pieceIdAt(o, "acc2")!;
+  assert.deepEqual(slots.map((s) => isGrey(o, s, new Set([t, 11, 20, a2]))), [false, false, true, false, false]);
+  assert.deepEqual(slots.map((s) => isGrey(o, s, new Set([11, 20, a2]))), [true, false, true, false, false]);   // top (an originally liked piece) unliked -> grey in place
+  assert.deepEqual(slots.map((s) => isGrey(o, s, new Set([t, 11, 20, a2]))), [false, false, true, false, false]);   // liked again -> colour
+  assert.deepEqual(slots.map((s) => isGrey(o, s, new Set())), [true, true, true, true, true]);
+  assert.equal(isGrey(o, "acc7", new Set([t])), true);
 });
 test("grey piece: only double tap reacts, single tap does nothing", () => {
   assert.equal(greyGesture("like", true), "like");

@@ -9,6 +9,8 @@ import Heart from "@/components/Heart";
 import type { FeedCard } from "@/lib/types";
 import { getDeviceId } from "@/lib/client/device";
 import { formatPrice } from "@/lib/client/format";
+import { useSaleMarker } from "@/lib/client/sale";
+import { priceDisplay } from "@/lib/price-display";
 import FeedImage from "@/components/FeedImage";
 import { track } from "@/lib/client/track";
 import { WISHLIST_HEART } from "@/config/wishlist";
@@ -17,6 +19,7 @@ import { heartLook, heartVisual, refreshItems } from "@/lib/wishlist-soft";
 /** Minimal "Wishlist" products list (the full "My collection" comes later): products this anonymous device liked. Used by the Wishlist tab and by the /likes page. */
 export default function LikesView({ liked, onToggle }: { liked?: Set<number>; onToggle?: (card: FeedCard) => void }) {
   const reduced = useReducedMotion();
+  const saleOn = useSaleMarker();
   const [items, setItems] = useState<FeedCard[] | null>(null);
   const [error, setError] = useState(false);
   const [device, setDevice] = useState("");
@@ -51,7 +54,11 @@ export default function LikesView({ liked, onToggle }: { liked?: Set<number>; on
             <div className="absolute right-0 top-0"><Heart on={isLiked(c.id)} look={heartVisual(heartLook(c.id, liked ?? local), WISHLIST_HEART)} onClick={() => toggle(c)} label={isLiked(c.id) ? "Remove like" : "Like"} size={WISHLIST_HEART.size} /></div>
             <p className="mt-1 truncate text-xs font-semibold uppercase tracking-wide">{c.brand}</p>
             <p className="line-clamp-2 text-sm text-neutral-600">{c.name}</p>
-            <p className="mt-0.5 text-sm">{formatPrice(c.price_cents, c.currency)}</p>
+            {(() => { const p = priceDisplay(c, saleOn); return (
+              <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-sm">
+                <span>{formatPrice(p.now, c.currency)}</span>
+                {p.was !== null && <span className="text-xs text-neutral-400 line-through">{formatPrice(p.was, c.currency)}</span>}
+              </p>); })()}
             <a href={outHref(c.id, "wishlist")} target="_blank" rel="noopener noreferrer" onClick={() => track({ event_type: "view_product_click", product_id: c.id, slot: "sheet" })}
               className="mt-1 inline-block text-xs underline underline-offset-2">View product</a>
           </li>
