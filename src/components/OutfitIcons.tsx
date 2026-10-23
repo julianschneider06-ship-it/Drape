@@ -1,5 +1,12 @@
-import { memo } from "react";
+"use client";
+import { memo, useEffect, useSyncExternalStore } from "react";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
 import type { IconId } from "@/lib/outfit-icons";
+import { ICON_HIT_PX, ICON_LABELS, ICON_LABEL_STYLE } from "@/config/icon-labels";
+import { labelStore } from "@/lib/icon-label";
+import { DURATION_MS, sec } from "@/config/motion";
+import { useReducedMotion } from "@/lib/motion";
 
 // Rough, abstract line marks (a few thin strokes, 24x24, no fills). Display only: no animation, no images, inline SVG.
 const D: Record<IconId, React.ReactNode> = {
@@ -34,17 +41,41 @@ export function IconGlyph({ id, size = 16, stroke = "#8b9099", width = 1.5 }: { 
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{D[id]}</svg>;
 }
 
-/** small see-through circles at the top left of an outfit card (display only, no taps) */
-function OutfitIcons({ icons }: { icons: IconId[] }) {
-  if (!icons.length) return null;
+/** small see-through circles at the top left of an outfit card; a tap on one shows its one-word label (src/lib/icon-label.ts, one label at a time) */
+function OutfitIcons({ icons, outfitKey, style }: { icons: IconId[]; outfitKey: string | number; style?: React.CSSProperties }) {
+  const shown = useSyncExternalStore(labelStore.subscribe, labelStore.get, () => null);
+  const reduced = useReducedMotion();
+  const has = icons.length > 0;
+  useEffect(() => {   // any other interaction hides the label at once: a press outside the icons (piece tap, swipe start, sheet), scroll, wheel
+    if (!has) return;
+    const hide = () => labelStore.dispatch({ type: "hide" });
+    const press = (e: Event) => { if (!(e.target as Element | null)?.closest?.("[data-icon-btn]")) hide(); };
+    document.addEventListener("pointerdown", press, true); document.addEventListener("scroll", hide, true); document.addEventListener("wheel", hide, { capture: true, passive: true });
+    return () => { document.removeEventListener("pointerdown", press, true); document.removeEventListener("scroll", hide, true); document.removeEventListener("wheel", hide, true); };
+  }, [has]);
+  useEffect(() => () => { if (labelStore.get()?.startsWith(`${outfitKey}:`)) labelStore.dispatch({ type: "hide" }); }, [outfitKey]);
+  if (!has) return null;
+  const padX = (ICON_HIT_PX.w - 26) / 2, padY = (ICON_HIT_PX.h - 26) / 2;
   return (
-    <div aria-hidden className="pointer-events-none absolute left-3 z-20 flex gap-1" data-outfit-icons={icons.join(" ")} style={{ top: "calc(max(0.75rem, env(safe-area-inset-top)) + 2.75rem + 0.25rem)" }}>
-      {icons.map((id) => (
-        <span key={id} className="flex h-[26px] w-[26px] items-center justify-center rounded-full" style={{ background: "rgba(229,231,235,0.55)" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9099" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{D[id]}</svg>
-        </span>
-      ))}
+    <div className="absolute z-20 flex" data-outfit-icons={icons.join(" ")} style={{ left: `calc(0.75rem - ${padX}px)`, top: `calc(max(0.75rem, env(safe-area-inset-top)) + 2.75rem + 0.25rem - ${padY}px)`, ...style }}>
+      {icons.map((id) => {
+        const key = `${outfitKey}:${id}`, on = shown === key, label = ICON_LABELS[id];
+        return (
+          <button key={id} type="button" data-icon-btn aria-label={label} onClick={() => labelStore.dispatch({ type: "tap", key })}
+            className="relative flex items-center justify-center" style={{ width: ICON_HIT_PX.w, height: ICON_HIT_PX.h, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
+            <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full" style={{ background: "rgba(229,231,235,0.55)" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9099" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{D[id]}</svg>
+            </span>
+            <AnimatePresence>
+              {on && (
+                <m.span key="l" className="pointer-events-none absolute left-1/2 whitespace-nowrap" style={{ top: `calc(50% + 13px + ${ICON_LABEL_STYLE.gapPx}px)`, x: "-50%", fontSize: ICON_LABEL_STYLE.fontSize, color: ICON_LABEL_STYLE.color, lineHeight: 1.2 }}
+                  initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn) } }} exit={{ opacity: 0, transition: { duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.menuOut) } }}>{label}</m.span>
+              )}
+            </AnimatePresence>
+          </button>
+        );
+      })}
     </div>
   );
 }
-export default memo(OutfitIcons, (a, b) => a.icons.length === b.icons.length && a.icons.every((x, i) => x === b.icons[i]));
+export default memo(OutfitIcons, (a, b) => a.outfitKey === b.outfitKey && a.style === b.style && a.icons.length === b.icons.length && a.icons.every((x, i) => x === b.icons[i]));

@@ -10,14 +10,18 @@ import { canvasSize } from "@/lib/layout/engine";
 import { HEADER_PX } from "@/lib/layout/config";
 import { isGrey } from "@/lib/wishlist-outfits";
 import OutfitCanvas from "./OutfitCanvas";
+import OutfitIcons from "./OutfitIcons";
+import { outfitIcons } from "@/lib/outfit-icons";
+
+const ICON_POS = { left: "calc(0.75rem - 2px)", top: -3 } as const;   // icons sit at the canvas corner here (the canvas already starts under the Wishlist header)
 
 type Status = "loading" | "ready" | "empty" | "error";
 const MAX_MISSES = 3;   // pages in a row without any outfit before the list ends
 const dimFor = (o: FeedOutfit, liked: ReadonlySet<number>) => (slot: SlotName) => isGrey(o, slot, liked);   // grey = filler that is not liked right now
 
 /** Wishlist > Generate Outfits: a vertical feed of outfits built from the liked products; filler pieces are greyed out and cannot be tapped. Nothing is recorded by generating. */
-function GenerateOutfits({ gender, likedIds, liked, shuffleKey, onOpen, onLike }: {
-  gender: "women" | "men"; likedIds: number[]; liked: ReadonlySet<number>; shuffleKey: number;
+function GenerateOutfits({ icons, gender, likedIds, liked, shuffleKey, onOpen, onLike }: {
+  icons?: boolean; gender: "women" | "men"; likedIds: number[]; liked: ReadonlySet<number>; shuffleKey: number;
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const root = useRef<HTMLDivElement>(null), tail = useRef<HTMLElement>(null);
@@ -78,7 +82,10 @@ function GenerateOutfits({ gender, likedIds, liked, shuffleKey, onOpen, onLike }
       )}
       {canvas && items.map((o, i) => (
         <section key={`${i}:${o.id}`} data-i={i} className="relative flex h-full snap-start snap-always flex-col items-center justify-center">
-          <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dimOf(o)} likeDim onOpen={(c, slot) => onOpen(c, o, i, slot)} onLike={(c, slot) => onLike(c, o, i, slot)} />
+          <div className="relative" style={{ width: canvas.w, height: canvas.h }}>
+            <OutfitCanvas outfit={o} canvas={canvas} priority={i < 2} dim={dimOf(o)} likeDim reserveIcons={!!icons} onOpen={(c, slot) => onOpen(c, o, i, slot)} onLike={(c, slot) => onLike(c, o, i, slot)} />
+            {icons && <OutfitIcons icons={outfitIcons(o.tags)} outfitKey={`${i}:${o.id}`} style={ICON_POS} />}
+          </div>
         </section>
       ))}
       {status !== "empty" && (

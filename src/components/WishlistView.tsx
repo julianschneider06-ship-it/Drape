@@ -16,8 +16,8 @@ export type WishTab = "products" | "outfits";
 const TABS: { id: WishTab; label: string }[] = [{ id: "products", label: "Products" }, { id: "outfits", label: "Generate Outfits" }];
 
 /** The Wishlist tab (fades in over the feed, fades out when left): title, a Products | Generate Outfits switcher, and the chosen view below (the bottom bar stays visible). */
-export default function WishlistView({ gender, liked, tab, onTab, onToggle, onOpen, onLike, onOpenProduct, sheetOpen }: {
-  gender: "women" | "men"; liked: Set<number>; onOpenProduct: (card: FeedCard) => void; sheetOpen: boolean; tab: WishTab; onTab: (t: WishTab) => void; onToggle: (card: FeedCard) => void;
+export default function WishlistView({ icons, gender, liked, tab, onTab, onToggle, onOpen, onLike, onOpenProduct, sheetOpen }: {
+  icons?: boolean; gender: "women" | "men"; liked: Set<number>; onOpenProduct: (card: FeedCard) => void; sheetOpen: boolean; tab: WishTab; onTab: (t: WishTab) => void; onToggle: (card: FeedCard) => void;
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const reduced = useReducedMotion(), present = useIsPresent();
@@ -47,7 +47,7 @@ export default function WishlistView({ gender, liked, tab, onTab, onToggle, onOp
         <AnimatePresence>
           {tab === "outfits" && (
             <m.div key="outfits" className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn) }}>
-              <GenerateOutfits gender={gender} likedIds={entryIds} liked={liked} shuffleKey={shuffle} onOpen={onOpen} onLike={onLike} />
+              <GenerateOutfits icons={icons} gender={gender} likedIds={entryIds} liked={liked} shuffleKey={shuffle} onOpen={onOpen} onLike={onLike} />
             </m.div>
           )}
         </AnimatePresence>

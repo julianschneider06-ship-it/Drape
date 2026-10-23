@@ -444,7 +444,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
                     onLayout={(layout, mode, slots) => { layoutInfo.current.set(o.id, { layout, mode }); const k = slots.join(","); setPlaced((p) => (p[o.id] === k ? p : { ...p, [o.id]: k })); }} />
                 </div>
               )}
-              {iconsOn && <OutfitIcons icons={outfitIcons(o.tags)} />}
+              {iconsOn && <OutfitIcons icons={outfitIcons(o.tags)} outfitKey={o.id} />}
             </section>
           ))}
           {obPhase === "loading" && <section style={{ height: H }} className="flex items-center justify-center text-sm text-neutral-400">Loading…</section>}
@@ -472,7 +472,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       )}
       <AnimatePresence>
         {navOn && layers.wishlistOpen && (
-          <WishlistView key="wishlist" gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
+          <WishlistView key="wishlist" icons={iconsOn} gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
             onToggle={(card) => toggleLike(card, null, 0, "sheet")}
             onOpenProduct={(card) => setSheet({ card, outfit: null, index: 0, slot: "top" })} sheetOpen={!!sheet} />
         )}
