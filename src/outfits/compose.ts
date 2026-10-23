@@ -216,7 +216,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
       let acc: ComposedAcc[] = [];
       if (accPool.length) {
         const ctx = outfitCtx(g, b.ps as Piece[], b.ps.map((p) => `${p.name} ${p.sub}`));
-        const picks = chooseAccessories(ctx, accPool, session.acc, shopMult ? (id) => Math.sqrt(sw(cat.accById.get(id)!)) : undefined);   // accessories: the boost multiplies a score that is then compared with thresholds, so it acts stronger than on a pick weight: half the strength (square root)
+        const picks = chooseAccessories(ctx, accPool, session.acc, shopMult ? (id) => Math.cbrt(sw(cat.accById.get(id)!)) : undefined);   // accessories: the boost multiplies a score that is then compared with thresholds, so it acts stronger than on a pick weight: a third of the strength in log terms (cube root); the greedy pick by score would otherwise hand a shop's few accessories to every outfit
         acc = picks.map((p) => ({ id: p.acc.id, type: p.acc.type, placement: p.placement, zone: p.zone, score: +p.score.toFixed(3) }));
       }
       if (!layoutCheck(cat, b.kind, b.ps, acc)) { rej("layout"); continue; }
