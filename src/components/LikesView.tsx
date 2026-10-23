@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { outHref } from "@/lib/client/out-url";
 import * as m from "motion/react-m";
 import { MENU } from "@/config/motion";
 import { useReducedMotion } from "@/lib/motion";
@@ -51,7 +52,7 @@ export default function LikesView({ liked, onToggle }: { liked?: Set<number>; on
             <p className="mt-1 truncate text-xs font-semibold uppercase tracking-wide">{c.brand}</p>
             <p className="line-clamp-2 text-sm text-neutral-600">{c.name}</p>
             <p className="mt-0.5 text-sm">{formatPrice(c.price_cents, c.currency)}</p>
-            <a href={c.url} target="_blank" rel="noopener noreferrer" onClick={() => track({ event_type: "view_product_click", product_id: c.id, slot: "sheet" })}
+            <a href={outHref(c.id, "wishlist")} target="_blank" rel="noopener noreferrer" onClick={() => track({ event_type: "view_product_click", product_id: c.id, slot: "sheet" })}
               className="mt-1 inline-block text-xs underline underline-offset-2">View product</a>
           </li>
         ))}

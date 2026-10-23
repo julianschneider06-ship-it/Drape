@@ -7,11 +7,12 @@ import { sheetMotion } from "@/lib/menu-motion";
 import type { FeedCard } from "@/lib/types";
 import { formatPrice } from "@/lib/client/format";
 import { feedSrc, viewCard } from "@/lib/client/format";
+import { outHref } from "@/lib/client/out-url";
 import FeedImage from "./FeedImage";
 import Heart from "./Heart";
 
-export default function ProductSheet({ card, liked, onLike, onClose, onViewProduct }: {
-  card: FeedCard; liked: boolean; onLike: () => void; onClose: () => void; onViewProduct: () => void;
+export default function ProductSheet({ card, liked, onLike, onClose, onViewProduct, feedVariant }: {
+  card: FeedCard; liked: boolean; onLike: () => void; onClose: () => void; onViewProduct: () => void; feedVariant?: "base" | "dynamic" | "hybrid";
 }) {
   const reduced = useReducedMotion(), present = useIsPresent();
   const mo = useMemo(() => sheetMotion(reduced), [reduced]);
@@ -44,7 +45,7 @@ export default function ProductSheet({ card, liked, onLike, onClose, onViewProdu
           </div>
           <Heart on={liked} onClick={onLike} size={26} label={liked ? "Remove like" : "Like"} />
         </div>
-        <a href={card.url} target="_blank" rel="noopener noreferrer" onClick={onViewProduct}
+        <a href={outHref(card.id, "detail", feedVariant)} target="_blank" rel="noopener noreferrer" onClick={onViewProduct}
           className="mt-4 block rounded-full bg-black py-3 text-center text-sm font-medium text-white active:opacity-80">
           View product
         </a>

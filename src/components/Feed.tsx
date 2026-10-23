@@ -484,7 +484,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
 
       <AnimatePresence>
         {sheet && (
-          <ProductSheet key="sheet" card={sheet.card} liked={liked.has(sheet.card.id)} onClose={() => setSheet(null)}
+          <ProductSheet key="sheet" card={sheet.card} feedVariant={dbg.feed === "default" ? "base" : dbg.feed} liked={liked.has(sheet.card.id)} onClose={() => setSheet(null)}
           onLike={() => toggleLike(sheet.card, sheet.outfit, sheet.index, "sheet")}
           onViewProduct={() => (signal({ t: "view_product_click", p: sheet.card.id, o: shownIds(sheet.outfit) }), track({ event_type: "view_product_click", product_id: sheet.card.id, outfit_id: sheet.outfit.id, feed_index: sheet.index, slot: "sheet", gender: genderRef.current }))} />
       )}
