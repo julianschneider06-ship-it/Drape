@@ -14,7 +14,11 @@ export function nextCols(cols: Cols): Cols {
   return LIKES_GRID_COLUMNS[(i + 1) % LIKES_GRID_COLUMNS.length] ?? LIKES_GRID_DEFAULT;
 }
 
-/** Which text fields a grid cell shows: 2 = all, 3 = brand + price, 4 = price only (image always). */
-export function fieldsFor(cols: Cols): { brand: boolean; name: boolean; link: boolean; oldPrice: boolean } {
-  return { brand: cols <= 3, name: cols <= 2, link: cols <= 2, oldPrice: cols <= 3 };
+/** Which text fields a grid cell shows: 2 = all, 3 = brand + price, 4 = price only (image always). The shop link lives only in the product sheet. */
+export function fieldsFor(cols: Cols): { brand: boolean; name: boolean; oldPrice: boolean } {
+  return { brand: cols <= 3, name: cols <= 2, oldPrice: cols <= 3 };
 }
+
+/** The grid button shows the CURRENT layout: icon columns = the active mode (anything invalid = default). */
+export function gridIconCols(cols: Cols): Cols { return (LIKES_GRID_COLUMNS as readonly number[]).includes(cols) ? cols : LIKES_GRID_DEFAULT; }
+export function gridLabel(cols: Cols): string { const n = gridIconCols(cols); return `Grid density, ${n} columns`; }

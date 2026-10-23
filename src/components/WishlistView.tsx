@@ -16,8 +16,8 @@ export type WishTab = "products" | "outfits";
 const TABS: { id: WishTab; label: string }[] = [{ id: "products", label: "Products" }, { id: "outfits", label: "Generate Outfits" }];
 
 /** The Wishlist tab (fades in over the feed, fades out when left): title, a Products | Generate Outfits switcher, and the chosen view below (the bottom bar stays visible). */
-export default function WishlistView({ gender, liked, tab, onTab, onToggle, onOpen, onLike }: {
-  gender: "women" | "men"; liked: Set<number>; tab: WishTab; onTab: (t: WishTab) => void; onToggle: (card: FeedCard) => void;
+export default function WishlistView({ gender, liked, tab, onTab, onToggle, onOpen, onLike, onOpenProduct, sheetOpen }: {
+  gender: "women" | "men"; liked: Set<number>; onOpenProduct: (card: FeedCard) => void; sheetOpen: boolean; tab: WishTab; onTab: (t: WishTab) => void; onToggle: (card: FeedCard) => void;
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const reduced = useReducedMotion(), present = useIsPresent();
@@ -43,7 +43,7 @@ export default function WishlistView({ gender, liked, tab, onTab, onToggle, onOp
       </div>
       <div className="relative min-h-0 flex-1">
         {/* the products list stays mounted (hidden) so a soft-unliked product keeps its place while switching views */}
-        <Layer active={tab === "products"} shiftPx={0} className="absolute inset-0 overflow-y-auto px-3 pb-6"><div className="mx-auto max-w-5xl"><LikesView liked={liked} onToggle={onToggle} /></div></Layer>
+        <Layer active={tab === "products"} shiftPx={0} className="absolute inset-0 overflow-y-auto px-3 pb-6"><div className="mx-auto max-w-5xl"><LikesView liked={liked} onToggle={onToggle} onOpenProduct={onOpenProduct} sheetOpen={sheetOpen} /></div></Layer>
         <AnimatePresence>
           {tab === "outfits" && (
             <m.div key="outfits" className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn) }}>

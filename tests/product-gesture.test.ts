@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ProductGesture, doubleTapWindow, feedDoubleTap, parseTapDelay } from "../src/lib/product-gesture";
+import { DelayedTap, ProductGesture, doubleTapWindow, feedDoubleTap, parseTapDelay } from "../src/lib/product-gesture";
 import { DOUBLE_TAP_WINDOW_MS, GESTURE_MOVE_PX, TAP_OPEN_DELAY_MS } from "../src/config/product-gesture";
 import { RAIL_HEART } from "../src/config/action-rail";
 
@@ -84,4 +84,28 @@ test("detail view: double tap toggles like via the same recogniser, single tap d
 test("feed double tap: liked piece only replays the animation, unliked piece is liked", () => {
   assert.equal(feedDoubleTap(true), "replay");
   assert.equal(feedDoubleTap(false), "like");
+});
+
+function fake() {
+  let now = 0; const timers: { at: number; f: () => void; id: number }[] = []; let n = 0;
+  const env = { now: () => now, set: (f: () => void, ms: number) => { const id = ++n; timers.push({ at: now + ms, f, id }); return id; }, clear: (t: unknown) => { const i = timers.findIndex((x) => x.id === t); if (i >= 0) timers.splice(i, 1); } };
+  const advance = (ms: number) => { now += ms; for (const t of [...timers].filter((x) => x.at <= now)) { timers.splice(timers.indexOf(t), 1); t.f(); } };
+  return { env, advance };
+}
+test("DelayedTap: single tap opens after TAP_OPEN_DELAY_MS", () => {
+  const { env, advance } = fake(); const d = new DelayedTap(TAP_OPEN_DELAY_MS, env); let opened = 0;
+  d.down("a", 5, 5); advance(40); assert.equal(d.up(() => opened++), "pending");
+  advance(TAP_OPEN_DELAY_MS - 1); assert.equal(opened, 0); advance(1); assert.equal(opened, 1);
+});
+test("DelayedTap: a double tap never opens", () => {
+  const { env, advance } = fake(); const d = new DelayedTap(TAP_OPEN_DELAY_MS, env); let opened = 0;
+  d.down("a", 5, 5); advance(40); d.up(() => opened++);
+  advance(80); d.down("a", 6, 5); advance(40); assert.equal(d.up(() => opened++), "double");
+  advance(1000); assert.equal(opened, 0);
+});
+test("DelayedTap: a second press that turns into a scroll still opens the first tap", () => {
+  const { env, advance } = fake(); const d = new DelayedTap(TAP_OPEN_DELAY_MS, env); let opened = 0;
+  d.down("a", 5, 5); advance(40); d.up(() => opened++);
+  advance(80); d.down("a", 5, 5); d.move(5, 60); d.up(() => opened++);
+  assert.equal(opened, 1); advance(1000); assert.equal(opened, 1);
 });

@@ -37,7 +37,7 @@ import { applySwaps, loopSize, slotKeyOf, type SwapEvt, type SwapState } from "@
 import type { SlotName } from "@/lib/layout/engine";
 
 type Gender = "women" | "men";
-interface SheetState { card: FeedCard; outfit: FeedOutfit; index: number; slot: SlotName }
+interface SheetState { card: FeedCard; outfit: FeedOutfit | null; index: number; slot: SlotName }
 const trackSlot = (s: SlotName) => (s.startsWith("acc") ? "accessory" : s) as "top" | "bottom" | "shoes" | "full" | "accessory";
 
 const store = {
@@ -473,7 +473,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       <AnimatePresence>
         {navOn && layers.wishlistOpen && (
           <WishlistView key="wishlist" gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
-            onToggle={(card) => toggleLike(card, null, 0, "sheet")} />
+            onToggle={(card) => toggleLike(card, null, 0, "sheet")}
+            onOpenProduct={(card) => setSheet({ card, outfit: null, index: 0, slot: "top" })} sheetOpen={!!sheet} />
         )}
       </AnimatePresence>
       <AnimatePresence>{navOn && layers.profileOpen && <ProfileView key="profile" />}</AnimatePresence>
@@ -491,7 +492,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         {sheet && (
           <ProductSheet key="sheet" card={sheet.card} feedVariant={dbg.feed === "default" ? "base" : dbg.feed} liked={liked.has(sheet.card.id)} onClose={() => setSheet(null)}
           onLike={() => toggleLike(sheet.card, sheet.outfit, sheet.index, "sheet")}
-          onViewProduct={() => (signal({ t: "view_product_click", p: sheet.card.id, o: shownIds(sheet.outfit) }), track({ event_type: "view_product_click", product_id: sheet.card.id, outfit_id: sheet.outfit.id, feed_index: sheet.index, slot: "sheet", gender: genderRef.current }))} />
+          onViewProduct={() => (sheet.outfit && signal({ t: "view_product_click", p: sheet.card.id, o: shownIds(sheet.outfit) }), track({ event_type: "view_product_click", product_id: sheet.card.id, outfit_id: sheet.outfit?.id, feed_index: sheet.index, slot: "sheet", gender: genderRef.current }))} />
       )}
       </AnimatePresence>
     </main>

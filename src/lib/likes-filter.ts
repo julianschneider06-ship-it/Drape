@@ -7,9 +7,9 @@ export function groupOf(slot: string | null | undefined): LikesGroup {
 }
 
 /** chips to show: All always, a group only when at least one listed product belongs to it */
-export function chipsFor(items: { slot: string }[]): { id: LikesFilter; label: string }[] {
+export function chipsFor(items: { slot: string }[]): { id: LikesFilter; label: string; short: string }[] {
   const have = new Set(items.map((c) => groupOf(c.slot)));
-  return [{ id: "all", label: "All" }, ...LIKES_FILTER_GROUPS.filter((g) => have.has(g.id)).map((g) => ({ id: g.id as LikesFilter, label: g.label }))];
+  return [{ id: "all", label: "All", short: "All" }, ...LIKES_FILTER_GROUPS.filter((g) => have.has(g.id)).map((g) => ({ id: g.id as LikesFilter, label: g.label, short: g.short }))];
 }
 
 /** the filter actually applied: falls back to All when its group has no products left */

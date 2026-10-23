@@ -40,3 +40,31 @@ export class ProductGesture {
 
 /** For You feed double tap: a piece that is not liked gets liked; an already liked piece stays liked and only replays the heart animation (no state change, no event). */
 export function feedDoubleTap(alreadyLiked: boolean): "like" | "replay" { return alreadyLiked ? "replay" : "like"; }
+
+/** Delayed single-tap open that a double tap cancels (same timings as the outfit cards: TAP_OPEN_DELAY_MS, DOUBLE_TAP_WINDOW_MS). Used by Wishlist > Products; time and timers are injectable for tests. */
+export class DelayedTap {
+  private pg: ProductGesture;
+  private timer: unknown = null;
+  private pending: (() => void) | null = null;   // the open the timer would run
+  constructor(private openDelay: number = TAP_OPEN_DELAY_MS, private env: { set: (f: () => void, ms: number) => unknown; clear: (t: unknown) => void; now: () => number } = { set: (f, ms) => setTimeout(f, ms), clear: (t) => clearTimeout(t as ReturnType<typeof setTimeout>), now: () => Date.now() }) {
+    this.pg = new ProductGesture(doubleTapWindow(openDelay));
+  }
+  private stopTimer() { if (this.timer != null) { this.env.clear(this.timer); this.timer = null; } }
+  down(key: string, x: number, y: number) { this.stopTimer(); this.pg.down(key, this.env.now(), x, y); }   // a second press inside the delay holds the open until we know if it is a double tap
+  move(x: number, y: number) { this.pg.move(x, y); }
+  /** "pending" = first tap, `open` runs after the delay; "double" = second tap, nothing opens; "none" = the press was a scroll (a held first tap still opens). */
+  up(open: () => void): "pending" | "double" | "none" {
+    const a = this.pg.up(this.env.now()), held = this.pending;
+    this.stopTimer(); this.pending = null;
+    if (a === "like") return "double";
+    if (a === "tap") {
+      const run = () => { this.timer = null; this.pending = null; open(); };
+      this.pending = run; this.timer = this.env.set(run, this.openDelay);
+      return "pending";
+    }
+    held?.();
+    return "none";
+  }
+  cancel() { this.pg.cancel(); const h = this.pending; this.stopTimer(); this.pending = null; h?.(); }
+  dispose() { this.stopTimer(); this.pending = null; }
+}
