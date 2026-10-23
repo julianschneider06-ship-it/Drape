@@ -49,7 +49,7 @@ async function main() {
     while ((i = buf.indexOf("\n")) >= 0) { take(buf.slice(0, i).replace(/\r$/, "")); buf = buf.slice(i + 1); }
   }
   if (buf) take(buf);
-  console.log("columns:", header?.join(","));
+  console.log("columns:", (header as string[] | null)?.join(","));
   console.log("rows:", rows);
   for (const [k, v] of [...per].sort((a, b) => b[1] - a[1])) console.log(v, k);
 }

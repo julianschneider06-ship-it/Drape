@@ -151,3 +151,17 @@ Re-downloaded the feed (same way, temp folder outside the repo, deleted afterwar
 | Dsquared2, Armani Exchange | **Skip** (Fashiontamers images missing or 20-47%) | 0 |
 
 Sum of the Import rows is about 1.1k clothing products; with all Maybes about 1.7k. Image risk: Tommy and Boss need the real cutout gate, expect 60-70% to survive.
+
+## 9. Import (2026-10-22/23, branch `claude/awin-brands-feed-import-9miby3`)
+Script `scripts/awin-select.ts` (downloads the feed from `AWIN_FEED_URL_BRANDS` into a temp folder outside the repo, picks products, writes `selection.json` + `links.json`), adapter `src/ingest/adapters/awin.ts` (reads the selection via `AWIN_SELECTION_FILE`, one `SOURCES` entry per merchant), `scripts/awin-links.ts` (stores links). Then the normal pipeline (preselect, classify, classify-accessories, bbox, cutout + image-check rounds, measure, pool, alternatives old + w2, catalogue). Temp files deleted afterwards, session token expired.
+**Why fewer than the caps:** the feed has one row per SIZE (Brian James) or per variant (Tooled Up). Distinct products (page, in stock, GBP only, no shoes / socks / underwear / overalls / hi-vis, at most 2 colours per product, spread round-robin over tops / bottoms / outerwear / accessories): Tommy+Tommy Jeans 244 of cap 400, Boss 134 of 300, Bugatti 75 of 250, Helly Hansen 12 of 31, Dickies 18 of 98. Nothing was lowered for quality.
+| shop | currency / market | products | feed_ready | usable (ready + measured) | status |
+|---|---|---|---|---|---|
+| brianjames | GBP / GB | 465 | 412 (89%) | 339 (73%) | active |
+| tooledup (Dickies only) | GBP / GB | 18 | 13 (72%) | 10 (56%) | active (gate 50%) |
+Dickies prices: all are on sale in the feed (standing "was" price), so no compare-at is stored (`trustRrp: false`); Brian James keeps rrp > price as compare-at. Gender: men (one Dickies women's tee).
+**Affiliate links:** table `affiliate_links` (PK product_id + network + merchant; RLS on, no policy, no grants), filled through rpc `affiliate_links_upsert` (allowlisted for the gateway only): 482 rows. `aw_deep_link` is not in the raw payload either; used nowhere in the UI.
+**Stock refresh:** `refreshShop` returns `skipped` ("awin feed shop: no daily stock refresh yet") for kind `awin`, so `shop_refresh_log` shows both shops every run; offers stay as imported until a feed-based refresh exists (needs the feed URL in the runner and a diff job; not done).
+**Pool:** active outfits men 3,173 -> 3,388, women 4,369 -> 4,360 (rebuild reshuffles; the new menswear only affects men). 520 active pool outfits use a new top or bottom. Alternatives (old + w2), accessories and the catalogue snapshot rebuilt (8,781 pieces).
+**Cost:** AI $0.68 (classification $0.54, accessory classification $0.03, image checks about $0.11); `dash_ai_spend` 28.15 -> 28.83. Skipped on purpose: shoes, watches (watch shops), perfume, Fashiontamers (no images), Aussui (mixed currencies), Calvin Klein, adidas, Nike etc.
+**Fix on the way:** `scripts/probe-awin.ts` had a type error that broke `npm run build` (its commit was docs-only with [skip ci], so it was never built).
