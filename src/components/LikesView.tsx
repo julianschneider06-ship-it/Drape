@@ -8,7 +8,8 @@ import { fadeSlide } from "@/lib/menu-motion";
 import Heart from "@/components/Heart";
 import type { FeedCard } from "@/lib/types";
 import { getDeviceId } from "@/lib/client/device";
-import { formatPrice } from "@/lib/client/format";
+import { formatPrice, feedSrc, viewCard } from "@/lib/client/format";
+import { applyFilter, chipsFor, effectiveFilter, type LikesFilter } from "@/lib/likes-filter";
 import { useSaleMarker } from "@/lib/client/sale";
 import { priceDisplay } from "@/lib/price-display";
 import FeedImage from "@/components/FeedImage";
@@ -24,6 +25,8 @@ export default function LikesView({ liked, onToggle }: { liked?: Set<number>; on
   const [error, setError] = useState(false);
   const [device, setDevice] = useState("");
   const [local, setLocal] = useState<Set<number>>(new Set());   // standalone (/likes page): the likes of this visit; in the Wishlist tab the feed's set is used
+  const [filter, setFilter] = useState<LikesFilter>("all");   // local only; the Wishlist view is unmounted when the tab is left, so it resets to All
+  const topRef = useRef<HTMLDivElement>(null);
   const likedRef = useRef(liked); likedRef.current = liked;
 
   useEffect(() => {
@@ -43,14 +46,30 @@ export default function LikesView({ liked, onToggle }: { liked?: Set<number>; on
     fetch("/api/likes", { method: "POST", body: JSON.stringify({ device_id: device, product_id: c.id, liked: want, slot: "sheet" }) }).catch(() => setError(true));
   };
 
+  const chips = chipsFor(items ?? []), active = effectiveFilter(filter, items ?? []);
+  const pick = (f: LikesFilter) => {
+    setFilter(f);
+    for (let e: HTMLElement | null = topRef.current; e; e = e.parentElement) if (e.scrollHeight > e.clientHeight && /(auto|scroll)/.test(getComputedStyle(e).overflowY)) { e.scrollTop = 0; return; }
+    window.scrollTo(0, 0);   // standalone /likes page scrolls the window
+  };
+
   return (
     <>
+      <div ref={topRef} />
+      {chips.length > 1 && (
+        <div className="sticky top-0 z-10 -mx-3 flex gap-2 overflow-x-auto bg-white px-3 py-2" role="group" aria-label="Filter by type">
+          {chips.map((c) => (
+            <button key={c.id} type="button" onClick={() => pick(c.id)} aria-pressed={active === c.id}
+              className={`shrink-0 rounded-full border px-3 py-1 text-xs ${active === c.id ? "border-black bg-black text-white" : "border-neutral-300 bg-white text-black"}`}>{c.label}</button>
+          ))}
+        </div>
+      )}
       {error && <m.p {...fadeSlide(reduced, MENU.hintShiftPx)} className="py-10 text-center text-sm text-neutral-500">Could not load your wishlist.</m.p>}
       {items && items.length === 0 && <m.p {...fadeSlide(reduced, MENU.hintShiftPx)} className="py-16 text-center text-sm text-neutral-500">Nothing liked yet. Tap the heart on a piece you like.</m.p>}
       <ul className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-4 lg:grid-cols-6">
-        {(items ?? []).map((c) => (
+        {applyFilter(items ?? [], active).map((c) => (
           <li key={c.id} className="relative">
-            <div className="relative aspect-[3/4] bg-white"><FeedImage card={c} fill={0.96} minW={500} /></div>
+            <div className="relative aspect-[3/4] bg-white">{(() => { const v = viewCard(c, "auto"); return <FeedImage card={v} src={v.cut ? feedSrc(v, "top") : undefined} blend={!v.cut} noSale fill={0.96} minW={500} />; })()}</div>
             <div className="absolute right-0 top-0"><Heart on={isLiked(c.id)} look={heartVisual(heartLook(c.id, liked ?? local), WISHLIST_HEART)} onClick={() => toggle(c)} label={isLiked(c.id) ? "Remove like" : "Like"} size={WISHLIST_HEART.size} /></div>
             <p className="mt-1 truncate text-xs font-semibold uppercase tracking-wide">{c.brand}</p>
             <p className="line-clamp-2 text-sm text-neutral-600">{c.name}</p>
