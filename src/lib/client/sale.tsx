@@ -1,15 +1,20 @@
 "use client";
 import { SALE_MARKER_ENABLED } from "@/lib/layout/config";
+import { useSyncExternalStore } from "react";
+import { effectiveSale } from "@/lib/shop-pref";
+import { getPrefs, subscribePrefs } from "@/lib/client/profile-store";
 import type { FeedCard } from "@/lib/types";
 
-/** Red hand-drawn outline on products on sale. One switch: app_settings.sale_marker_enabled (code default SALE_MARKER_ENABLED in config.ts); ?sale=off / ?sale=on override it. */
+/** Red hand-drawn outline on products on sale. Switches: app_settings.sale_marker_enabled (code default SALE_MARKER_ENABLED in config.ts) AND the user's choice in Profile (device only); ?sale=off / ?sale=on override both. */
 let saleDefault = SALE_MARKER_ENABLED;   // the live default comes from app_settings (set by Feed from the server)
 export const setSaleDefault = (v: boolean | undefined) => { if (typeof v === "boolean") saleDefault = v; };
+export const saleGlobalOn = () => saleDefault;
 export function saleMarkerOn(): boolean {
   if (typeof window === "undefined") return false;
-  const q = new URLSearchParams(window.location.search).get("sale");
-  return q === "on" ? true : q === "off" ? false : saleDefault;
+  return effectiveSale(new URLSearchParams(window.location.search).get("sale"), saleDefault, getPrefs().sale);
 }
+/** re-renders the caller when the user flips the Profile switch */
+export const useSaleMarker = (): boolean => useSyncExternalStore(subscribePrefs, saleMarkerOn, () => false);
 export const isOnSale = (c: FeedCard) => !!c.compare_at_cents && c.compare_at_cents > (c.price_cents ?? 0);
 
 /** Outline size class from the piece's width as a share of the canvas: large items get a ~2px line, small ones never thinner than ~1.5px. */

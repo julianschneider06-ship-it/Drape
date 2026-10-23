@@ -14,7 +14,7 @@
     "cutout": "scripts/cutout/run_all.sh",
     "image-check": "tsx scripts/image-check.ts",
     "outfits": "tsx scripts/build-outfits.ts",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts tests/*.test.tsx"
   },
   "dependencies": {
     "ajv": "^8.20.0",

@@ -4,7 +4,7 @@ import type { SwapEvt } from "@/lib/client/swap";
 import type { FeedAccessory, FeedCard, FeedOutfit } from "@/lib/types";
 import { cropGeometry, feedSrc, viewCard, type CutMode } from "@/lib/client/format";
 import { garmentClass, RULES, SALE_LABEL } from "@/lib/layout/config";
-import { isOnSale, saleMarkerOn } from "@/lib/client/sale";
+import { isOnSale, useSaleMarker } from "@/lib/client/sale";
 import { showSale } from "@/lib/search";
 import { shineColor, shineStrokes, wobblyBox } from "@/lib/shine";
 import { PRICE_TAG, SHINE } from "@/config/search";
@@ -26,6 +26,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string, slots: string[]) => void;
   onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; shine?: { color: string | null }; animateLayout?: boolean; reserveIcons?: boolean; priceTag?: boolean; onLike?: (c: FeedCard, slot: SlotName) => boolean | void;   // onLike given = product gestures: single tap opens (after the double-tap window), double tap toggles the like (returns the new state); without it the old single tap opens (welcome tutorial);   // priceTag: Search only, hand-drawn price box next to the searched (not dimmed) piece, decoration (not tappable);   // reserveIcons: the attribute icons sit top left (non-tappable), tap areas never extend into them;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
 }) {
+  const saleOn = useSaleMarker();   // app setting AND the Profile choice (re-renders when the user flips it)
   const cards = useMemo(() => {
     const v = (c: FeedCard) => viewCard(c, cut);
     return (outfit.kind === "full" ? { full: v(outfit.top), shoes: v(outfit.shoes) } : { top: v(outfit.top), bottom: outfit.bottom ? v(outfit.bottom) : undefined, shoes: v(outfit.shoes) }) as Partial<Record<SlotName, ReturnType<typeof v>>>;
@@ -129,7 +130,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
   // "SALE" label per piece on sale: side with room (away from the other pieces first), never over a piece, the margin or outside the canvas
   const labels = useMemo(() => {
     const out: Record<string, { side: "left" | "right"; dy: number }> = {};
-    if (!saleMarkerOn()) return out;
+    if (!saleOn) return out;
     const { w: W, h: H } = canvas;
     const fs = SALE_LABEL.fontShare * W, lw = fs * SALE_LABEL.lineEm, lh = fs * SALE_LABEL.lenEm, gap = SALE_LABEL.gap * W, pad = RULES.edgePad * W;
     for (const p of layout.pieces) {
@@ -156,7 +157,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
       }
     }
     return out;
-  }, [layout, cards, accs, canvas, dim]);
+  }, [layout, cards, accs, canvas, dim, saleOn]);
 
   // price tag spot: below the searched piece's lower-left corner, nudged to a free spot inside the card if needed (never over another piece or the SALE label)
   const tag = useMemo(() => {
@@ -208,7 +209,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
               {!dimmed && hits[p.slot] && (hits[p.slot].l || hits[p.slot].t || hits[p.slot].r || hits[p.slot].b) ? <span aria-hidden data-hit="1" className="absolute" style={{ left: -hits[p.slot].l, top: -hits[p.slot].t, right: -hits[p.slot].r, bottom: -hits[p.slot].b }} /> : null}
               {onLike && !dimmed && <LikePop ref={(h) => { pops.current[p.slot] = h; }} />}
               {shine && !dimmed && c.cut && (() => {
-                const sale = saleMarkerOn() && isOnSale(c), m = SHINE.distance + (sale ? SHINE.saleExtra : 0) + SHINE.length * 1.5 + SHINE.width + 2, w = p.rect.w, h = p.rect.h;
+                const sale = saleOn && isOnSale(c), m = SHINE.distance + (sale ? SHINE.saleExtra : 0) + SHINE.length * 1.5 + SHINE.width + 2, w = p.rect.w, h = p.rect.h;
                 return (
                   <svg aria-hidden className="pointer-events-none absolute overflow-visible" data-shine={c.id} style={{ left: -m, top: -m, width: w + 2 * m, height: h + 2 * m }} viewBox={`${-m} ${-m} ${w + 2 * m} ${h + 2 * m}`}
                     fill="none" stroke={shineColor(shine.color, sale)} strokeWidth={SHINE.width} strokeLinecap="round">

@@ -59,7 +59,10 @@ export const MENU_COLORS = {
   nav: { on: "#000000", off: "#a3a3a3" },
   toggle: { on: { borderColor: "#000000", backgroundColor: "#000000", color: "#ffffff" }, off: { borderColor: "#e5e5e5", backgroundColor: "#ffffff", color: "#000000" } },
   action: { on: { backgroundColor: "#000000" }, off: { backgroundColor: "#d4d4d4" } },
+  switchTrack: { on: { backgroundColor: "#000000" }, off: { backgroundColor: "#d4d4d4" } },
 } as const;
+/** On / off switch (Profile settings): track and thumb sizes in px; the thumb slides with SPRING.pill, the track colour fades. */
+export const SWITCH = { width: 44, height: 26, thumb: 22, pad: 2 } as const;
 /** Opacity of disabled options / buttons. */
 export const DISABLED_OPACITY = 0.35;
 

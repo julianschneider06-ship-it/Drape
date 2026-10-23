@@ -12,7 +12,7 @@ export const NAV_PX = 49;
 
 const Icon = ({ tab }: { tab: Tab }) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    {tab === "foryou" ? <path d="M12 4.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 9.8l5-.7z" /> : tab === "likes" ? <path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7C19.5 15.9 12 20.5 12 20.5z" /> : <><circle cx="10.5" cy="10.5" r="5.5" /><path d="M14.7 14.7L19.5 19.5" /></>}
+    {tab === "foryou" ? <path d="M12 4.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 9.8l5-.7z" /> : tab === "likes" ? <path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7C19.5 15.9 12 20.5 12 20.5z" /> : tab === "profile" ? <><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20c.6-3.6 3.4-5.6 7-5.6s6.4 2 7 5.6" /></> : <><circle cx="10.5" cy="10.5" r="5.5" /><path d="M14.7 14.7L19.5 19.5" /></>}
   </svg>
 );
 

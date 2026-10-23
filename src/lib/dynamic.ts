@@ -14,6 +14,7 @@ import { applySignals, decodeTaste, encodeTaste, type Signal } from "@/outfits/t
 import { newTaste, withPrior } from "@/outfits/taste";
 import { mixFor, TASTE } from "@/lib/personalization/config";
 import { makeRnd } from "@/outfits/pool-shared";
+import { parseShopPrefs, shopWeights } from "@/lib/shop-pref";
 import { gatewayRpc } from "@/lib/gateway";
 import type { FeedAccessory, FeedAlt, FeedCard, FeedOutfit } from "@/lib/types";
 
@@ -70,9 +71,21 @@ export async function toFeedOutfits(cat: Catalogue, g: "women" | "men", outs: Co
   return res;
 }
 
+const storeSets = new WeakMap<Catalogue, Set<string>>();
+/** shops that have pieces or accessories in this catalogue (unknown ids in a client's preferences are ignored) */
+export function knownStores(cat: Catalogue): Set<string> {
+  let s = storeSets.get(cat);
+  if (!s) { s = new Set<string>(); for (const p of cat.pieces) s.add(p.store); for (const a of cat.accs) s.add(a.store); storeSets.set(cat, s); }
+  return s;
+}
+
 export interface PageInput { banB64?: string | null; device: string; gender: "women" | "men"; recent?: { ids: number[]; style: string; store: string }[]; startersServed?: number; persona?: string | null; contrast?: number;
   /** hybrid: the client-held taste (base64) and the signals since the last page; null / undefined = plain composer without taste */
-  taste?: string | null; signals?: Signal[]; hybrid?: boolean; seed?: string[] }
+  taste?: string | null; signals?: Signal[]; hybrid?: boolean; seed?: string[];
+  /** Profile > Shops, compact string "slug:L,slug:M" from the device (validated and capped here, unknown shops ignored); nothing is stored */
+  shops?: unknown;
+  /** optional fixed random seed (reproducible measurements, scripts/sim-shop-pref.ts); default random */
+  rs?: number }
 export interface TasteOut { taste: string; n: number; personalized: boolean; applied: number; skipped: number; bytes: number; thin: string[]; mix: Record<string, number> }
 export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items: FeedOutfit[]; ms: { total: number; ban: number; compose: number; cards: number; write: number; taste?: number; cat?: typeof catalogueLoad & { coldMs: number }; up?: number }; taste?: TasteOut }> {
   const t0 = performance.now(); const countBefore = catalogueLoad.count; const cat = await getCat(inp.gender); const tCat = performance.now() - t0;
@@ -95,8 +108,9 @@ export async function dynamicPage(inp: PageInput): Promise<{ ban: string; items:
     tasteOut = { taste: "", n: taste.n, personalized: taste.n >= TASTE.personalizeFrom, applied: r.applied, skipped: r.skipped, bytes: 0, thin: [], mix: mixFor(taste.n) };
   }
   const tc = performance.now();
-  const seed = Math.floor(Math.random() * 2 ** 31);
-  const { outfits, ban: ban2, stats } = compose(cat, { gender: inp.gender, taste: prior ?? taste, prior: !!prior, ...(inp.contrast ? { mix: { match: 0, near: 0, new: 1 - inp.contrast, contrast: inp.contrast } } : {}) }, ban, 6, session, makeRnd(seed));
+  const seed = inp.rs ?? Math.floor(Math.random() * 2 ** 31);
+  const prefs = parseShopPrefs(inp.shops, knownStores(cat));
+  const { outfits, ban: ban2, stats } = compose(cat, { gender: inp.gender, taste: prior ?? taste, prior: !!prior, ...(prefs.size ? { shopMult: shopWeights(prefs) } : {}), ...(inp.contrast ? { mix: { match: 0, near: 0, new: 1 - inp.contrast, contrast: inp.contrast } } : {}) }, ban, 6, session, makeRnd(seed));
   const eff = ban2.effective(cat, inp.gender);
   const alts = outfits.map((o) => alternativesFor(cat, inp.gender, o, eff, prior ?? taste));
   if (tasteOut && taste) { const t1 = performance.now(); tasteOut.taste = encodeTaste(taste); tasteOut.bytes = tasteOut.taste.length; tasteOut.thin = stats.thin ?? []; tt += performance.now() - t1; }

@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { FeedCard } from "@/lib/types";
 import { blendStyle, cropGeometry, imgUrl } from "@/lib/client/format";
 import { showSale } from "@/lib/search";
-import { isOnSale, saleMarkerOn, saleSize } from "@/lib/client/sale";
+import { isOnSale, saleSize, useSaleMarker } from "@/lib/client/sale";
 
 /**
  * Product image fitted to its box, cropped to the product's content box (shop whitespace removed) when known,
@@ -11,8 +11,8 @@ import { isOnSale, saleMarkerOn, saleSize } from "@/lib/client/sale";
  */
 export default function FeedImage({ card, src: srcIn, priority, fill = 0.92, minW = 700, blend = true, wShare = 0.3, noSale = false }: { card: FeedCard; src?: string; blend?: boolean; priority?: boolean; fill?: number; minW?: number; wShare?: number; noSale?: boolean }) {
   const [failed, setFailed] = useState(false);
-  const g = cropGeometry(card);
-  const sale = !blend && saleMarkerOn() && showSale(isOnSale(card), noSale);   // only cutouts (transparent) get the outline
+  const g = cropGeometry(card), saleOn = useSaleMarker();
+  const sale = !blend && saleOn && showSale(isOnSale(card), noSale);   // only cutouts (transparent) get the outline
   const look = blend ? blendStyle(card) : sale ? { filter: `url(#drape-sale-ink-${saleSize(wShare)})` } : undefined; // cutouts are transparent: no multiply (shoes stay opaque over trousers)
   if (failed) return <span className="absolute inset-0 flex items-center justify-center px-6 text-center text-xs text-neutral-400">{card.brand}<br />{card.name}</span>;
   const src = srcIn ?? imgUrl(card.image, minW);

@@ -18,7 +18,7 @@ import { mixFor, priorMixFor, STEER, TASTE } from "../lib/personalization/config
 import { outfitTags } from "./tags";
 import { STYLE_KEYS as SK } from "../classify/styles";
 
-export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number; banOverall?: number; legacy?: boolean; prior?: boolean }
+export interface Profile { gender: "women" | "men"; taste: Taste | null; contrastShare?: number; mix?: Record<Bucket, number>; accessories?: boolean; now?: Date; minScore?: number; likedIds?: Set<number>; banFraction?: number; banOverall?: number; legacy?: boolean; prior?: boolean; shopMult?: ReadonlyMap<string, number> }
 export interface ComposedAcc { id: number; type: string; placement: string; zone: string; score: number }
 export interface ComposedOutfit {
   kind: "three" | "full"; ids: number[]; acc: ComposedAcc[]; score: number; style: string; season: SeasonResult; bucket: Bucket; pattern?: string; hash: number;
@@ -115,6 +115,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
     return kept.length >= POLISH.subCapMinPool ? kept : list;
   };
   const fresh = (p: CatPiece) => 1 / (1 + COMPOSE.freshnessPerUse * (session.uses.get(p.id) ?? 0));
+  const shopMult = profile.shopMult, sw = (p: { store: string }) => (shopMult ? shopMult.get(p.store) ?? 1 : 1);   // Profile > Shops: Less / More multiplier on the selection weight (never a filter)
   const tasteW = (p: CatPiece) => (guest ? 1 - COMPOSE.tasteWeight * 0.5 : Math.pow(1 - COMPOSE.tasteWeight + COMPOSE.tasteWeight * tm(p), STEER.tasteExponent));
   // tag preferences: final pick weight x (1 + tagWeight x tag match) - outfit tags without accessories (cheap; the accessories are chosen afterwards)
   const tagF = (ps: CatPiece[], bucket: Bucket): number => { if (!taste) return 1; const t = outfitTags(cat, { pieces: ps, accs: [], bucket }); return 1 + STEER.tagWeight * tagMatch(taste, { se: t.season_primary, oc: t.occasion, pk: t.palette.kind, si: t.silhouette, fo: t.formality_level, w: t.weather, ct: t.contrast ? 1 : 0 }); };
@@ -146,18 +147,18 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
     let anchor: CatPiece | null;
     if (bucket === "contrast") {
       pat = patterns[Math.floor(rnd() * patterns.length)]; anchorSlot = pat.anchor;
-      anchor = pick(cand(anchorSlot, sSeason).filter(pat.a), (p) => fresh(p) * (0.5 + tasteW(p)), rnd);
+      anchor = pick(cand(anchorSlot, sSeason).filter(pat.a), (p) => fresh(p) * (0.5 + tasteW(p)) * sw(p), rnd);
     } else {
       const w = { top: COMPOSE.anchorSlot.top, bottom: COMPOSE.anchorSlot.bottom, shoes: COMPOSE.anchorSlot.shoes, full_body: fullShare } as const;
       anchorSlot = pick(["top", "bottom", "shoes", "full_body"] as const, (s) => w[s], rnd)!;
-      anchor = pick(cand(anchorSlot, sSeason), (p) => fresh(p) * bandW(p), rnd);
+      anchor = pick(cand(anchorSlot, sSeason), (p) => fresh(p) * bandW(p) * sw(p), rnd);
     }
     if (!anchor) { noWhy = "no-candidate:anchor"; return null; }
     if (anchorSlot === "full_body") {
       const shoes = cand("shoes", sSeason); const sc: [CatPiece, number][] = [];
       for (const s of sampleFor(shoes, Math.round(COMPOSE.shoeSample * wide))) { const r = scoreOutfit([anchor, s]); if (r && r.score >= minS) sc.push([s, r.score]); }
       sc.sort((a, b) => b[1] - a[1]); const top = sc.slice(0, COMPOSE.topN);
-      const ch = pick(top, ([s, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(s) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, s)) * fresh(s) * tagF([anchor!, s], bucket), rnd);
+      const ch = pick(top, ([s, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(s) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, s)) * fresh(s) * tagF([anchor!, s], bucket) * sw(s), rnd);
       if (!ch) { noWhy = "no-candidate:min-score"; return null; }
       return { ps: [anchor, ch[0]], kind: "full", score: ch[1] };
     }
@@ -172,7 +173,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
     // partner choice with backtracking (new rules): if the chosen partner has no completion that reaches the minimum score, the next best partners are tried (up to 3) before the attempt fails
     let secs = sec.slice(0, COMPOSE.pairK);
     for (let tryNo = 0; tryNo < (legacy ? 1 : POLISH.partnerTries); tryNo++) {
-      const secPick = pick(secs, ([y, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(y) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, y)) * fresh(y), rnd);
+      const secPick = pick(secs, ([y, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(y) * (1 + COMPOSE.connectionWeight * connBonus(taste, anchor!, y)) * fresh(y) * sw(y), rnd);
       if (!secPick) { if (tryNo === 0) noWhy = "no-candidate:partner"; break; }
       secs = secs.filter((x) => x !== secPick);
       const y = secPick[0];
@@ -185,7 +186,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
         const r = sc2(ps); const sv = r ? r.score * tone(ps) : 0; if (r && sv >= minS) fin.push([z, sv]);
       }
       fin.sort((a, b) => b[1] - a[1]);
-      const fp = pick(fin.slice(0, COMPOSE.topN), ([z, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(z) * (1 + COMPOSE.connectionWeight * connBonus(taste, third === "shoes" ? y.slot === "bottom" ? y : anchor! : anchor!, z)) * fresh(z) * tagF(trio(z), bucket), rnd);
+      const fp = pick(fin.slice(0, COMPOSE.topN), ([z, v]) => Math.pow(v, COMPOSE.scoreExponent) * tasteW(z) * (1 + COMPOSE.connectionWeight * connBonus(taste, third === "shoes" ? y.slot === "bottom" ? y : anchor! : anchor!, z)) * fresh(z) * tagF(trio(z), bucket) * sw(z), rnd);
       if (fp) return { ps: trio(fp[0]), kind: "three", score: fp[1], pattern: pat?.name };
       noWhy = "no-candidate:min-score";
     }
@@ -215,7 +216,7 @@ export function compose(cat: Catalogue, profile: Profile, banIn: BanState, n = 6
       let acc: ComposedAcc[] = [];
       if (accPool.length) {
         const ctx = outfitCtx(g, b.ps as Piece[], b.ps.map((p) => `${p.name} ${p.sub}`));
-        const picks = chooseAccessories(ctx, accPool, session.acc);
+        const picks = chooseAccessories(ctx, accPool, session.acc, shopMult ? (id) => sw(cat.accById.get(id)!) : undefined);
         acc = picks.map((p) => ({ id: p.acc.id, type: p.acc.type, placement: p.placement, zone: p.zone, score: +p.score.toFixed(3) }));
       }
       if (!layoutCheck(cat, b.kind, b.ps, acc)) { rej("layout"); continue; }
