@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ProductGesture, doubleTapWindow, parseTapDelay } from "../src/lib/product-gesture";
+import { ProductGesture, doubleTapWindow, feedDoubleTap, parseTapDelay } from "../src/lib/product-gesture";
 import { DOUBLE_TAP_WINDOW_MS, GESTURE_MOVE_PX, TAP_OPEN_DELAY_MS } from "../src/config/product-gesture";
 import { RAIL_HEART } from "../src/config/action-rail";
 
@@ -79,4 +79,9 @@ test("detail view: double tap toggles like via the same recogniser, single tap d
   press(0); assert.equal(liked, false);          // single tap: no like, nothing delayed
   press(150); assert.equal(liked, true);
   press(1000); press(1150); assert.equal(liked, false);
+});
+
+test("feed double tap: liked piece only replays the animation, unliked piece is liked", () => {
+  assert.equal(feedDoubleTap(true), "replay");
+  assert.equal(feedDoubleTap(false), "like");
 });

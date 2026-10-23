@@ -1,4 +1,5 @@
 "use client";
+import { feedDoubleTap } from "@/lib/product-gesture";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeedCard, FeedOutfit, FeedResponse } from "@/lib/types";
 import { getDeviceId } from "@/lib/client/device";
@@ -439,7 +440,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
             <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)" }}>
               {feedCanvas && (
                 <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>   {/* the right ACTION_RAIL_WIDTH px stay empty: the fixed rail overlay sits there */}
-                  <OutfitCanvas outfit={o} canvas={feedCanvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => { toggleLike(c, o, i, slot); return likeResult.current; }} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
+                  <OutfitCanvas outfit={o} canvas={feedCanvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => { if (feedDoubleTap(liked.has(c.id)) === "replay") return true; toggleLike(c, o, i, slot); return likeResult.current; }} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
                     onLayout={(layout, mode, slots) => { layoutInfo.current.set(o.id, { layout, mode }); const k = slots.join(","); setPlaced((p) => (p[o.id] === k ? p : { ...p, [o.id]: k })); }} />
                 </div>
               )}

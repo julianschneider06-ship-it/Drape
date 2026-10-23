@@ -37,3 +37,6 @@ export class ProductGesture {
   }
   cancel() { this.active = false; this.last = null; }
 }
+
+/** For You feed double tap: a piece that is not liked gets liked; an already liked piece stays liked and only replays the heart animation (no state change, no event). */
+export function feedDoubleTap(alreadyLiked: boolean): "like" | "replay" { return alreadyLiked ? "replay" : "like"; }
