@@ -10,8 +10,8 @@ export const SWAP_MIN_PX = 28;
 export const SWAP_MIN_VELOCITY = 0.35;
 export const SWAP_FLICK_MIN_PX = 14;
 
-/** Product sheet: a downward swipe is a close COMMAND (the sheet never follows the finger). It fires once the finger moved down this far (px) with vertical dominance ... */
-export const SHEET_CLOSE_MIN_PX = 40;
-/** ... or earlier, from SHEET_CLOSE_FLICK_MIN_PX, when the swipe is at least this fast (px per ms). */
+/** Product sheet: the sheet follows a downward drag 1:1; once the drag passed this share of the sheet height the close is COMMITTED (exit animation, finger may still be down). Below it, release springs back. */
+export const SHEET_SNAP_CLOSE_RATIO = 0.10;
+/** A fast downward flick also closes, even below the ratio: from SHEET_CLOSE_FLICK_MIN_PX when at least this fast (px per ms). */
 export const SHEET_CLOSE_MIN_VELOCITY = 0.5;
 export const SHEET_CLOSE_FLICK_MIN_PX = 16;

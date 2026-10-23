@@ -1,4 +1,4 @@
-import { AXIS_LOCK_PX, HORIZONTAL_BIAS, SHEET_CLOSE_FLICK_MIN_PX, SHEET_CLOSE_MIN_PX, SHEET_CLOSE_MIN_VELOCITY, SWAP_FLICK_MIN_PX, SWAP_MIN_PX, SWAP_MIN_VELOCITY } from "@/config/gestures";
+import { AXIS_LOCK_PX, HORIZONTAL_BIAS, SHEET_CLOSE_FLICK_MIN_PX, SHEET_CLOSE_MIN_VELOCITY, SHEET_SNAP_CLOSE_RATIO, SWAP_FLICK_MIN_PX, SWAP_MIN_PX, SWAP_MIN_VELOCITY } from "@/config/gestures";
 
 export type Axis = "x" | "y" | null;
 
@@ -16,13 +16,29 @@ export function swapOnRelease(dx: number, dtMs: number): boolean {
   return ax >= SWAP_FLICK_MIN_PX && dtMs > 0 && ax / dtMs >= SWAP_MIN_VELOCITY;
 }
 
+export type SheetDrag = { offset: number; action: "ignore" | "follow" | "commit" };
+
 /**
- * Product sheet: should this move (finger offset from the press, dtMs since the press) close the sheet? Downward, vertically dominant, and either far enough
- * or a short fast flick. When the content is scrolled, only a swipe that began on the handle / image counts (scrolling wins otherwise).
+ * Product sheet drag (finger offset from the press, dtMs since the press, scrollTop at the press, sheetH = sheet height in px).
+ * "ignore": upward, not vertically dominant yet, or the content was scrolled and the press was not on the handle / image (scrolling wins) -> offset 0.
+ * "follow": the sheet moves 1:1 with the finger; releasing here springs back.
+ * "commit": passed SHEET_SNAP_CLOSE_RATIO of the sheet height, or a fast flick (works below the ratio too) -> close now, further movement is ignored.
  */
-export function sheetCloseSwipe(dx: number, dy: number, dtMs: number, scrollTop: number, onHandleOrImage: boolean): boolean {
-  if (dy <= 0 || decideAxis(dx, dy) !== "y") return false;
-  if (scrollTop > 0 && !onHandleOrImage) return false;
-  if (dy >= SHEET_CLOSE_MIN_PX) return true;
-  return dy >= SHEET_CLOSE_FLICK_MIN_PX && dtMs > 0 && dy / dtMs >= SHEET_CLOSE_MIN_VELOCITY;
+export function sheetDrag(dx: number, dy: number, dtMs: number, scrollTop: number, onHandleOrImage: boolean, sheetH: number): SheetDrag {
+  if (dy <= 0 || decideAxis(dx, dy) !== "y") return { offset: 0, action: "ignore" };
+  if (scrollTop > 0 && !onHandleOrImage) return { offset: 0, action: "ignore" };
+  const flick = dy >= SHEET_CLOSE_FLICK_MIN_PX && dtMs > 0 && dy / dtMs >= SHEET_CLOSE_MIN_VELOCITY;
+  if (flick || (sheetH > 0 && dy >= SHEET_SNAP_CLOSE_RATIO * sheetH)) return { offset: dy, action: "commit" };
+  return { offset: dy, action: "follow" };
+}
+
+/**
+ * Should a touchmove inside the sheet be cancelled so the page / feed behind never moves? Only the panel's own content may scroll, and only
+ * while it can still move in the finger's direction (finger down = content scrolls up = needs scrollTop > 0).
+ */
+export function blockTouchMove(insidePanel: boolean, scrollable: boolean, scrollTop: number, maxScroll: number, dy: number): boolean {
+  if (!insidePanel || !scrollable) return true;
+  if (dy > 0) return scrollTop <= 0;
+  if (dy < 0) return scrollTop >= maxScroll;
+  return false;
 }
