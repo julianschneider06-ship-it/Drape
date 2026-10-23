@@ -14,6 +14,7 @@ import { hitCategory, HIT_DEBUG_COLORS, HIT_ICON_ZONE } from "@/config/hit-area"
 import { hitInsets } from "@/lib/hit-areas";
 import { ProductGesture, doubleTapWindow, parseTapDelay } from "@/lib/product-gesture";
 import { TAP_OPEN_DELAY_MS } from "@/config/product-gesture";
+import { decideAxis, swapOnRelease } from "@/lib/gestures";
 import LikePop, { type LikePopHandle } from "./LikePop";
 import FeedImage from "./FeedImage";
 import { tagLine } from "@/outfits/tags";
@@ -66,29 +67,35 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
 
   useEffect(() => { onLayout?.(layout.template, layout.debug?.mode ?? "template", layout.pieces.map((p) => p.slot)); }, [layout, onLayout]);
 
-  // ---- swipe on a piece = swap that piece (horizontal, mostly-horizontal drags only; vertical scrolling is never touched) ----
-  const gest = useRef<{ x: number; y: number; slot: string | null; mode: "idle" | "swipe" | "scroll" } | null>(null);
+  // ---- swipe on a piece = swap that piece. Axis lock after AXIS_LOCK_PX (src/lib/gestures.ts): horizontal-ish on a piece owns the gesture
+  // (native touchmove is cancelled so the vertical scroller cannot take over), clearly vertical = outfit scroll, no swap. ----
+  const root = useRef<HTMLDivElement>(null);
+  const gest = useRef<{ x: number; y: number; t: number; slot: string | null; mode: "idle" | "swipe" | "scroll" } | null>(null);
   const suppressUntil = useRef(0);
   const down = (e: React.PointerEvent) => {
     if (!onSwipe || (e.pointerType === "mouse" && e.button !== 0)) return;
     const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-slot]");   // topmost piece under the finger (shoes / overlays win)
-    gest.current = { x: e.clientX, y: e.clientY, slot: el?.getAttribute("data-slot") ?? null, mode: "idle" };
+    gest.current = { x: e.clientX, y: e.clientY, t: Date.now(), slot: el?.getAttribute("data-slot") ?? null, mode: "idle" };
   };
   const move = (e: React.PointerEvent) => {
-    const g = gest.current; if (!g || g.mode === "scroll") return;
-    const dx = e.clientX - g.x, dy = e.clientY - g.y;
-    if (g.mode === "idle") {
-      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx) * 0.7) g.mode = "scroll";
-      else if (g.slot && Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 2) g.mode = "swipe";
-    }
+    const g = gest.current; if (!g || g.mode !== "idle") return;
+    const axis = decideAxis(e.clientX - g.x, e.clientY - g.y);
+    if (axis === "y") g.mode = "scroll"; else if (axis === "x" && g.slot) g.mode = "swipe";
   };
   const up = (e: React.PointerEvent) => {
     const g = gest.current; gest.current = null;
-    if (!g || g.mode !== "swipe") return;
-    const dx = e.clientX - g.x;
+    if (!g || g.mode === "scroll") return;
+    const dx = e.clientX - g.x, dy = e.clientY - g.y;
+    if (g.mode === "idle" && !(g.slot && decideAxis(dx, dy) === "x")) return;   // a quick flick can end before the lock fired
     suppressUntil.current = Date.now() + 350;   // the tap that would follow a drag must not open the sheet
-    if (Math.abs(dx) >= 44 && g.slot) onSwipe?.(g.slot as SlotName, dx > 0 ? "next" : "prev")   // swipe right = next, swipe left = previous (both loop);
+    if (g.slot && swapOnRelease(dx, Date.now() - g.t)) onSwipe?.(g.slot as SlotName, dx > 0 ? "next" : "prev");   // swipe right = next, swipe left = previous (both loop)
   };
+  useEffect(() => {   // React's touchmove is passive: a native non-passive listener is needed to keep the scroller out of a locked swipe
+    const el = root.current; if (!el || !onSwipe) return;
+    const stop = (e: TouchEvent) => { if (gest.current?.mode === "swipe" && e.cancelable) e.preventDefault(); };
+    el.addEventListener("touchmove", stop, { passive: false });
+    return () => el.removeEventListener("touchmove", stop);
+  }, [onSwipe]);
   // ---- product gestures (only with onLike): single tap = open (after the double-tap window), double tap = like ----
   const pg = useRef(new ProductGesture());
   const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);   // pending single tap
@@ -188,7 +195,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
   const { w: W, h: H } = canvas;
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
   return (
-    <div className="relative" style={{ width: W, height: H, touchAction: "pan-y" }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { gest.current = null; }} data-layout={layout.template} data-cuts={layout.pieces.map((p) => ((cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)?.cut ? "1" : "0")).join("")} data-stack={(() => { const b = layout.pieces.find((p) => p.slot === "bottom" || p.slot === "full"), t = layout.pieces.find((p) => p.slot === "top" || p.slot === "full"), sh = layout.pieces.find((p) => p.slot === "shoes"); return b && t && sh ? `${(t.rect.y / H).toFixed(3)}:${(b.rect.y / H).toFixed(3)}:${((sh.rect.y + sh.rect.h) / H).toFixed(3)}` : ""; })()} data-rects={layout.pieces.map((p) => `${p.slot}${layout.debug?.acc?.placed.find((q) => q.slot === p.slot)?.type ? "=" + layout.debug.acc.placed.find((q) => q.slot === p.slot)!.type + "/" + layout.debug.acc.placed.find((q) => q.slot === p.slot)!.kind : ""}:${Math.round(p.rect.x)},${Math.round(p.rect.y)},${Math.round(p.rect.w)},${Math.round(p.rect.h)}`).join(";")} data-dem={layout.debug?.acc?.demoted.join("|") ?? ""} data-lim={layout.debug?.acc?.limited?.join(",") ?? ""} data-head={layout.debug?.acc ? `${layout.debug.acc.headZone ? 1 : 0}:${layout.debug.acc.headShrink.toFixed(3)}:${layout.debug.acc.dropped.length}:${layout.debug.acc.demoted.length}` : ""} data-acc={layout.debug?.acc ? layout.debug.acc.placed.map((a) => `${a.type}:${a.kind}`).join(",") : ""}>
+    <div ref={root} className="relative" style={{ width: W, height: H, touchAction: "pan-y" }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { gest.current = null; }} data-layout={layout.template} data-cuts={layout.pieces.map((p) => ((cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)?.cut ? "1" : "0")).join("")} data-stack={(() => { const b = layout.pieces.find((p) => p.slot === "bottom" || p.slot === "full"), t = layout.pieces.find((p) => p.slot === "top" || p.slot === "full"), sh = layout.pieces.find((p) => p.slot === "shoes"); return b && t && sh ? `${(t.rect.y / H).toFixed(3)}:${(b.rect.y / H).toFixed(3)}:${((sh.rect.y + sh.rect.h) / H).toFixed(3)}` : ""; })()} data-rects={layout.pieces.map((p) => `${p.slot}${layout.debug?.acc?.placed.find((q) => q.slot === p.slot)?.type ? "=" + layout.debug.acc.placed.find((q) => q.slot === p.slot)!.type + "/" + layout.debug.acc.placed.find((q) => q.slot === p.slot)!.kind : ""}:${Math.round(p.rect.x)},${Math.round(p.rect.y)},${Math.round(p.rect.w)},${Math.round(p.rect.h)}`).join(";")} data-dem={layout.debug?.acc?.demoted.join("|") ?? ""} data-lim={layout.debug?.acc?.limited?.join(",") ?? ""} data-head={layout.debug?.acc ? `${layout.debug.acc.headZone ? 1 : 0}:${layout.debug.acc.headShrink.toFixed(3)}:${layout.debug.acc.dropped.length}:${layout.debug.acc.demoted.length}` : ""} data-acc={layout.debug?.acc ? layout.debug.acc.placed.map((a) => `${a.type}:${a.kind}`).join(",") : ""}>
       {debug && <>
         <div className="absolute border border-dashed border-sky-400 bg-sky-50/60" style={{ left: pct(layout.marginRect.x, W), top: 0, width: pct(layout.marginRect.w, W), height: "100%" }} />
         <span className="absolute left-1 top-0 z-50 rounded bg-black px-1 text-[10px] text-white">{layout.template}{layout.debug ? ` ${layout.debug.binding.join("+")}` : ""}</span>
