@@ -110,7 +110,7 @@ function splitTitle(title: string, feedColour: string): { name: string; colour: 
       const id = g.merchant === "Brian James" ? `bj:${m?.[1] ?? r.merchant_product_id}` : g.shoes ? `bm:${r.merchant_deep_link.split(/[?#]/)[0].split("/").pop()}` : `tu:${r.merchant_product_id}`;
       if (!isFinite(price)) continue;
       const brand = r.brand_name.trim().replace(/^hugo boss$/i, "Hugo Boss");
-      selection.push({ id, merchant: g.merchant, brand, name: x.name, colour: x.colour, url: r.merchant_deep_link.split(/[?#]/)[0], categoryText: r.merchant_category,
+      selection.push({ id, merchant: g.merchant, brand, name: x.name, colour: g.shoes ? null : x.colour, url: r.merchant_deep_link.split(/[?#]/)[0], categoryText: r.merchant_category,
         image: r.merchant_image_url, price, rrp: isFinite(rrp) ? rrp : null, currency: g.currency,
         gender: g.shoes ? inferGender(null, x.name, r.merchant_deep_link) : inferGender("men", r.merchant_category, x.name) });
       links.push({ source: g.shoes ? "bennimarceau" : g.merchant === "Brian James" ? "brianjames" : "tooledup", external_id: id, merchant: g.merchant, aw_deep_link: r.aw_deep_link, feed_product_id: r.aw_product_id,
