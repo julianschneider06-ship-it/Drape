@@ -53,6 +53,7 @@ Scalability is very important to the user. Design for millions of products and u
 
 - **Feed variants:** `?feed=base|dynamic|hybrid` and `?sale=on|off` override the defaults. Defaults live in table `app_settings` (`feed_default` = `hybrid` since 2026-10, `sale_marker_enabled`), read on the server only, cached about 45 s, page shell refreshed every 60 s. Rollback = UPDATE `feed_default` to `base`. Sale marker: red hand-drawn outline per shape plus one SALE label per product.
 - **Jobs:** table `job_requests` (allowlist: `refresh_stock` and `probe_market` only, never a paid job). Runner route is ticked by pg_cron + pg_net every 5 minutes; stock refresh is enqueued daily at 01:15 UTC. Per-shop result of every attempt in `shop_refresh_log`.
+- **Pipeline permissions:** scripts `preselect-images` and `classify` are allowed via `.claude/settings.json`; other scripts and token creation are not.
 - **Markets:** each shop has its own market (country) in `shop_market`, plus a `frozen` flag with a stored reason. No row = default US (`country=US`). The runner runs in Dublin, so the market must be set explicitly per shop. A 30% price-change guard rejects suspicious updates per shop.
 - **Market probe result:** 11 formerly frozen shops now have their own market (DE, GB, SE, JP). `nordgreen` stays frozen (needs re-ingest and re-probe). `margarethowell` is held by the guard.
 - **Currency labels:** audit done, five shops corrected to USD. Shops with unclear evidence are listed in `docs/architecture.md`; do not guess their currency.
