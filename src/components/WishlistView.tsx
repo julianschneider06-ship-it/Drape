@@ -11,9 +11,10 @@ import type { FeedCard, FeedOutfit } from "@/lib/types";
 import type { SlotName } from "@/lib/layout/engine";
 import LikesView from "./LikesView";
 import GenerateOutfits from "./GenerateOutfits";
+import MyOutfits from "./MyOutfits";
 
-export type WishTab = "products" | "outfits";
-const TABS: { id: WishTab; label: string }[] = [{ id: "products", label: "Products" }, { id: "outfits", label: "Generate Outfits" }];
+export type WishTab = "products" | "outfits" | "mine";
+const TABS: { id: WishTab; label: string }[] = [{ id: "products", label: "Products" }, { id: "outfits", label: "Generate Outfits" }, { id: "mine", label: "My Outfits" }];
 
 /** The Wishlist tab (fades in over the feed, fades out when left): title, a Products | Generate Outfits switcher, and the chosen view below (the bottom bar stays visible). */
 export default function WishlistView({ icons, gender, liked, tab, onTab, onToggle, onOpen, onLike, onOpenProduct, sheetOpen }: {
@@ -38,7 +39,7 @@ export default function WishlistView({ icons, gender, liked, tab, onTab, onToggl
           </AnimatePresence>
         </div>
         <div className="flex justify-center">
-          <Segmented id="wishlist" label="Wishlist view" options={TABS} value={tab} onChange={onTab} />
+          <Segmented id="wishlist" label="Wishlist view" compact options={TABS} value={tab} onChange={onTab} />
         </div>
       </div>
       <div className="relative min-h-0 flex-1">
@@ -48,6 +49,13 @@ export default function WishlistView({ icons, gender, liked, tab, onTab, onToggl
           {tab === "outfits" && (
             <m.div key="outfits" className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn) }}>
               <GenerateOutfits icons={icons} gender={gender} likedIds={entryIds} liked={liked} shuffleKey={shuffle} onOpen={onOpen} onLike={onLike} />
+            </m.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {tab === "mine" && (
+            <m.div key="mine" className="absolute inset-0 bg-white" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn) }}>
+              <MyOutfits gender={gender} liked={liked} onOpenProduct={onOpenProduct} />
             </m.div>
           )}
         </AnimatePresence>

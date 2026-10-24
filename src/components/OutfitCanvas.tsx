@@ -19,6 +19,7 @@ import { decideAxis, swapOnRelease } from "@/lib/gestures";
 import LikePop, { type LikePopHandle } from "./LikePop";
 import FeedImage from "./FeedImage";
 import { tagLine } from "@/outfits/tags";
+import { isBlankId } from "@/lib/my-outfits";
 
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
@@ -216,6 +217,7 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
       ))}
       {layout.pieces.map((p) => {
         const c = (cards[p.slot] ?? accs.find((a) => a.slot === p.slot)?.card)!;
+        if (isBlankId(c.id)) return null;   // My Outfits: an empty main slot keeps its place in the layout but paints nothing
         const isNew = swapEvt?.kind === "swap" && swapEvt.slot === p.slot && swapEvt.newId === c.id;
         const bounce = "", dimmed = !!dim?.(p.slot);
         return (
