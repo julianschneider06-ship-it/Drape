@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { WishlistBackground } from "@/components/WishlistBackground";
 import * as m from "motion/react-m";
 import { AnimatePresence } from "motion/react";
 import { MENU } from "@/config/motion";
@@ -84,7 +85,8 @@ export default function MyOutfits({ gender, liked, onOpenProduct, customize }: {
     {editing && <Editor key={editing.id} initial={editing.draft} cardById={cardById} liked={liked} likedCards={likedNow} reduced={reduced} customize={customize}
       onCancel={() => setEditing(null)}
       onSave={(d) => { const next = saveOutfit(store, toSaved(d, editing.id)); if (next) commit(next); setEditing(null); }} />}
-    <div ref={root} className="absolute inset-0 overflow-y-auto overscroll-y-contain bg-white px-3 pb-6">
+    <WishlistBackground />
+    <div ref={root} className="absolute inset-0 overflow-y-auto overscroll-y-contain px-3 pb-6">
       <div className="mx-auto flex max-w-5xl flex-col items-center">
         <div className="sticky top-0 z-10 flex w-full flex-col items-center gap-1 bg-white py-2">
           <m.button type="button" onClick={() => openEditor()} disabled={full || liked.size === 0} {...pressProps(reduced, MENU.pressScale)}
@@ -166,7 +168,8 @@ function Editor({ initial, cardById, liked, likedCards, reduced, customize, onCa
   const placedSlots = shown;
   const extra = layout ? unplacedAcc(layout, draft.acc.length).filter((i) => draft.acc[i] !== null) : [];
   return (
-    <div className="absolute inset-0 z-20 flex flex-col bg-white">
+    <div className="absolute inset-0 z-20 flex flex-col">
+      <WishlistBackground className="-z-10" />
       <div className="flex shrink-0 items-center justify-between px-3 py-2">
         <button type="button" onClick={onCancel} aria-label="Back without saving" className="flex h-10 w-10 items-center justify-center text-neutral-700">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>

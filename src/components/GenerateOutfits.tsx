@@ -1,5 +1,6 @@
 "use client";
 import * as m from "motion/react-m";
+import { WishlistBackground } from "@/components/WishlistBackground";
 import { MENU } from "@/config/motion";
 import { useReducedMotion } from "@/lib/motion";
 import { fadeSlide } from "@/lib/menu-motion";
@@ -74,7 +75,9 @@ function GenerateOutfits({ icons, gender, likedIds, liked, shuffleKey, onOpen, o
   if (dimCache.current.liked !== liked) dimCache.current = { liked, m: new Map() };
   const dimOf = (o: FeedOutfit) => { const c = dimCache.current; let f = c.m.get(o); if (!f) { f = dimFor(o, liked); c.m.set(o, f); } return f; };
   return (
-    <div ref={root} className="no-scrollbar absolute inset-0 snap-y snap-mandatory overflow-y-scroll overscroll-y-contain bg-white">
+    <>
+    <WishlistBackground />
+    <div ref={root} className="no-scrollbar absolute inset-0 snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
       {status === "empty" && !items.length && (
         <m.section className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center" {...fadeSlide(reduced, MENU.hintShiftPx)}>
           <p className="text-sm text-neutral-500">{likedIds.length || run.current.ids.length ? "No outfits could be built from your wishlist yet." : "Like some pieces to generate outfits"}</p>
@@ -95,6 +98,7 @@ function GenerateOutfits({ icons, gender, likedIds, liked, shuffleKey, onOpen, o
         </section>
       )}
     </div>
+    </>
   );
 }
 export default memo(GenerateOutfits);
