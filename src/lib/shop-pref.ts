@@ -43,8 +43,11 @@ export function shopWeights(prefs: ReadonlyMap<string, "less" | "more">): Map<st
 /** Effective sale marker. A link parameter (?sale=on|off) wins (testing); otherwise the global app setting AND the user's choice: global off always beats local on. */
 export const effectiveSale = (link: string | null, globalOn: boolean, localOn: boolean): boolean => (link === "on" ? true : link === "off" ? false : globalOn && localOn);
 
-export interface ProfilePrefs { v: 1; sale: boolean; shops: ShopPrefs }
-export const DEFAULT_PREFS: ProfilePrefs = { v: 1, sale: true, shops: {} };
+export interface ProfilePrefs { v: 1; sale: boolean; bg: boolean; shops: ShopPrefs }
+export const DEFAULT_PREFS: ProfilePrefs = { v: 1, sale: true, bg: true, shops: {} };
+
+/** Effective Drape background (Wishlist Generate Outfits + My Outfits): ?bg=0|1 wins (testing), otherwise the user's choice. */
+export const effectiveBg = (link: string | null, localOn: boolean): boolean => (link === "1" ? true : link === "0" ? false : localOn);
 
 /** Clean whatever was read from storage: wrong version, garbage, wrong types -> defaults for that part. */
 export function cleanPrefs(raw: unknown): ProfilePrefs {
@@ -58,7 +61,7 @@ export function cleanPrefs(raw: unknown): ProfilePrefs {
       if ((l === "less" || l === "more") && SHOP_PREF_LIMITS.idPattern.test(id)) { shops[id] = l; if (++n >= SHOP_PREF_LIMITS.maxEntries) break; }
     }
   }
-  return { v: 1, sale: typeof r.sale === "boolean" ? r.sale : true, shops };
+  return { v: 1, sale: typeof r.sale === "boolean" ? r.sale : true, bg: typeof r.bg === "boolean" ? r.bg : true, shops };
 }
 
 /** read / write with the storage passed in, every access guarded (blocked storage = defaults, nothing thrown) */

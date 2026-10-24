@@ -1,10 +1,12 @@
 "use client";
 import { preload } from "react-dom";
 import { WISHLIST_BG } from "@/config/wishlist-background";
+import { useDrapeBackground } from "@/lib/client/background";
 
 /** Static background layer: absolute, never inside a scroller, so it never moves with the content. */
 export function WishlistBackground({ className = "" }: { className?: string }) {
-  if (!WISHLIST_BG.enabled) return null;
+  const on = useDrapeBackground();
+  if (!WISHLIST_BG.enabled || !on) return null;
   preload(WISHLIST_BG.src, { as: "image", fetchPriority: "high" });
   return (
     <div aria-hidden className={`pointer-events-none absolute inset-0 bg-white ${className}`}

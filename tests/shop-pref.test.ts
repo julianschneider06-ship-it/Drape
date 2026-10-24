@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanPrefs, DEFAULT_PREFS, effectiveSale, encodeShopPrefs, levelWeight, parseShopPrefs, readPrefs, shopWeights, writePrefs } from "../src/lib/shop-pref";
+import { cleanPrefs, DEFAULT_PREFS, effectiveBg, effectiveSale, encodeShopPrefs, levelWeight, parseShopPrefs, readPrefs, shopWeights, writePrefs } from "../src/lib/shop-pref";
 import { filterShops, yourShops } from "../src/lib/profile-shops";
 import { SHOP_PREF, SHOP_PREF_LIMITS } from "../src/config/shop-pref";
 import { shopList } from "../src/lib/shops-server";
@@ -73,9 +73,9 @@ test("storage: empty, garbage, wrong version and blocked storage give defaults",
 });
 test("storage: round trip and cleaning of stored values", () => {
   let saved = "";
-  assert.equal(writePrefs({ setItem: (_k, v) => { saved = v; } }, "k", { v: 1, sale: false, shops: { kith: "more" } }), true);
-  assert.deepEqual(readPrefs({ getItem: () => saved }, "k"), { v: 1, sale: false, shops: { kith: "more" } });
-  assert.deepEqual(cleanPrefs({ v: 1, sale: "yes", shops: { kith: "normal", ok: "less", "BAD ID": "more", x: 3 } }), { v: 1, sale: true, shops: { ok: "less" } });
+  assert.equal(writePrefs({ setItem: (_k, v) => { saved = v; } }, "k", { v: 1, sale: false, bg: true, shops: { kith: "more" } }), true);
+  assert.deepEqual(readPrefs({ getItem: () => saved }, "k"), { v: 1, sale: false, bg: true, shops: { kith: "more" } });
+  assert.deepEqual(cleanPrefs({ v: 1, sale: "yes", shops: { kith: "normal", ok: "less", "BAD ID": "more", x: 3 } }), { v: 1, sale: true, bg: true, shops: { ok: "less" } });
 });
 
 test("shop filter: case-insensitive, instant, empty query matches nothing", () => {
@@ -99,4 +99,15 @@ test("shop list: live shops only, unisex counted once, display names, sorted", (
   const W = ["women"], M = ["men"], U = ["women", "men"];
   const list = shopList([cat([{ id: 1, store: "kith", genders: U }, { id: 2, store: "old", genders: W }, { id: 3, store: "a", genders: W }]), cat([{ id: 1, store: "kith", genders: U }], [{ id: 9, store: "kith", genders: M }, { id: 10, store: "brand-new", genders: M }])], src);
   assert.deepEqual(list, [{ id: "a", name: "Alpha", n: 1, g: { women: 1, men: 0 } }, { id: "brand-new", name: "Brand New", n: 1, g: { women: 0, men: 1 } }, { id: "kith", name: "Kith", n: 2, g: { women: 1, men: 2 } }]);
+});
+
+test("drape background: default on, stored choice, link wins", () => {
+  assert.equal(DEFAULT_PREFS.bg, true);
+  assert.equal(cleanPrefs({ v: 1, bg: false }).bg, false);
+  assert.equal(cleanPrefs({ v: 1, bg: "no" }).bg, true);
+  assert.equal(cleanPrefs({ v: 1, sale: false }).bg, true);   // old saves keep working
+  assert.equal(effectiveBg(null, false), false);
+  assert.equal(effectiveBg("1", false), true);
+  assert.equal(effectiveBg("0", true), false);
+  assert.equal(effectiveBg("x", true), true);
 });

@@ -5,6 +5,7 @@ export const PROFILE_TEXT = {
   accountHint: "Account coming later",
   feedHeading: "Feed settings",
   saleLabel: "Sale marker",
+  bgLabel: "Drape Background",
   saleGlobalOff: "Currently off for everyone",
   shopsHeading: "Shops",
   searchPlaceholder: "Search shops",
