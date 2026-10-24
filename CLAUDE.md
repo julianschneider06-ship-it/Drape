@@ -134,3 +134,4 @@ The user tells you step by step what to work on right now. Do not start later st
 - New libraries may be added without asking if they serve progress.
 - Create database tables and migrations yourself (Supabase tools or SQL migrations in the repo).
 - End every reply with one sentence saying what comes next.
+- Prompt history: `docs/prompt-log.md`. Each session started with "Prompt N." in the first line appends one line for N (content, last commit on main) to it at the end; a continuation of a prompt keeps its number.
