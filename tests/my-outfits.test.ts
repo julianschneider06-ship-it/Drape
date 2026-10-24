@@ -145,3 +145,89 @@ test("editor layout: the accessory slots all fit at once (stacked and side-by-si
   const full = editorLayout({ top: { ...DRESS } as FeedCard }, { w: 360, h: 520 });   // one-piece: full-body layout, no Bottom slot
   assert.ok(full.pieces.some((p) => p.slot === "full") && !full.pieces.some((p) => p.slot === "bottom"));
 });
+
+// ---- accessory frame / move / resize (pure logic) ----
+import { accRect, applyAccLayout, clampCenter, clampScale, defaultAccLayout, isDrag, maxScaleFor, moveLayout, nextZ, parseAccLayout, resizeLayout } from "../src/lib/my-outfits-acc";
+import { MY_OUTFITS_ACC_DRAG_PX, MY_OUTFITS_ACC_MAX_SCALE, MY_OUTFITS_ACC_MIN_SCALE } from "../src/config/my-outfits";
+
+const W = 300, H = 600, DEF = { x: 220, y: 100, w: 60, h: 60 };
+
+test("scale is clamped to the config min / max (and to what fits the area)", () => {
+  assert.equal(clampScale(0.01, DEF, W, H), MY_OUTFITS_ACC_MIN_SCALE);
+  assert.equal(clampScale(99, DEF, W, H), MY_OUTFITS_ACC_MAX_SCALE);
+  assert.equal(clampScale(1.3, DEF, W, H), 1.3);
+  assert.equal(clampScale(NaN, DEF, W, H), 1);
+  assert.ok(maxScaleFor({ x: 10, y: 0, w: 60, h: 60 }, W, H) <= 70 / 60);   // little room to the left of the right edge
+});
+
+test("vertical position is clamped so the slot stays fully inside the area", () => {
+  assert.equal(clampCenter(-1, 60, H), 30 / H);
+  assert.equal(clampCenter(2, 60, H), 1 - 30 / H);
+  assert.equal(clampCenter(0.5, 60, H), 0.5);
+  const r = accRect(DEF, { y: 0, s: 1 }, W, H);
+  assert.equal(r.y, 0);
+  const r2 = accRect(DEF, { y: 1, s: 1 }, W, H);
+  assert.equal(r2.y + r2.h, H);
+  assert.equal(r2.x, DEF.x);   // horizontal position stays
+});
+
+test("move is vertical only and clamped to the whole area height", () => {
+  const start = defaultAccLayout(DEF, H);
+  const down = moveLayout(DEF, start, 50, W, H), r = accRect(DEF, down, W, H);
+  assert.equal(r.y, DEF.y + 50); assert.equal(r.x, DEF.x);
+  assert.equal(accRect(DEF, moveLayout(DEF, start, 9999, W, H), W, H).y + 60, H);
+  assert.equal(accRect(DEF, moveLayout(DEF, start, -9999, W, H), W, H).y, 0);
+});
+
+test("resize keeps the aspect ratio and the top-right corner; stays inside the area", () => {
+  const start = defaultAccLayout({ ...DEF, h: 90 }, H), def = { ...DEF, h: 90 };
+  const big = accRect(def, resizeLayout(def, start, -30, 45, W, H), W, H);
+  assert.ok(Math.abs(big.w / big.h - 60 / 90) < 1e-9);
+  assert.ok(big.w > def.w);
+  assert.equal(big.x + big.w, def.x + def.w);   // right edge fixed
+  assert.ok(Math.abs(big.y - def.y) < 1e-6);    // top edge fixed
+  const tiny = accRect(def, resizeLayout(def, start, 9999, -9999, W, H), W, H);
+  assert.ok(Math.abs(tiny.w / def.w - MY_OUTFITS_ACC_MIN_SCALE) < 1e-9);
+  const huge = accRect(def, resizeLayout(def, { y: 0.95, s: 1 }, -9999, 9999, W, H), W, H);
+  assert.ok(huge.y >= 0 && huge.y + huge.h <= H + 1e-6 && huge.x >= -1e-6);
+});
+
+test("tap versus drag threshold", () => {
+  assert.equal(isDrag(0, 0), false);
+  assert.equal(isDrag(MY_OUTFITS_ACC_DRAG_PX, 0), false);
+  assert.equal(isDrag(0, -(MY_OUTFITS_ACC_DRAG_PX + 1)), true);
+  assert.equal(isDrag(5, 5), true);   // diagonal counts by distance
+});
+
+test("touched last is drawn on top", () => {
+  assert.equal(nextZ([null, { y: 0.5, s: 1, z: 3 }, { y: 0.2, s: 1 }]), 4);
+  assert.equal(nextZ([]), 1);
+  const pieces = [{ slot: "top", rect: DEF, rot: 0, z: 1 }, { slot: "acc1", rect: DEF, rot: 0, z: 5 }, { slot: "acc2", rect: DEF, rot: 0, z: 6 }] as never;
+  const out = applyAccLayout(pieces, [{ y: 0.5, s: 1, z: 1 }, { y: 0.5, s: 1, z: 2 }], W, H);
+  assert.ok(out[2].z > out[1].z && out[1].z > 6);
+  assert.equal(out[0], (pieces as { slot: string }[])[0]);   // main pieces untouched
+  assert.equal(applyAccLayout(pieces, undefined, W, H), pieces);
+});
+
+test("stored layout: old data loads unchanged, new data round-trips, junk is dropped", () => {
+  const old = JSON.stringify({ v: 1, outfits: [{ id: "a", top: 1, bottom: 2, shoes: 3, acc: [6, 7] }] });
+  const s0 = parseStore(old);
+  assert.deepEqual(s0.outfits[0], { id: "a", top: 1, bottom: 2, shoes: 3, acc: [6, 7] });   // no accL added
+  assert.deepEqual(serializeStore(s0), JSON.stringify(s0));
+  assert.equal(fromSaved(s0.outfits[0]).accL?.every((x) => x === null), true);
+
+  let d = setSlot(setSlot(emptyDraft(), { acc: 1 }, CAP), { acc: 3 }, CAP2);
+  d = { ...d, accL: [{ y: 0.9, s: 1 }, { y: 0.3, s: 1.4, z: 2 }, null, { y: 0.6, s: 0.8 }, null, null, null] };
+  const saved = toSaved(d, "x");
+  assert.deepEqual(saved.acc, [6, 7]);
+  assert.deepEqual(saved.accL, [{ y: 0.3, s: 1.4, z: 2 }, { y: 0.6, s: 0.8 }]);   // empty slots are not saved, layouts follow their product
+  const back = parseStore(serializeStore({ v: 1, outfits: [saved] })).outfits[0];
+  assert.deepEqual(back, saved);
+  assert.deepEqual(fromSaved(back).accL?.slice(0, 2), saved.accL);
+  assert.equal(toSaved(setSlot(emptyDraft(), { acc: 0 }, CAP), "y").accL, undefined);   // nothing custom = no field
+
+  const junk = parseStore(JSON.stringify({ v: 1, outfits: [{ id: "j", top: 1, bottom: null, shoes: null, acc: [6, 6, 7], accL: [{ y: 5, s: 99, z: 1.5 }, { y: 0.1, s: 1 }, "x"] }] })).outfits[0];
+  assert.deepEqual(junk.acc, [6, 7]);
+  assert.deepEqual(junk.accL, [{ y: 1, s: MY_OUTFITS_ACC_MAX_SCALE }, null]);   // clamped; the duplicate's layout is dropped with it; bad z / junk ignored
+  assert.equal(parseAccLayout({ y: "a", s: 1 }), null);
+});

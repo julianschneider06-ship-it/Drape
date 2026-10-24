@@ -20,12 +20,14 @@ import LikePop, { type LikePopHandle } from "./LikePop";
 import FeedImage from "./FeedImage";
 import { tagLine } from "@/outfits/tags";
 import { isBlankId } from "@/lib/my-outfits";
+import { applyAccLayout, type AccLayout } from "@/lib/my-outfits-acc";
 
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, likeDim, shine, reserveIcons, priceTag, onLike }: {
-  outfit: FeedOutfit; canvas: { w: number; h: number }; override?: string[]; debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
+function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, likeDim, shine, reserveIcons, priceTag, onLike, accLayout }: {
+  outfit: FeedOutfit; canvas: { w: number; h: number }; accLayout?: (AccLayout | null)[]; override?: string[];   // accLayout: My Outfits only, custom vertical position / size per accessory slot (acc1 = index 0)
+  debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string, slots: string[]) => void;
   onSwipe?: (slot: SlotName, dir: "next" | "prev") => void; swapEvt?: SwapEvt; dim?: (slot: SlotName) => boolean; likeDim?: boolean; shine?: { color: string | null }; animateLayout?: boolean; reserveIcons?: boolean; priceTag?: boolean; onLike?: (c: FeedCard, slot: SlotName) => boolean | void;   // likeDim (Generate Outfits only): greyed pieces still take a double tap = like (single tap does nothing);   // onLike given = product gestures: single tap opens (after the double-tap window), double tap toggles the like (returns the new state); without it the old single tap opens (welcome tutorial);   // priceTag: Search only, hand-drawn price box next to the searched (not dimmed) piece, decoration (not tappable);   // reserveIcons: the attribute icons sit top left (non-tappable), tap areas never extend into them;   // shine: Search only, decorative strokes around the searched (not dimmed) piece; dim: Search tab, pieces that are not the searched item are greyed out and cannot be tapped; animateLayout=false: a swapped piece snaps to its new box (no layout animation)
 }) {
@@ -59,8 +61,9 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
     const seed = hash32(String(outfit.id));
     const accessories: AccIn[] = accs.map(({ slot, acc, card }) => { const g = cropGeometry(card); return { slot, type: acc.type, size: acc.size, aspect: g ? g.cw / g.ch : null, placement: acc.placement, zone: acc.zone ?? "mid", frontFlat: !!acc.front_flat, beltShape: acc.belt_shape }; });
     // rule layout by default; ?layout=A,FB forces one of the old random templates (debug)
-    return computeLayout({ kind: outfit.kind, pieces, seed, canvas, accessories, template: override?.length ? pickTemplate(outfit.kind, seed, override) : undefined, priceTag: tagInfo ? { slot: tagInfo.slot, w: tagInfo.w, h: tagInfo.h } : undefined });
-  }, [cards, outfit, canvas, override, accs, tagInfo]);
+    const base = computeLayout({ kind: outfit.kind, pieces, seed, canvas, accessories, template: override?.length ? pickTemplate(outfit.kind, seed, override) : undefined, priceTag: tagInfo ? { slot: tagInfo.slot, w: tagInfo.w, h: tagInfo.h } : undefined });
+    return accLayout?.some(Boolean) ? { ...base, pieces: applyAccLayout(base.pieces, accLayout, canvas.w, canvas.h) } : base;
+  }, [cards, outfit, canvas, override, accs, tagInfo, accLayout]);
 
   // invisible tap areas: visible rect + HIT_PADDING per category, split at the midpoint between neighbours, clamped to the card (src/lib/hit-areas.ts)
   const hits = useMemo(() => hitInsets(layout.pieces.map((p) => ({ slot: p.slot, rect: p.rect, cat: hitCategory(p.slot, accs.find((a) => a.slot === p.slot)?.acc.type) })), canvas, reserveIcons ? [HIT_ICON_ZONE] : []), [layout, accs, canvas, reserveIcons]);

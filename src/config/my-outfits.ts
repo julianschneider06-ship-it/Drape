@@ -35,3 +35,12 @@ export const MY_OUTFITS_TEXT = {
   close: "Close",
   onepiece: "One-piece",
 };
+
+// Accessory slots in the editor: frame, resize handle, vertical move (Top / Bottom / Shoes are not affected).
+export const MY_OUTFITS_ACC_MIN_SCALE = 0.5;       // smallest size, relative to the default slot size
+export const MY_OUTFITS_ACC_MAX_SCALE = 2.5;       // largest size, relative to the default slot size
+export const MY_OUTFITS_ACC_DRAG_PX = 6;           // movement under this = a tap (opens the picker), over it = a drag
+export const MY_OUTFITS_ACC_HANDLE_HIT_PX = 32;    // touch target of the resize handle (the visible corner mark is smaller)
+export const MY_OUTFITS_ACC_HANDLE_MARK_PX = 10;   // visible corner mark (length of each arm)
+export const MY_OUTFITS_ACC_HANDLE_THICK_PX = 3;   // its thickness (the frame line is 1 px)
+export const MY_OUTFITS_ACC_Z_BASE = 100;          // a moved / resized slot is drawn above the layout's own order; the one touched last on top

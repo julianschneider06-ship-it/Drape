@@ -5,7 +5,7 @@ import { AnimatePresence } from "motion/react";
 import { MENU } from "@/config/motion";
 import { useReducedMotion } from "@/lib/motion";
 import { fadeSlide, pressProps } from "@/lib/menu-motion";
-import { MY_OUTFITS_ACC, MY_OUTFITS_MAX_SAVED, MY_OUTFITS_SLOTS, MY_OUTFITS_TEXT as T } from "@/config/my-outfits";
+import { MY_OUTFITS_ACC, MY_OUTFITS_ACC_HANDLE_HIT_PX, MY_OUTFITS_ACC_HANDLE_MARK_PX, MY_OUTFITS_ACC_HANDLE_THICK_PX, MY_OUTFITS_MAX_SAVED, MY_OUTFITS_SLOTS, MY_OUTFITS_TEXT as T } from "@/config/my-outfits";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 import type { SlotName } from "@/lib/layout/engine";
 import { canvasSize } from "@/lib/layout/engine";
@@ -18,6 +18,7 @@ import {
   bottomLocked, deleteOutfit, emptyDraft, fromSaved, idAt, isGreyId, isOnePiece, missingRequired, newOutfitId, pickerItems, saveOutfit, setSlot, storeFull, toSaved,
   type Draft, type SavedOutfit, type SlotRef, type Store,
 } from "@/lib/my-outfits";
+import { applyAccLayout, defaultAccLayout, isDrag, moveLayout, nextZ, resizeLayout, type AccLayout } from "@/lib/my-outfits-acc";
 import { loadStore, writeStore } from "@/lib/client/my-outfits-store";
 import OutfitCanvas from "./OutfitCanvas";
 import FeedImage from "./FeedImage";
@@ -98,7 +99,7 @@ export default function MyOutfits({ gender, liked, onOpenProduct }: { gender: "w
             <section key={s.id} className="flex w-full flex-col items-center py-2" data-outfit={s.id}>
               {o ? (
                 <div className="relative" style={{ width: canvas.w, height: canvas.h }}>
-                  <OutfitCanvas outfit={o} canvas={canvas} priority={false} dim={(slot: SlotName) => isGrey(o, slot, liked)} likeDim onOpen={(c) => onOpenProduct(c)} />
+                  <OutfitCanvas outfit={o} canvas={canvas} priority={false} dim={(slot: SlotName) => isGrey(o, slot, liked)} likeDim accLayout={s.accL} onOpen={(c) => onOpenProduct(c)} />
                 </div>
               ) : (
                 <div className="flex items-center justify-center text-sm text-neutral-400" style={{ width: canvas.w, height: canvas.h }}>{sig(s) in rendered ? "These products are no longer available." : "Loading…"}</div>
@@ -143,6 +144,8 @@ function Editor({ initial, cardById, liked, likedCards, reduced, onCancel, onSav
     return editorLayout({ top: v(topCard), bottom: v(cardOf(draft.bottom)), shoes: v(cardOf(draft.shoes)) }, canvas);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvas, draft.top, draft.bottom, draft.shoes, topCard, cardById]);
+  const shown = useMemo(() => (layout && canvas ? applyAccLayout(layout.pieces, draft.accL, canvas.w, canvas.h) : []), [layout, canvas, draft.accL]);
+  const setAccL = (i: number, c: AccLayout) => setDraft((d) => { const l = Array.from({ length: Math.max(d.acc.length, i + 1) }, (_, k) => d.accL?.[k] ?? null); l[i] = c; return { ...d, accL: l }; });
   const labelOf = (ref: SlotRef) => (typeof ref === "string" ? MY_OUTFITS_SLOTS.find((s) => s.id === ref)!.label : MY_OUTFITS_ACC.label);
   const tile = (ref: SlotRef, rect: { x: number; y: number; w: number; h: number } | null, z = 1, rot = 0) => {
     const id = idAt(draft, ref), c = cardOf(id);
@@ -160,7 +163,7 @@ function Editor({ initial, cardById, liked, likedCards, reduced, onCancel, onSav
       </button>
     );
   };
-  const placedSlots = layout?.pieces ?? [];
+  const placedSlots = shown;
   const extra = layout ? unplacedAcc(layout, draft.acc.length).filter((i) => draft.acc[i] !== null) : [];
   return (
     <div className="absolute inset-0 z-20 flex flex-col bg-white">
@@ -177,7 +180,15 @@ function Editor({ initial, cardById, liked, likedCards, reduced, onCancel, onSav
       <div ref={area} className="relative min-h-0 flex-1">
         {canvas && layout && (
           <div className="absolute left-1/2 top-0 -translate-x-1/2" style={{ width: canvas.w, height: canvas.h }} data-editor-layout={layout.template}>
-            {placedSlots.map((p) => (p.slot === "bottom" && locked ? null : tile(slotRefOf(p.slot), p.rect, p.z, p.rot)))}
+            {placedSlots.map((p) => {
+              if (p.slot === "bottom" && locked) return null;
+              const ref = slotRefOf(p.slot);
+              if (typeof ref === "string") return tile(ref, p.rect, p.z, p.rot);
+              const i = ref.acc, c = cardOf(draft.acc[i] ?? null), def = layout.pieces.find((q) => q.slot === p.slot)!.rect;
+              return <AccTile key={`acc${i}`} idx={i} rect={p.rect} def={def} z={p.z} rot={p.rot} canvas={canvas} card={c} grey={c ? isGreyId(c.id, liked) : false}
+                label={`${MY_OUTFITS_ACC.label}${c ? `: ${c.brand} ${c.name}` : " (empty)"}`} current={draft.accL?.[i] ?? null} front={nextZ(draft.accL ?? [])}
+                onTap={() => setPicking(ref)} onChange={setAccL} />;
+            })}
           </div>
         )}
       </div>
@@ -193,6 +204,52 @@ function Editor({ initial, cardById, liked, likedCards, reduced, onCancel, onSav
           onClose={() => setPicking(null)} onClear={() => { setDraft(setSlot(draft, picking, null)); setPicking(null); }}
           onPick={(c) => { setDraft(setSlot(draft, picking, c)); setPicking(null); }} />}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/** One accessory slot in the editor: thin frame (always), resize corner (bottom left), vertical drag, tap = picker. Pointer capture + touch-action none keep every other gesture away. */
+function AccTile({ idx, rect, def, z, rot, canvas, card, grey, label, current, front, onTap, onChange }: {
+  idx: number; rect: { x: number; y: number; w: number; h: number }; def: { x: number; y: number; w: number; h: number }; z: number; rot: number; canvas: { w: number; h: number };
+  card: FeedCard | undefined; grey: boolean; label: string; current: AccLayout | null; front: number; onTap: () => void; onChange: (i: number, c: AccLayout) => void;
+}) {
+  const g = useRef<{ mode: "move" | "resize"; x: number; y: number; start: AccLayout; dragging: boolean; z: number } | null>(null);
+  const end = (e: React.PointerEvent<HTMLDivElement>, tap: boolean) => {
+    const s = g.current; g.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* not captured */ }
+    if (tap && s && !s.dragging) onTap();
+  };
+  const pct = (v: number, of: number) => `${(v / of) * 100}%`;
+  const { w: W, h: H } = canvas;
+  return (
+    <div role="button" tabIndex={0} aria-label={label} data-slot={`acc${idx + 1}`} data-acc-tile className="absolute select-none outline-none"
+      style={{ left: pct(rect.x, W), top: pct(rect.y, H), width: pct(rect.w, W), height: pct(rect.h, H), zIndex: z, transform: rot ? `rotate(${rot}deg)` : undefined, touchAction: "none", WebkitTouchCallout: "none", WebkitUserSelect: "none" }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onTap(); } }}
+      onContextMenu={(e) => e.preventDefault()}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        const handle = !!(e.target as HTMLElement).closest("[data-acc-handle]");
+        const start = current ?? defaultAccLayout(def, H);
+        g.current = { mode: handle ? "resize" : "move", x: e.clientX, y: e.clientY, start, dragging: false, z: current?.z && current.z === front - 1 ? current.z : front };
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      }}
+      onPointerMove={(e) => {
+        const s = g.current; if (!s) return;
+        e.stopPropagation();
+        const dx = e.clientX - s.x, dy = e.clientY - s.y;
+        if (!s.dragging) { if (!isDrag(dx, dy)) return; s.dragging = true; }
+        const next = s.mode === "resize" ? resizeLayout(def, s.start, dx, dy, W, H) : moveLayout(def, s.start, dy, W, H);
+        onChange(idx, { ...next, z: s.z });
+      }}
+      onPointerUp={(e) => { e.stopPropagation(); end(e, true); }}
+      onPointerCancel={(e) => end(e, false)}>
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-neutral-400">
+        {card ? <Thumb card={card} grey={grey} fill={1} /> : "+"}
+      </span>
+      <span aria-hidden data-acc-frame className="pointer-events-none absolute inset-0 rounded-[2px] border border-neutral-400" />
+      <span aria-hidden data-acc-handle className="absolute" style={{ left: -12, bottom: -12, width: MY_OUTFITS_ACC_HANDLE_HIT_PX, height: MY_OUTFITS_ACC_HANDLE_HIT_PX, touchAction: "none" }}>
+        <span className="pointer-events-none absolute border-neutral-900" style={{ left: 11, bottom: 11, width: MY_OUTFITS_ACC_HANDLE_MARK_PX, height: MY_OUTFITS_ACC_HANDLE_MARK_PX, borderLeftWidth: MY_OUTFITS_ACC_HANDLE_THICK_PX, borderBottomWidth: MY_OUTFITS_ACC_HANDLE_THICK_PX, borderLeftStyle: "solid", borderBottomStyle: "solid" }} />
+      </span>
     </div>
   );
 }
