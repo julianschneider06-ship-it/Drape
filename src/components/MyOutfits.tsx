@@ -5,16 +5,17 @@ import { AnimatePresence } from "motion/react";
 import { MENU } from "@/config/motion";
 import { useReducedMotion } from "@/lib/motion";
 import { fadeSlide, pressProps } from "@/lib/menu-motion";
-import { MY_OUTFITS_ACC, MY_OUTFITS_MAX_ACCESSORY_SLOTS, MY_OUTFITS_MAX_SAVED, MY_OUTFITS_SLOTS, MY_OUTFITS_TEXT as T } from "@/config/my-outfits";
+import { MY_OUTFITS_ACC, MY_OUTFITS_MAX_SAVED, MY_OUTFITS_SLOTS, MY_OUTFITS_TEXT as T } from "@/config/my-outfits";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 import type { SlotName } from "@/lib/layout/engine";
 import { canvasSize } from "@/lib/layout/engine";
-import { HEADER_PX } from "@/lib/layout/config";
+import { HEADER_PX, MAX_CANVAS_W } from "@/lib/layout/config";
+import { editorLayout, slotRefOf, unplacedAcc } from "@/lib/my-outfits-layout";
 import { getDeviceId } from "@/lib/client/device";
 import { feedSrc, viewCard } from "@/lib/client/format";
 import { isGrey } from "@/lib/wishlist-outfits";
 import {
-  addAccSlot, bottomLocked, canAddAcc, canRemoveAcc, canSave, deleteOutfit, emptyDraft, fromSaved, idAt, isGreyId, newOutfitId, pickerItems, removeAccSlot, saveOutfit, setSlot, storeFull, toSaved,
+  bottomLocked, deleteOutfit, emptyDraft, fromSaved, idAt, isGreyId, isOnePiece, missingRequired, newOutfitId, pickerItems, saveOutfit, setSlot, storeFull, toSaved,
   type Draft, type SavedOutfit, type SlotRef, type Store,
 } from "@/lib/my-outfits";
 import { loadStore, writeStore } from "@/lib/client/my-outfits-store";
@@ -25,9 +26,9 @@ const ACTIONS_PX = 44;   // edit / delete row under each outfit
 const sig = (o: SavedOutfit) => JSON.stringify([o.top, o.bottom, o.shoes, o.acc]);
 const btn = "rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm text-neutral-700";
 
-function Thumb({ card, grey }: { card: FeedCard; grey: boolean }) {
+function Thumb({ card, grey, fill = 0.9 }: { card: FeedCard; grey: boolean; fill?: number }) {
   const v = viewCard(card, "auto");
-  return <div className="absolute inset-0" style={grey ? { opacity: 0.4, filter: "saturate(0.35)" } : undefined}><FeedImage card={v} src={v.cut ? feedSrc(v, "top") : undefined} blend={!v.cut} noSale fill={0.9} minW={360} /></div>;
+  return <div className="absolute inset-0" style={grey ? { opacity: 0.4, filter: "saturate(0.35)" } : undefined}><FeedImage card={v} src={v.cut ? feedSrc(v, "top") : undefined} blend={!v.cut} noSale fill={fill} minW={360} /></div>;
 }
 
 /** Wishlist > My Outfits: outfits built by hand from liked products, saved on this device only (ids + slot order). Nothing is recorded. */
@@ -126,24 +127,41 @@ function Editor({ initial, cardById, liked, likedCards, reduced, onCancel, onSav
 }) {
   const [draft, setDraft] = useState<Draft>(initial);
   const [picking, setPicking] = useState<SlotRef | null>(null);
-  const topCard = draft.top !== null ? cardById.get(draft.top) : undefined;
-  const locked = bottomLocked(topCard);
-  const tile = (ref: SlotRef, label: string, wide: boolean) => {
-    const id = idAt(draft, ref), c = id !== null ? cardById.get(id) : undefined;
-    const isLocked = ref === "bottom" && locked;
+  const area = useRef<HTMLDivElement>(null);
+  const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const el = area.current; if (!el) return;
+    const measure = () => setCanvas((p) => { const n = { w: Math.min(el.clientWidth, MAX_CANVAS_W), h: Math.max(240, el.clientHeight) }; return p && p.w === n.w && p.h === n.h ? p : n; });
+    measure(); const ro = new ResizeObserver(measure); ro.observe(el); return () => ro.disconnect();
+  }, []);
+  const cardOf = (id: number | null) => (id !== null ? cardById.get(id) : undefined);
+  const topCard = cardOf(draft.top), locked = bottomLocked(topCard);
+  const missing = missingRequired(draft, isOnePiece(topCard)), ok = missing.length === 0;
+  const layout = useMemo(() => {
+    if (!canvas) return null;
+    const v = (c: FeedCard | undefined) => (c ? viewCard(c, "auto") : undefined);
+    return editorLayout({ top: v(topCard), bottom: v(cardOf(draft.bottom)), shoes: v(cardOf(draft.shoes)) }, canvas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvas, draft.top, draft.bottom, draft.shoes, topCard, cardById]);
+  const labelOf = (ref: SlotRef) => (typeof ref === "string" ? MY_OUTFITS_SLOTS.find((s) => s.id === ref)!.label : MY_OUTFITS_ACC.label);
+  const tile = (ref: SlotRef, rect: { x: number; y: number; w: number; h: number } | null, z = 1, rot = 0) => {
+    const id = idAt(draft, ref), c = cardOf(id);
+    const label = labelOf(ref), main = typeof ref === "string";
+    const style: React.CSSProperties = rect && canvas
+      ? { left: `${(rect.x / canvas.w) * 100}%`, top: `${(rect.y / canvas.h) * 100}%`, width: `${(rect.w / canvas.w) * 100}%`, height: `${(rect.h / canvas.h) * 100}%`, zIndex: z, transform: rot ? `rotate(${rot}deg)` : undefined }
+      : {};
+    const grey = c ? isGreyId(c.id, liked) : false;
     return (
-      <div key={typeof ref === "string" ? ref : `acc${ref.acc}`} className={`relative ${wide ? "col-span-2" : ""}`}>
-        <button type="button" disabled={isLocked} onClick={() => setPicking(ref)} aria-label={`${label}${c ? `: ${c.brand} ${c.name}` : " (empty)"}`}
-          className={`relative block w-full overflow-hidden rounded-md border ${wide ? "aspect-[2/1]" : "aspect-[4/3]"} ${isLocked ? "border-neutral-200 bg-neutral-50" : "border-neutral-300 bg-white"}`}>
-          {c ? <Thumb card={c} grey={isGreyId(c.id, liked)} /> : <span className="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">{isLocked ? T.onepiece : `${label} +`}</span>}
-          {c && <span className="absolute left-2 top-1.5 text-[11px] uppercase tracking-wide text-neutral-400">{label}</span>}
-        </button>
-        {typeof ref !== "string" && canRemoveAcc(draft, ref.acc) && (
-          <button type="button" aria-label={T.removeAcc} onClick={() => setDraft(removeAccSlot(draft, ref.acc))} className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-neutral-500">×</button>
+      <button key={main ? ref : `acc${ref.acc}`} type="button" onClick={() => setPicking(ref)} aria-label={`${label}${c ? `: ${c.brand} ${c.name}` : " (empty)"}`} data-slot={main ? ref : `acc${ref.acc + 1}`}
+        className={rect ? "absolute select-none" : "relative block h-12 w-12 shrink-0"} style={{ ...style, touchAction: "manipulation" }}>
+        {c ? <Thumb card={c} grey={grey} fill={1} /> : (
+          <span className="absolute inset-0 flex items-center justify-center rounded-md border border-neutral-300 text-[11px] text-neutral-400" style={{ borderWidth: 1 }}>{main ? label : "+"}</span>
         )}
-      </div>
+      </button>
     );
   };
+  const placedSlots = layout?.pieces ?? [];
+  const extra = layout ? unplacedAcc(layout, draft.acc.length).filter((i) => draft.acc[i] !== null) : [];
   return (
     <div className="absolute inset-0 z-20 flex flex-col bg-white">
       <div className="flex shrink-0 items-center justify-between px-3 py-2">
@@ -151,20 +169,25 @@ function Editor({ initial, cardById, liked, likedCards, reduced, onCancel, onSav
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
         </button>
         <span className="text-sm font-medium">Outfit</span>
-        <button type="button" onClick={() => canSave(draft) && onSave(draft)} disabled={!canSave(draft)} aria-label="Save outfit" className={`flex h-10 w-10 items-center justify-center ${canSave(draft) ? "text-black" : "text-neutral-300"}`}>
+        <button type="button" onClick={() => ok && onSave(draft)} disabled={!ok} aria-label="Save outfit" className={`flex h-10 w-10 items-center justify-center ${ok ? "text-black" : "text-neutral-300"}`}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-8">
-        <div className="mx-auto grid max-w-md grid-cols-2 gap-2">
-          {MY_OUTFITS_SLOTS.map((s) => tile(s.id, s.label, true))}
-          {draft.acc.map((_, i) => tile({ acc: i }, MY_OUTFITS_ACC.label, false))}
-        </div>
-        {canAddAcc(draft) && (
-          <div className="mt-3 flex justify-center"><button type="button" className={btn} onClick={() => setDraft(addAccSlot(draft))}>{T.addAcc}</button></div>
+      <p className="h-4 shrink-0 px-3 text-center text-xs text-neutral-500" data-missing={ok ? "" : missing.join(",")}>{ok ? "" : T.missing(missing)}</p>
+      <div ref={area} className="relative min-h-0 flex-1">
+        {canvas && layout && (
+          <div className="absolute left-1/2 top-0 -translate-x-1/2" style={{ width: canvas.w, height: canvas.h }} data-editor-layout={layout.template}>
+            {placedSlots.map((p) => (p.slot === "bottom" && locked ? null : tile(slotRefOf(p.slot), p.rect, p.z, p.rot)))}
+          </div>
         )}
-        {!canAddAcc(draft) && <p className="mt-3 text-center text-xs text-neutral-400">Up to {MY_OUTFITS_MAX_ACCESSORY_SLOTS} accessories</p>}
       </div>
+      {extra.length > 0 && (
+        <div className="shrink-0 px-3 pt-1" data-acc-extra>
+          <p className="text-center text-[11px] text-neutral-400">{T.moreAcc}</p>
+          <div className="flex justify-center gap-2 overflow-x-auto pb-1">{extra.map((i) => tile({ acc: i }, null))}</div>
+        </div>
+      )}
+      <div className="h-3 shrink-0" />
       <AnimatePresence>
         {picking && <Picker key="picker" slot={picking} draft={draft} liked={likedCards} reduced={reduced}
           onClose={() => setPicking(null)} onClear={() => { setDraft(setSlot(draft, picking, null)); setPicking(null); }}

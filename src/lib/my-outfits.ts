@@ -1,5 +1,5 @@
 // Pure logic of Wishlist > My Outfits (no I/O): slot rules, editing, the saved shape and its storage parsing. Numbers and texts live in src/config/my-outfits.ts.
-import { MY_OUTFITS_FIRST_ACC_SLOTS, MY_OUTFITS_FULL_SLOT, MY_OUTFITS_MAX_ACCESSORY_SLOTS, MY_OUTFITS_MAX_SAVED, MY_OUTFITS_SLOTS, MY_OUTFITS_ACC, type MainSlot } from "@/config/my-outfits";
+import { MY_OUTFITS_ACC_SLOTS, MY_OUTFITS_FULL_SLOT, MY_OUTFITS_MAX_SAVED, MY_OUTFITS_SLOTS, MY_OUTFITS_ACC, type MainSlot } from "@/config/my-outfits";
 import { groupOf } from "@/lib/likes-filter";
 import type { FeedCard } from "@/lib/types";
 
@@ -11,14 +11,20 @@ export interface Store { v: 1; outfits: SavedOutfit[] }
 export type SlotRef = MainSlot | { acc: number };
 
 export const emptyStore = (): Store => ({ v: 1, outfits: [] });
-export const emptyDraft = (): Draft => ({ top: null, bottom: null, shoes: null, acc: Array.from({ length: MY_OUTFITS_FIRST_ACC_SLOTS }, () => null) });
+export const emptyDraft = (): Draft => ({ top: null, bottom: null, shoes: null, acc: Array.from({ length: MY_OUTFITS_ACC_SLOTS }, () => null) });
 
 export const isOnePiece = (c: { slot: string } | null | undefined) => c?.slot === MY_OUTFITS_FULL_SLOT;
 export const idsOf = (d: Draft): number[] => [d.top, d.bottom, d.shoes, ...d.acc].filter((x): x is number => x !== null);
 export const filledCount = (d: Draft) => idsOf(d).length;
-export const canSave = (d: Draft) => filledCount(d) >= 1;
-export const canAddAcc = (d: Draft, max = MY_OUTFITS_MAX_ACCESSORY_SLOTS) => d.acc.length < max;
-export const canRemoveAcc = (d: Draft, i: number) => d.acc.length > 1 && d.acc[i] === null;   // only an empty extra slot; the first slot stays
+/** the slots that must be filled to save: Top, Bottom, Shoes (a one-piece Top covers Bottom). Accessories and everything else are optional. Returns the labels of the empty required slots. */
+export function missingRequired(d: Draft, topIsOnePiece: boolean): string[] {
+  const out: string[] = [];
+  if (d.top === null) out.push("Top");
+  if (d.bottom === null && !(d.top !== null && topIsOnePiece)) out.push("Bottom");
+  if (d.shoes === null) out.push("Shoes");
+  return out;
+}
+export const canSave = (d: Draft, topIsOnePiece: boolean) => missingRequired(d, topIsOnePiece).length === 0;
 
 /** does a liked product fit this slot (same grouping as the Wishlist type filter) */
 export function fitsSlot(slot: SlotRef, card: { slot: string }): boolean {
@@ -43,17 +49,15 @@ export function setSlot(d: Draft, slot: SlotRef, card: FeedCard | null): Draft {
   if (slot === "top" && isOnePiece(card)) n.bottom = null;
   return n;
 }
-export const addAccSlot = (d: Draft, max = MY_OUTFITS_MAX_ACCESSORY_SLOTS): Draft => (canAddAcc(d, max) ? { ...d, acc: [...d.acc, null] } : d);
-export const removeAccSlot = (d: Draft, i: number): Draft => (canRemoveAcc(d, i) ? { ...d, acc: d.acc.filter((_, k) => k !== i) } : d);
 
 /** the Bottom slot is locked while the Top is a one-piece garment */
 export const bottomLocked = (topCard: { slot: string } | null | undefined) => isOnePiece(topCard);
 
 export function toSaved(d: Draft, id: string): SavedOutfit { return { id, top: d.top, bottom: d.bottom, shoes: d.shoes, acc: d.acc.filter((x): x is number => x !== null) }; }
-/** back into the editor: filled accessories first, then at least one slot, one extra empty slot is not added */
+/** back into the editor: accessories fill the slots in order; an old outfit with more accessories than slots keeps ALL of them (the extra ones sit in slots beyond MY_OUTFITS_ACC_SLOTS, which the editor lists below the layout) */
 export function fromSaved(s: SavedOutfit): Draft {
-  const acc: (number | null)[] = s.acc.slice(0, MY_OUTFITS_MAX_ACCESSORY_SLOTS);
-  while (acc.length < MY_OUTFITS_FIRST_ACC_SLOTS) acc.push(null);
+  const acc: (number | null)[] = [...s.acc];
+  while (acc.length < MY_OUTFITS_ACC_SLOTS) acc.push(null);
   return { top: s.top, bottom: s.bottom, shoes: s.shoes, acc };
 }
 
@@ -70,7 +74,7 @@ export function parseStore(raw: string | null | undefined): Store {
       const one = (v: unknown) => (posInt(v) ? v : null);
       const seen = new Set<number>(), take = (v: number | null) => { if (v === null || seen.has(v)) return null; seen.add(v); return v; };
       const s: SavedOutfit = { id: o.id, top: take(one(o.top)), bottom: take(one(o.bottom)), shoes: take(one(o.shoes)), acc: [] };
-      if (Array.isArray(o.acc)) for (const a of o.acc) { const x = take(one(a)); if (x !== null && s.acc.length < MY_OUTFITS_MAX_ACCESSORY_SLOTS) s.acc.push(x); }
+      if (Array.isArray(o.acc)) for (const a of o.acc) { const x = take(one(a)); if (x !== null) s.acc.push(x); }
       if (s.top !== null || s.bottom !== null || s.shoes !== null || s.acc.length) outfits.push(s);
       if (outfits.length >= MY_OUTFITS_MAX_SAVED) break;
     }
