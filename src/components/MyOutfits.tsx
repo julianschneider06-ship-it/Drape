@@ -18,7 +18,7 @@ import {
   bottomLocked, deleteOutfit, emptyDraft, fromSaved, idAt, isGreyId, isOnePiece, missingRequired, newOutfitId, pickerItems, saveOutfit, setSlot, storeFull, toSaved,
   type Draft, type SavedOutfit, type SlotRef, type Store,
 } from "@/lib/my-outfits";
-import { applyAccLayout, defaultAccLayout, isDrag, moveLayout, nextZ, resizeLayout, type AccLayout } from "@/lib/my-outfits-acc";
+import { accSlotMode, activeAccLayouts, applyAccLayout, defaultAccLayout, isDrag, moveLayout, nextZ, resizeLayout, type AccLayout } from "@/lib/my-outfits-acc";
 import { loadStore, writeStore } from "@/lib/client/my-outfits-store";
 import OutfitCanvas from "./OutfitCanvas";
 import FeedImage from "./FeedImage";
@@ -33,7 +33,7 @@ function Thumb({ card, grey, fill = 0.9 }: { card: FeedCard; grey: boolean; fill
 }
 
 /** Wishlist > My Outfits: outfits built by hand from liked products, saved on this device only (ids + slot order). Nothing is recorded. */
-export default function MyOutfits({ gender, liked, onOpenProduct }: { gender: "women" | "men"; liked: ReadonlySet<number>; onOpenProduct: (card: FeedCard) => void }) {
+export default function MyOutfits({ gender, liked, onOpenProduct, customize }: { gender: "women" | "men"; liked: ReadonlySet<number>; onOpenProduct: (card: FeedCard) => void; customize: boolean }) {
   const reduced = useReducedMotion();
   const root = useRef<HTMLDivElement>(null);
   const [store, setStore] = useState<Store>(() => loadStore());
@@ -81,7 +81,7 @@ export default function MyOutfits({ gender, liked, onOpenProduct }: { gender: "w
 
   return (
     <>
-    {editing && <Editor key={editing.id} initial={editing.draft} cardById={cardById} liked={liked} likedCards={likedNow} reduced={reduced}
+    {editing && <Editor key={editing.id} initial={editing.draft} cardById={cardById} liked={liked} likedCards={likedNow} reduced={reduced} customize={customize}
       onCancel={() => setEditing(null)}
       onSave={(d) => { const next = saveOutfit(store, toSaved(d, editing.id)); if (next) commit(next); setEditing(null); }} />}
     <div ref={root} className="absolute inset-0 overflow-y-auto overscroll-y-contain bg-white px-3 pb-6">
@@ -99,7 +99,7 @@ export default function MyOutfits({ gender, liked, onOpenProduct }: { gender: "w
             <section key={s.id} className="flex w-full flex-col items-center py-2" data-outfit={s.id}>
               {o ? (
                 <div className="relative" style={{ width: canvas.w, height: canvas.h }}>
-                  <OutfitCanvas outfit={o} canvas={canvas} priority={false} dim={(slot: SlotName) => isGrey(o, slot, liked)} likeDim accLayout={s.accL} onOpen={(c) => onOpenProduct(c)} />
+                  <OutfitCanvas outfit={o} canvas={canvas} priority={false} dim={(slot: SlotName) => isGrey(o, slot, liked)} likeDim accLayout={activeAccLayouts(customize, s.accL)} onOpen={(c) => onOpenProduct(c)} />
                 </div>
               ) : (
                 <div className="flex items-center justify-center text-sm text-neutral-400" style={{ width: canvas.w, height: canvas.h }}>{sig(s) in rendered ? "These products are no longer available." : "Loading…"}</div>
@@ -123,8 +123,8 @@ export default function MyOutfits({ gender, liked, onOpenProduct }: { gender: "w
   );
 }
 
-function Editor({ initial, cardById, liked, likedCards, reduced, onCancel, onSave }: {
-  initial: Draft; cardById: Map<number, FeedCard>; liked: ReadonlySet<number>; likedCards: FeedCard[]; reduced: boolean; onCancel: () => void; onSave: (d: Draft) => void;
+function Editor({ initial, cardById, liked, likedCards, reduced, customize, onCancel, onSave }: {
+  initial: Draft; cardById: Map<number, FeedCard>; liked: ReadonlySet<number>; likedCards: FeedCard[]; reduced: boolean; customize: boolean; onCancel: () => void; onSave: (d: Draft) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(initial);
   const [picking, setPicking] = useState<SlotRef | null>(null);
@@ -144,7 +144,7 @@ function Editor({ initial, cardById, liked, likedCards, reduced, onCancel, onSav
     return editorLayout({ top: v(topCard), bottom: v(cardOf(draft.bottom)), shoes: v(cardOf(draft.shoes)) }, canvas);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvas, draft.top, draft.bottom, draft.shoes, topCard, cardById]);
-  const shown = useMemo(() => (layout && canvas ? applyAccLayout(layout.pieces, draft.accL, canvas.w, canvas.h) : []), [layout, canvas, draft.accL]);
+  const shown = useMemo(() => (layout && canvas ? applyAccLayout(layout.pieces, activeAccLayouts(customize, draft.accL), canvas.w, canvas.h) : []), [layout, canvas, draft.accL, customize]);
   const setAccL = (i: number, c: AccLayout) => setDraft((d) => { const l = Array.from({ length: Math.max(d.acc.length, i + 1) }, (_, k) => d.accL?.[k] ?? null); l[i] = c; return { ...d, accL: l }; });
   const labelOf = (ref: SlotRef) => (typeof ref === "string" ? MY_OUTFITS_SLOTS.find((s) => s.id === ref)!.label : MY_OUTFITS_ACC.label);
   const tile = (ref: SlotRef, rect: { x: number; y: number; w: number; h: number } | null, z = 1, rot = 0) => {
@@ -183,7 +183,7 @@ function Editor({ initial, cardById, liked, likedCards, reduced, onCancel, onSav
             {placedSlots.map((p) => {
               if (p.slot === "bottom" && locked) return null;
               const ref = slotRefOf(p.slot);
-              if (typeof ref === "string") return tile(ref, p.rect, p.z, p.rot);
+              if (typeof ref === "string" || accSlotMode(customize) === "plain") return tile(ref, p.rect, p.z, p.rot);   // switch off: default layout, no frame, no gestures
               const i = ref.acc, c = cardOf(draft.acc[i] ?? null), def = layout.pieces.find((q) => q.slot === p.slot)!.rect;
               return <AccTile key={`acc${i}`} idx={i} rect={p.rect} def={def} z={p.z} rot={p.rot} canvas={canvas} card={c} grey={c ? isGreyId(c.id, liked) : false}
                 label={`${MY_OUTFITS_ACC.label}${c ? `: ${c.brand} ${c.name}` : " (empty)"}`} current={draft.accL?.[i] ?? null} front={nextZ(draft.accL ?? [])}

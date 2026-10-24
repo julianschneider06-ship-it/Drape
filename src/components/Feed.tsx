@@ -54,12 +54,13 @@ function pickedStyles(g: Gender): string[] {
   try { return store.get(STYLES_GENDER_KEY) === g ? cleanStyles(JSON.parse(store.get(STYLES_KEY) ?? "[]")) : []; } catch { return []; }
 }
 
-export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynamic" | "hybrid"; sale: boolean; icons?: boolean; search?: boolean } }) {
+export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynamic" | "hybrid"; sale: boolean; icons?: boolean; search?: boolean; customize?: boolean } }) {
   setSaleDefault(defaults?.sale);   // app_settings.sale_marker_enabled (?sale=on|off still overrides)
   const [gender, setGender] = useState<Gender | null>(null);
   const [iconsOn, setIconsOn] = useState(defaults?.icons !== false);   // app_settings.icons_enabled; ?icons=0 / ?icons=1 override it
   // bottom bar + Search tab (app_settings.search_enabled; ?search=0 hides both). Both tabs stay mounted: switching only toggles visibility, so For You keeps its scroll position and records nothing.
   const [searchOn, setSearchOn] = useState(defaults?.search !== false);
+  const [customizeOn, setCustomizeOn] = useState(defaults?.customize === true);   // app_settings.liked_outfit_customizable_enabled (My Outfits accessory layout); ?customize=1 / ?customize=0 override it
   const [navReady, setNavReady] = useState(false);   // false until the first-visit check ran (no bar flash before the welcome flow)
   const [tab, setTab] = useState<Tab>("foryou");
   const [searchSeen, setSearchSeen] = useState(false);
@@ -143,6 +144,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   useEffect(() => {
     const q = new URLSearchParams(location.search);
     const ic = q.get("icons"); if (ic === "0" || ic === "1") setIconsOn(ic === "1");
+    const cu = q.get("customize"); if (cu === "0" || cu === "1") setCustomizeOn(cu === "1");
     const mode = q.get("feed") ?? defaults?.feed ?? "base";   // ?feed=... always wins; without it the default comes from app_settings.feed_default
     hybridRef.current = mode === "hybrid";
     dynRef.current = mode === "dynamic" || hybridRef.current;   // ?feed=base (or an unknown value) = the pool feed
@@ -472,7 +474,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       )}
       <AnimatePresence>
         {navOn && layers.wishlistOpen && (
-          <WishlistView key="wishlist" icons={iconsOn} gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
+          <WishlistView key="wishlist" icons={iconsOn} customize={customizeOn} gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
             onToggle={(card) => toggleLike(card, null, 0, "sheet")}
             onOpenProduct={(card) => setSheet({ card, outfit: null, index: 0, slot: "top" })} sheetOpen={!!sheet} />
         )}

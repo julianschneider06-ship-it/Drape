@@ -63,3 +63,10 @@ export function applyAccLayout(pieces: Placed[], layouts: readonly (AccLayout | 
     return c ? { ...p, rect: accRect(p.rect, c, W, H), z: c.z ? MY_OUTFITS_ACC_Z_BASE + c.z : p.z } : p;
   });
 }
+
+/** the editor's accessory behaviour: "custom" = frame, resize handle, vertical move (switch on); "plain" = the Prompt 60 look, tap opens the picker, no gestures (switch off) */
+export const accSlotMode = (customize: boolean): "custom" | "plain" => (customize ? "custom" : "plain");
+/** the stored layouts that apply right now: none while the switch is off. They stay in local storage and in the saved outfit, untouched. */
+export function activeAccLayouts<T>(customize: boolean, layouts: T): T | undefined {
+  return customize ? layouts : undefined;
+}

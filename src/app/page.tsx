@@ -6,5 +6,5 @@ export const revalidate = 60;
 
 export default async function Home() {
   const s = await getSettings();
-  return <Feed defaults={{ feed: s.feed_default, sale: s.sale_marker_enabled, icons: s.icons_enabled, search: s.search_enabled }} />;
+  return <Feed defaults={{ feed: s.feed_default, sale: s.sale_marker_enabled, icons: s.icons_enabled, search: s.search_enabled, customize: s.liked_outfit_customizable_enabled }} />;
 }

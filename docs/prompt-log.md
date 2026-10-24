@@ -64,3 +64,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - 60. My Outfits editor: real layout positions, required Top/Bottom/Shoes, 4c68ac9
 - 61. My Outfits accessories: frame, resize, vertical move, ee686e9
 - 62. Prompt log file + CLAUDE.md pointer, ee686e9 (base; this commit follows)
+- 63. My Outfits custom accessory layout behind app_settings switch, off by default, 32cf55b (base; this commit follows)
