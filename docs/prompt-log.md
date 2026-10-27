@@ -67,3 +67,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - 63. My Outfits custom accessory layout behind app_settings switch, off by default, 32cf55b (base; this commit follows)
 - Prompt 64: static background image for Wishlist Generate Outfits + My Outfits (last commit on main: 33c9f0d)
 - Prompt 65: Profile toggle "Drape Background" (device only, ?bg=0|1) for the wishlist background (last commit on main: see git log)
+- 66. Nike/adidas count in both Awin feeds, 0 footwear pages left to import, a6be609
