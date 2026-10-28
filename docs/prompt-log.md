@@ -2,48 +2,48 @@
 
 One line per prompt: number, short content, commit on main if known. Sessions started with "Prompt N." append their line here (see CLAUDE.md, "Working in Claude Code"). Early prompts are not in the shallow git clone; "see git log" means the history does not say.
 
-- 1. Early build: feed, see git log
-- 2. Early build: outfit pool, see git log
-- 3. Early build, see git log
-- 4. Early build, see git log
-- 5. Onboarding, see git log
-- 6. Onboarding, see git log
-- 7. Women accessories, see git log
-- 8. Women accessories, see git log
-- 9. Early build, see git log
-- 10. Onboarding, see git log
-- 11. Early build, see git log
-- 12. Attribute icons, see git log
-- 13. Bottom bar and search, see git log
-- 14. Bottom bar and search, see git log
-- 15. Bottom bar and search, see git log
-- 16. Bottom bar and search, see git log
-- 17. Bottom bar and search, see git log
-- 18. Bottom bar and search, see git log
-- 19. Bottom bar and search, see git log
-- 20. Early build, see git log
-- 21. Side-by-side layout, see git log
-- 22. Hit padding, see git log
-- 23. Early build, see git log
-- 24. Action rail, see git log
-- 25. Action rail, see git log
-- 26. Action rail, see git log
-- 27. Action rail, see git log
-- 28. Action rail, see git log
-- 29. Detail sheet, see git log
-- 30. Animations, see git log
-- 31. Animations, see git log
+- 1. Early build: feed, 2f2fc5e
+- 2. Early build: outfit pool, 2f2fc5e
+- 3. Early build, 2f2fc5e
+- 4. Early build, 2f2fc5e
+- 5. Onboarding, 2f2fc5e
+- 6. Onboarding, 2f2fc5e
+- 7. Women accessories, 2f2fc5e
+- 8. Women accessories, 2f2fc5e
+- 9. Early build, 2f2fc5e
+- 10. Onboarding, 2f2fc5e
+- 11. Early build, 2f2fc5e
+- 12. Attribute icons, 2f2fc5e
+- 13. Bottom bar and search, 2f2fc5e
+- 14. Bottom bar and search, 2f2fc5e
+- 15. Bottom bar and search, 2f2fc5e
+- 16. Bottom bar and search, 2f2fc5e
+- 17. Bottom bar and search, 2f2fc5e
+- 18. Bottom bar and search, 2f2fc5e
+- 19. Bottom bar and search, 2f2fc5e
+- 20. Early build, 2f2fc5e
+- 21. Side-by-side layout, 2f2fc5e
+- 22. Hit padding, 2f2fc5e
+- 23. Early build, 2f2fc5e
+- 24. Action rail, 2f2fc5e
+- 25. Action rail, 2f2fc5e
+- 26. Action rail, 2f2fc5e
+- 27. Action rail, 2f2fc5e
+- 28. Action rail, 2f2fc5e
+- 29. Detail sheet, 2f2fc5e
+- 30. Animations, 2f2fc5e
+- 31. Animations, 2f2fc5e
 - 32. Import Shopify shops: Aelfric Eden, Laurel & Gold, Sporty & Rich, Taylor Stitch, dfb302e
-- 33. Onboarding, see git log
-- 34. Early build, see git log
-- 35. Early build, see git log
-- 36. Optional Awin shops, on hold, see git log
-- 37. Early build, see git log
-- 38. Early build, see git log
+- 33. Onboarding, 2f2fc5e
+- 34. Early build, 2f2fc5e
+- 35. Early build, 2f2fc5e
+- 36. Optional Awin shops, on hold, 2f2fc5e
+- 37. Early build, 2f2fc5e
+- 38. Early build, 2f2fc5e
 - 39. Awin import Brian James + Tooled Up, c098109
-- 40. Status report, see git log
+- 40. Status report, 2f2fc5e
 - 41. /out redirect, bf08a34
-- 42. Diagnosis: outfit style labelling, see git log
+- 42. Diagnosis: outfit style labelling, 2f2fc5e
 - 43. Reserved outfits in the pool, 55bc385
 - 44. /out route fix, .gitignore, ea8ec41
 - 45. Profile tab + shop preferences, 81d84c2
@@ -51,7 +51,7 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - 47. Tap speed, 419be19
 - 48. Part swipe, ba6913b
 - 49. Sheet swipe-down + like grey parts, 7d44347
-- 50. Detail sheet as own surface, see git log
+- 50. Detail sheet as own surface, 2f2fc5e
 - 51. Double tap on liked part = animation only, 5706671
 - 52. Grey after unlike + sale price in Products, 15c787b
 - 53. Cutout images + type filter in Products, 3ebc8fe
@@ -68,4 +68,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 64: static background image for Wishlist Generate Outfits + My Outfits (last commit on main: 33c9f0d)
 - Prompt 65: Profile toggle "Drape Background" (device only, ?bg=0|1) for the wishlist background (last commit on main: see git log)
 - 66. Nike/adidas count in both Awin feeds, 0 footwear pages left to import, a6be609
-- 67. Seasonal decoration (sun / meadow / leaves / snow) anchored to the screen, clipped per outfit, Profile toggle Jahreszeitenverzierung (?season=0|1), see git log
+- 67. Seasonal decoration (sun / meadow / leaves / snow) anchored to the screen, clipped per outfit, Profile toggle Jahreszeitenverzierung (?season=0|1), 2f2fc5e
