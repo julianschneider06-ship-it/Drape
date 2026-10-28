@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { dominantSeason, decorClip, decorWindow, effectiveSeason } from "../src/lib/season-decor";
-import { meadowArt, sunArt, spotPieces, wobblyLine } from "../src/lib/season-decor-art";
+import { DECO_BITMAP_CHARS, DECO_BITMAP_SIZE, LEAF_BITMAP, SNOWFLAKE_BITMAP, SUN_BITMAP, decoPx, figurePx, meadowGrid, meadowMarkup, snap, spotPieces, snowMarkup, leafMarkup, sunMarkup } from "../src/lib/season-decor-art";
+import { DECO_MAX_COUNT, DECO_PX_MULT } from "../src/config/pixel-figure";
+import { MANNEQUIN } from "../src/config/mannequin";
 import { SEASON_DECOR } from "../src/config/season-decor";
 import { DEFAULT_PREFS, cleanPrefs } from "../src/lib/shop-pref";
 
@@ -53,12 +55,29 @@ test("setting: link wins, otherwise the device choice; default on and saved with
   assert.equal(cleanPrefs({ v: 1, sale: false }).season, true);   // old saves keep working
 });
 
-test("drawing is deterministic and the config is sane", () => {
-  assert.equal(wobblyLine([[0, 0], [5, 5], [10, 0]], 3), wobblyLine([[0, 0], [5, 5], [10, 0]], 3));
-  assert.deepEqual(sunArt(), sunArt());
-  assert.deepEqual(meadowArt(400), meadowArt(400));
-  assert.equal(sunArt().rays.length, SEASON_DECOR.sun.rays);
-  assert.equal(spotPieces(0, 400).length, SEASON_DECOR.spots.count);
+test("deco bitmaps are exactly 9x9 and use only known characters", () => {
+  for (const b of [SNOWFLAKE_BITMAP, LEAF_BITMAP, SUN_BITMAP]) {
+    assert.equal(b.length, DECO_BITMAP_SIZE);
+    for (const row of b) { assert.equal(row.length, DECO_BITMAP_SIZE); assert.ok([...row].every((c) => DECO_BITMAP_CHARS.includes(c)), row); }
+  }
+  assert.ok(SNOWFLAKE_BITMAP.every((r) => !r.includes("v")) && LEAF_BITMAP.some((r) => r.includes("v")));
+});
+
+test("deco pixel = DECO_PX_MULT x figure pixel, positions snap to it", () => {
+  assert.equal(figurePx(), MANNEQUIN.heightPx / 40);
+  assert.equal(decoPx(), figurePx() * DECO_PX_MULT);
+  const px = decoPx();
+  for (const v of [0, 3, 17.3, 100.9]) assert.ok(Math.abs(snap(v) / px - Math.round(snap(v) / px)) < 1e-9);
+});
+
+test("drawing is deterministic, flat and the config is sane", () => {
+  assert.equal(snowMarkup(), snowMarkup());
+  for (const m of [snowMarkup(), leafMarkup(), sunMarkup(), meadowMarkup(400).html]) assert.ok(m.startsWith("<rect ") && !/stroke|opacity|filter|gradient/i.test(m));
+  assert.ok(leafMarkup().includes(SEASON_DECOR.leaves.vein) && snowMarkup().includes(SEASON_DECOR.snow.color) && sunMarkup().includes(SEASON_DECOR.sun.color));
+  assert.deepEqual(meadowGrid(400), meadowGrid(400));
+  const g = meadowGrid(400); assert.ok(g.every((r) => r.length === g[0].length) && g[g.length - 1] === "#".repeat(g[0].length));
+  assert.ok(g.slice(0, g.length - 3).join("").includes("#"));   // blades stand above the strip
+  assert.equal(spotPieces(0, 400).length, Math.min(SEASON_DECOR.spots.count, DECO_MAX_COUNT));
   assert.deepEqual(spotPieces(1, 400), spotPieces(1, 400));
   assert.equal(SEASON_DECOR.spots.places.length, 2);
   for (const p of SEASON_DECOR.spots.places) assert.ok(p.y0 >= 0 && p.y1 <= 1 && p.y0 < p.y1 && p.x >= 0 && p.x < 1);

@@ -4,61 +4,38 @@ import { SEASON_DECOR as C } from "@/config/season-decor";
 import { decorClip, decorWindow, type DecorSeason } from "@/lib/season-decor";
 import Mannequin from "./Mannequin";
 import type { MannequinSpec } from "@/lib/mannequin";
-import { flakeArt, leafArt, meadowArt, spotPieces, sunArt } from "@/lib/season-decor-art";
+import { DECO_BITMAP_SIZE, decoPx, leafMarkup, meadowMarkup, snap, snowMarkup, spotPieces, sunMarkup, sunPx } from "@/lib/season-decor-art";
 
 // Screen-anchored seasonal decoration. One layer sits over the scroll area; for the (at most 3) outfits near the viewport it holds that outfit's decoration,
 // clipped to the part of the screen where THAT outfit is visible. The decorations never move; only the clip windows follow the scroll offset, written
 // straight to the DOM from the scroll event (no React render per frame). Behind the outfits, pointer-events none.
-const INK = C.ink;
-const nonScaling = { vectorEffect: "non-scaling-stroke" } as const;
+const grid = { shapeRendering: "crispEdges" } as const;
 
 function Sun({ safeTop }: { safeTop: boolean }) {
-  const a = useMemo(() => sunArt(), []), s = C.sun;
-  return (
-    <svg className="absolute right-0" style={{ top: safeTop ? `calc(env(safe-area-inset-top, 0px) + ${s.topOffsetPx}px)` : s.topOffsetPx, opacity: C.opacity }} width={s.sizePx} height={s.sizePx} viewBox={`0 0 ${s.sizePx} ${s.sizePx}`} fill="none" strokeLinecap="round" strokeLinejoin="round">
-      {a.rays.map((d, i) => <path key={i} d={d} stroke={s.color} strokeWidth={INK.width} />)}
-      <path d={a.disc} fill={s.color} stroke={s.color} strokeWidth={INK.width} />
-    </svg>
-  );
+  const html = useMemo(() => sunMarkup(), []), size = DECO_BITMAP_SIZE * sunPx();
+  return <svg className="absolute right-0" style={{ top: safeTop ? `calc(env(safe-area-inset-top, 0px) + ${C.sun.topOffsetPx}px)` : C.sun.topOffsetPx }} width={size} height={size} viewBox={`0 0 ${DECO_BITMAP_SIZE} ${DECO_BITMAP_SIZE}`} {...grid} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 function Meadow({ width }: { width: number }) {
-  const a = useMemo(() => meadowArt(width), [width]), m = C.meadow;
+  const a = useMemo(() => meadowMarkup(width), [width]);
   if (!(width > 0)) return null;
-  return (
-    <svg className="absolute left-0" style={{ bottom: "var(--safe-b, 0px)", opacity: C.opacity }} width={width} height={a.height} viewBox={`0 0 ${width} ${a.height}`} fill="none" strokeLinecap="round" strokeLinejoin="round">
-      <path d={a.band} fill={m.color} stroke={m.color} strokeWidth={INK.width} />
-      {a.blades.map((d, i) => <path key={i} d={d} stroke={m.color} strokeWidth={INK.width} />)}
-    </svg>
-  );
+  return <svg className="absolute left-0" style={{ bottom: "var(--safe-b, 0px)" }} width={width} height={a.rows * decoPx()} viewBox={`0 0 ${a.cols} ${a.rows}`} preserveAspectRatio="none" {...grid} dangerouslySetInnerHTML={{ __html: a.html }} />;
 }
 
-function Spots({ kind, width }: { kind: "autumn" | "winter"; width: number }) {
-  const pieces = useMemo(() => C.spots.places.map((_, i) => spotPieces(i, width).map((p) => ({ p, leaf: leafArt(p.seed), flake: flakeArt(p.seed) }))), [width]);
+/** two fixed spots of static pixel pieces, positions snapped to the decoration pixel grid */
+function Spots({ kind, width, height }: { kind: "autumn" | "winter"; width: number; height: number }) {
+  const html = useMemo(() => (kind === "autumn" ? leafMarkup() : snowMarkup()), [kind]), px = decoPx(), size = DECO_BITMAP_SIZE * px;
+  const pieces = useMemo(() => C.spots.places.map((pl, i) => spotPieces(i, width).map((p) => ({ key: p.seed, left: snap(pl.x * width + p.dx), top: snap((pl.y0 + p.yFrac * (pl.y1 - pl.y0)) * height) }))), [width, height]);
+  if (!(width > 0 && height > 0)) return null;
   return (
     <>
-      {C.spots.places.map((pl, pi) => (
-        <div key={pi} className="absolute" style={{ left: `${pl.x * 100}%`, top: `${pl.y0 * 100}%`, height: `${(pl.y1 - pl.y0) * 100}%`, width: 1 }}>
-          {pieces[pi].map(({ p, leaf, flake }) => (
-            <svg key={p.seed} className="absolute" style={{ left: p.dx, top: `${p.yFrac * 100}%`, opacity: p.opacity, transform: `rotate(${p.tilt}deg)` }} width={p.size} height={p.size} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
-              {kind === "autumn" ? (
-                <>
-                  <path d={leaf.body} fill={C.leaves.color} stroke={C.leaves.color} strokeWidth={INK.width * 0.8} {...nonScaling} />
-                  <path d={leaf.stem} stroke={C.leaves.color} strokeWidth={INK.width * 0.8} {...nonScaling} />
-                </>
-              ) : (
-                <path d={flake} stroke={C.snow.color} strokeWidth={INK.width} {...nonScaling} />
-              )}
-            </svg>
-          ))}
-        </div>
-      ))}
+      {pieces.flat().map((p) => <svg key={p.key} className="absolute" style={{ left: p.left, top: p.top }} width={size} height={size} viewBox={`0 0 ${DECO_BITMAP_SIZE} ${DECO_BITMAP_SIZE}`} {...grid} dangerouslySetInnerHTML={{ __html: html }} />)}
     </>
   );
 }
 
-const Art = ({ season, width, sun, safeTop }: { season: DecorSeason; width: number; sun: boolean; safeTop: boolean }) =>
-  season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Spots kind={season} width={width} />;
+const Art = ({ season, width, height, sun, safeTop }: { season: DecorSeason; width: number; height: number; sun: boolean; safeTop: boolean }) =>
+  season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Spots kind={season} width={width} height={height} />;
 
 /** `scroller` = the snap scroller the outfits live in (offset and height are read from it); `seasons[i]` = decoration of outfit i (null = none).
  *  `minis` = outfit preview figures (same clipping, drawn in front of the season art and still behind the products): `specs[i]` is outfit i's figure, `searchOn` places it over the Wishlist tab.
@@ -66,7 +43,7 @@ const Art = ({ season, width, sun, safeTop }: { season: DecorSeason; width: numb
 function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: { scroller: RefObject<HTMLElement | null>; seasons: (DecorSeason | null)[] | null; minis?: { specs: MannequinSpec[]; searchOn: boolean } | null; className: string; style?: CSSProperties; sunFront?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const [win, setWin] = useState<number[]>([]);
-  const [width, setWidth] = useState(0);
+  const [size, setSize] = useState({ w: 0, h: 0 });
   const winKey = useRef(""), count = Math.max(seasons?.length ?? 0, minis?.specs.length ?? 0);
 
   const apply = () => {   // clip every group to where its outfit is on screen (direct DOM writes)
@@ -82,7 +59,7 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: {
     const sc = scroller.current; if (!sc) return;
     const w = decorWindow(sc.scrollTop, sc.clientHeight, count), k = w.join(",");
     if (k !== winKey.current) { winKey.current = k; setWin(w); }
-    setWidth((p) => (p === sc.clientWidth ? p : sc.clientWidth));
+    setSize((p) => (p.w === sc.clientWidth && p.h === sc.clientHeight ? p : { w: sc.clientWidth, h: sc.clientHeight }));
     apply();
   };
   const syncRef = useRef(sync); syncRef.current = sync;
@@ -101,8 +78,8 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: {
   const shown = win.filter((i) => seasons?.[i] || minis?.specs[i]);
   const group = (i: number, sun: boolean) => (
     <div key={`${i}-${seasons?.[i]}`} data-i={i} className="sd-group absolute inset-0">
-      {seasons?.[i] && <Art season={seasons[i]!} width={width} sun={sun} safeTop={!!sunFront} />}
-      {minis?.specs[i] && <Mannequin spec={minis.specs[i]} layerWidth={width} searchOn={minis.searchOn} />}
+      {seasons?.[i] && <Art season={seasons[i]!} width={size.w} height={size.h} sun={sun} safeTop={!!sunFront} />}
+      {minis?.specs[i] && <Mannequin spec={minis.specs[i]} layerWidth={size.w} searchOn={minis.searchOn} />}
     </div>
   );
   return (

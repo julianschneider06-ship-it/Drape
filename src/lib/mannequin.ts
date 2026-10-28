@@ -1,64 +1,30 @@
-// Outfit preview, pure logic (no React): the outfit's pieces -> a small spec of variants and colours, plus the setting and the horizontal position.
-// Variants come from fields the cards already carry (`name`, `hood`, `slot`, and `mq` = classification hints); missing data = the default variant.
+// Outfit preview, pure logic (no React): the outfit's pieces -> the colours of the pixel figure, plus the setting and the horizontal position.
+// The figure has one fixed shape (src/lib/pixel-figure.ts); only the colours and the optional headwear / bag come from the outfit.
 import { MANNEQUIN as C } from "@/config/mannequin";
+import { PIXEL_COLORS } from "@/config/pixel-figure";
 import { navTabs } from "@/lib/nav-tabs";
+import type { FigureSpec } from "@/lib/pixel-figure";
 import { COLOR_HEX } from "@/lib/shine";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 
-export type ShoeKind = "low" | "high";
-export type BottomShape = "short" | "wide" | "slim";
-export type TopShape = "short" | "long" | "dress";
-export type HeadKind = "cap" | "hat" | "beanie";
-export interface MannequinSpec {
-  shoes: { kind: ShoeKind; color: string };
-  bottom: { shape: BottomShape; color: string } | null;   // null = a dress covers it
-  top: { shape: TopShape; hood: boolean; hem: "short" | "long"; color: string };   // hem only matters for a dress
-  head: { kind: HeadKind; color: string } | null;
-  glasses: boolean;
-  bag: { color: string } | null;
-}
+export type MannequinSpec = FigureSpec;
 
-const text = (c: FeedCard | null | undefined) => `${c?.mq?.sub ?? ""} ${c?.name ?? ""}`.toLowerCase();
-/** first colour of the piece as a flat fill; missing, unknown or multicolor = neutral grey */
-export const pieceColor = (c: FeedCard | null | undefined): string => COLOR_HEX[c?.mq?.col ?? ""] ?? C.fallbackColor;
+/** first colour of the piece as a flat fill; missing, unknown or multicolor = null */
+export const pieceHex = (c: FeedCard | null | undefined): string | null => COLOR_HEX[c?.mq?.col ?? ""] ?? null;
+/** same, grey when there is no plain colour (used for headwear and bags, which are drawn anyway) */
+export const pieceColor = (c: FeedCard | null | undefined): string => pieceHex(c) ?? C.fallbackColor;
 
-const HIGH_SHOE = /\b(boots?|bootie|booties|chelsea|combat|hi-?tops?|high[- ]?tops?|ankle|hiking|wellies|wellingtons)\b/;
-export const shoeKind = (c: FeedCard | null | undefined): ShoeKind => (HIGH_SHOE.test(text(c)) ? "high" : c ? "low" : C.defaults.shoes);
-
-const SHORT_BOTTOM = /\b(shorts?|skort|bermuda|mini)\b/, WIDE_BOTTOM = /\b(wide|flare[ds]?|palazzo|culottes?|baggy|cargo|parachute|barrel|skirt|relaxed|loose)\b/;
-export function bottomShape(c: FeedCard | null | undefined): BottomShape {
-  if (!c) return C.defaults.bottom;
-  const t = text(c);
-  if (SHORT_BOTTOM.test(t)) return "short";
-  if (WIDE_BOTTOM.test(t) || c.mq?.fit === "loose" || c.mq?.fit === "oversized" || ["relaxed", "oversized", "flared", "a_line", "boxy"].includes(c.mq?.sil ?? "")) return "wide";
-  if (/\b(slim|skinny|tapered|straight|legging|jeans|chinos?)\b/.test(t) || c.mq?.fit === "slim" || ["slim", "tapered", "straight"].includes(c.mq?.sil ?? "")) return "slim";
-  return C.defaults.bottom;
-}
-
-const SHORT_TOP = /\b(tee|t-?shirt|tank|cami|camisole|polo|short[- ]?sleeves?|sleeveless|crop(ped)?|bodysuit|vest|singlet|bandeau)\b/, LONG_SLEEVE = /\blong[- ]?sleeves?\b/;
-const HOOD = /\bhood(ed|ie|y)?\b/;
-/** short sleeve / long sleeve (outer layers count as long sleeve in their own colour) / dress (full-body piece) */
-export function topSpec(c: FeedCard, full: boolean): MannequinSpec["top"] {
-  const t = text(c), color = pieceColor(c), hood = c.hood === true || HOOD.test(t);
-  if (full) return { shape: "dress", hood: false, hem: /\b(midi|maxi|long|gown)\b/.test(t) ? "long" : /\b(mini|short)\b/.test(t) ? "short" : C.defaults.dressHem, color };
-  const shape: TopShape = c.mq?.outer || LONG_SLEEVE.test(t) || hood ? "long" : SHORT_TOP.test(t) ? "short" : C.defaults.top;
-  return { shape, hood, hem: C.defaults.dressHem, color };
-}
-
-/** Spec of the outfit as shown (after swaps). Other accessories are ignored; at most one head item, glasses and bag are drawn. */
+/** Colours of the outfit as shown (after swaps). A one-piece (dress, jumpsuit) colours both top and bottom; an outer layer without another top is the top itself.
+ *  Missing colours use the fixed fallbacks. Any headwear is the beanie; the first bag is the bag; everything else is ignored. */
 export function mannequinSpec(o: Pick<FeedOutfit, "kind" | "top" | "bottom" | "shoes" | "accessories">): MannequinSpec {
-  const full = o.kind === "full" || o.top.slot === "full_body";
-  let head: MannequinSpec["head"] = null, glasses = false, bag: MannequinSpec["bag"] = null;
+  const full = o.kind === "full" || o.top.slot === "full_body", F = PIXEL_COLORS.fallback;
+  let head: string | null = null, bag: string | null = null, hasHead = false, hasBag = false;
   for (const a of o.accessories ?? []) {
-    if (!head && (a.type === "cap" || a.type === "hat" || a.type === "beanie")) head = { kind: a.type, color: pieceColor(a.card) };
-    else if (a.type === "sunglasses" || a.type === "glasses") glasses = true;
-    else if (!bag && (a.type === "bag" || a.type === "backpack")) bag = { color: pieceColor(a.card) };
+    if (!hasHead && (a.type === "cap" || a.type === "hat" || a.type === "beanie")) { hasHead = true; head = pieceColor(a.card); }
+    else if (!hasBag && (a.type === "bag" || a.type === "backpack")) { hasBag = true; bag = pieceColor(a.card); }
   }
-  return {
-    shoes: { kind: shoeKind(o.shoes), color: pieceColor(o.shoes) },
-    bottom: full ? null : { shape: bottomShape(o.bottom), color: pieceColor(o.bottom) },
-    top: topSpec(o.top, full), head, glasses, bag,
-  };
+  const top = pieceHex(o.top) ?? F.top;
+  return { top, bottom: full ? top : pieceHex(o.bottom) ?? F.bottom, shoes: pieceHex(o.shoes) ?? F.shoes, head, bag };
 }
 
 /** Effective setting: ?mini=0|1 link wins (testing), otherwise the Profile choice (device only, default on). */
