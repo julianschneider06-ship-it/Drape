@@ -7,15 +7,16 @@ export const SEASON_DECOR = {
   opacity: 0.95,
 
   sun: {
-    sizePx: 84, centerInset: 0.1,      // box in the top right corner; centre of the disc sits this fraction of the box in from both edges (only a wedge shows)
+    sizePx: 84, centerInset: 0.1,      // box at the right edge; centre of the disc sits this fraction of the box in from the edges (only a wedge shows)
+    topOffsetPx: 64,                   // vertical offset of the sun box from the top of the outfit area (the feed adds the status/safe area); raise to move the sun down
     radius: 0.52, rays: 6, rayGap: 0.1, rayLen: 0.2,   // radius / gap / ray length as fractions of the box
-    fill: "#ffd23f", stroke: "#f08a00", rayStroke: "#f5a300",
+    color: "#ffd23f",                  // one uniform yellow for disc, outline and rays
   },
 
   meadow: {
-    heightPx: 30, blades: 0.35,        // strip height; blades per px of width
+    heightPx: 30, blades: 10,          // strip height; number of grass blades spread over the full width
     bladeMin: 9, bladeMax: 20, lean: 4,   // blade height range and sideways lean (px)
-    fill: "#c9eaa5", edge: "#8fd06b", blade: "#6fc24f",
+    color: "#a9dc86",                  // one uniform light green for strip, edge and blades
   },
 
   fall: {

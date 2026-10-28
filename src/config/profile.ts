@@ -6,7 +6,7 @@ export const PROFILE_TEXT = {
   feedHeading: "Feed settings",
   saleLabel: "Sale marker",
   bgLabel: "Drape Background",
-  seasonLabel: "Jahreszeitenverzierung",
+  seasonLabel: "Seasonal decoration",
   saleGlobalOff: "Currently off for everyone",
   shopsHeading: "Shops",
   searchPlaceholder: "Search shops",

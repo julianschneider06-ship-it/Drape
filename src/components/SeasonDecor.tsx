@@ -10,12 +10,12 @@ import { fallPieces, flakeArt, leafArt, meadowArt, sunArt } from "@/lib/season-d
 const INK = C.ink;
 const nonScaling = { vectorEffect: "non-scaling-stroke" } as const;
 
-function Sun() {
+function Sun({ safeTop }: { safeTop: boolean }) {
   const a = useMemo(() => sunArt(), []), s = C.sun;
   return (
-    <svg className="absolute right-0 top-0" width={s.sizePx} height={s.sizePx} viewBox={`0 0 ${s.sizePx} ${s.sizePx}`} fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: C.opacity }}>
-      {a.rays.map((d, i) => <path key={i} d={d} stroke={s.rayStroke} strokeWidth={INK.width} />)}
-      <path d={a.disc} fill={s.fill} stroke={s.stroke} strokeWidth={INK.width} />
+    <svg className="absolute right-0" style={{ top: safeTop ? `calc(env(safe-area-inset-top, 0px) + ${s.topOffsetPx}px)` : s.topOffsetPx, opacity: C.opacity }} width={s.sizePx} height={s.sizePx} viewBox={`0 0 ${s.sizePx} ${s.sizePx}`} fill="none" strokeLinecap="round" strokeLinejoin="round">
+      {a.rays.map((d, i) => <path key={i} d={d} stroke={s.color} strokeWidth={INK.width} />)}
+      <path d={a.disc} fill={s.color} stroke={s.color} strokeWidth={INK.width} />
     </svg>
   );
 }
@@ -25,8 +25,8 @@ function Meadow({ width }: { width: number }) {
   if (!(width > 0)) return null;
   return (
     <svg className="absolute left-0" style={{ bottom: "var(--safe-b, 0px)", opacity: C.opacity }} width={width} height={a.height} viewBox={`0 0 ${width} ${a.height}`} fill="none" strokeLinecap="round" strokeLinejoin="round">
-      <path d={a.band} fill={m.fill} stroke={m.edge} strokeWidth={INK.width} />
-      {a.blades.map((d, i) => <path key={i} d={d} stroke={m.blade} strokeWidth={INK.width} />)}
+      <path d={a.band} fill={m.color} stroke={m.color} strokeWidth={INK.width} />
+      {a.blades.map((d, i) => <path key={i} d={d} stroke={m.color} strokeWidth={INK.width} />)}
     </svg>
   );
 }
@@ -63,8 +63,8 @@ function Falling({ kind, width }: { kind: "autumn" | "winter"; width: number }) 
   );
 }
 
-const Art = ({ season, width, sun }: { season: DecorSeason; width: number; sun: boolean }) =>
-  season === "summer" ? (sun ? <Sun /> : null) : season === "spring" ? <Meadow width={width} /> : <Falling kind={season} width={width} />;
+const Art = ({ season, width, sun, safeTop }: { season: DecorSeason; width: number; sun: boolean; safeTop: boolean }) =>
+  season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Falling kind={season} width={width} />;
 
 /** `scroller` = the snap scroller the outfits live in (offset and height are read from it); `seasons[i]` = decoration of outfit i (null = none).
  *  `className`/`style` give the layer its box (same box as the scroller). `sunFront`: the sun sits above a translucent header (nothing else does). */
@@ -105,7 +105,7 @@ function SeasonDecor({ scroller, seasons, className, style, sunFront }: { scroll
   useLayoutEffect(() => { apply(); });   // freshly mounted groups get their clip before the first paint
 
   const shown = win.filter((i) => seasons[i]);
-  const group = (i: number, sun: boolean) => <div key={`${i}-${seasons[i]}`} data-i={i} className="sd-group absolute inset-0"><Art season={seasons[i]!} width={width} sun={sun} /></div>;
+  const group = (i: number, sun: boolean) => <div key={`${i}-${seasons[i]}`} data-i={i} className="sd-group absolute inset-0"><Art season={seasons[i]!} width={width} sun={sun} safeTop={!!sunFront} /></div>;
   return (
     <div ref={root} aria-hidden style={{ display: "contents" }}>
       <div className={`pointer-events-none ${className}`} style={style}>{shown.map((i) => group(i, !sunFront))}</div>

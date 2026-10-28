@@ -37,7 +37,7 @@ export function sunArt(size: number = C.sun.sizePx) {
 /** Meadow strip of `width` x (heightPx + tallest blade): a wobbly green band at the bottom and short vertical blades standing on it. */
 export function meadowArt(width: number) {
   const m = C.meadow, h = m.heightPx, top = m.bladeMax + 2, total = top + h, r = seededRnd(31);
-  const n = Math.max(6, Math.round(width * m.blades));
+  const n = m.blades;
   const edge: P[] = []; for (let x = -6; x <= width + 6; x += 14) edge.push([x, top + r() * 3]);
   const band = wobblyLine(edge, 11, 0.8) + `L${f(width + 8)} ${f(total + 4)}L-8 ${f(total + 4)}Z`;
   const blades: string[] = [];
