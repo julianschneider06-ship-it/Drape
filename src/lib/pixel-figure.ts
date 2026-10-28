@@ -1,10 +1,11 @@
 // Pixel-art figure: ops -> 20x40 grid -> palette from the outfit's colours -> merged SVG rects (cached per pose + palette). Pure, no React.
-import { BAG_OPS, FRONT_OPS, PIXEL_COLORS as K, PIXEL_FIGURE_POSE, PIXEL_GRID, SIDE_OPS, WOMEN_FRONT_OPS } from "@/config/pixel-figure";
+import { BAG_OPS, FACE_TEMPLATES, HEAD_TEMPLATES, HEAD_Y, LEGS_OPS, PIXEL_COLORS as K, PIXEL_FIGURE_POSE, PIXEL_GRID, SIDE_OPS, TORSO_TEMPLATES, TORSO_Y, type FaceKey, type HeadKey, type TorsoKey } from "@/config/pixel-figure";
 import { memoMarkup, pixelRects, rectsMarkup } from "@/lib/pixel-art";
 
 /** Resolved colours of the shown outfit (hex). `head` / `bag` null = the outfit has none. */
-/** `gender` picks the shape: "women" = slim figure with long hair and ponytail (no headwear), anything else / unset = the men's figure */
-export interface FigureSpec { top: string; bottom: string; shoes: string; head: string | null; bag: string | null; gender?: "men" | "women" }
+/** `gender` picks the body: "women" = slim figure, anything else / unset = the men's figure. `torso` / `headType` / `face` pick the ready-made templates (see src/config/pixel-figure.ts);
+ *  unset torso = hoodie, unset headType = beanie when `head` has a colour, else none (hair), unset face = none. Front pose only; the side pose ignores them. */
+export interface FigureSpec { top: string; bottom: string; shoes: string; head: string | null; bag: string | null; gender?: "men" | "women"; torso?: TorsoKey; headType?: Exclude<HeadKey, "none"> | null; face?: FaceKey | null }
 export type Pose = "front" | "side";
 export type Palette = Record<string, string>;
 
@@ -27,6 +28,7 @@ export function clampLight(h: string): string {
 export function figurePalette(s: FigureSpec): Palette {
   const B = clampLight(s.top), P = clampLight(s.bottom), W = clampLight(s.shoes), H = s.head ? clampLight(s.head) : K.hair, X = s.bag ? clampLight(s.bag) : null;
   const p: Palette = {
+    z: shade(B, K.shade.z), G: K.sunglasses, F: K.glasses,
     H, h: s.head ? shade(H, K.shade.h) : H, S: K.skin, K: K.eyes, L: K.hair,
     B, b: shade(B, K.shade.b), c: luminance(B) > K.strings.lightAbove ? K.strings.onLight : K.strings.onDark,
     P, p: shade(P, K.shade.p), q: shade(P, K.shade.q),
@@ -36,13 +38,24 @@ export function figurePalette(s: FigureSpec): Palette {
   return p;
 }
 
-/** the figure as rows of op keys ("." = empty); `hat` false = hair: the cuff row below the dome becomes skin (forehead) */
-export function figureGrid(pose: Pose, bag: boolean, hat: boolean, gender: "men" | "women" = "men"): string[] {
+/** The templates a spec resolves to (defaults applied). */
+export const specTemplates = (s: FigureSpec): { torso: TorsoKey; head: HeadKey; face: FaceKey | null } =>
+  ({ torso: s.torso ?? "hoodie", head: s.headType ?? (s.head ? "beanie" : "none"), face: s.face ?? null });
+
+/** the figure as rows of op keys ("." = empty). Front: legs, then the torso, head and face templates, then the bag. Side: the fixed side shape (`hat` = beanie or hair). */
+export function figureGrid(pose: Pose, bag: boolean, hat: boolean, gender: "men" | "women" = "men", tpl?: { torso?: TorsoKey; head?: HeadKey; face?: FaceKey | null }): string[] {
   const g = Array.from({ length: PIXEL_GRID.h }, () => Array<string>(PIXEL_GRID.w).fill("."));
   const fill = (ops: readonly (readonly [string, number, number, number, number])[]) => { for (const [k, x, y, w, h] of ops) for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) g[j][i] = k; };
-  const women = gender === "women" && pose === "front";
-  fill(pose === "side" ? SIDE_OPS : women ? WOMEN_FRONT_OPS : FRONT_OPS);
-  if (!hat && !women) for (let i = 0; i < PIXEL_GRID.w; i++) if (g[4][i] === "h") g[4][i] = "S";
+  const lay = (rows: readonly string[], y0: number) => rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] !== ".") g[y0 + j][i] = r[i]; });
+  if (pose === "side") {
+    fill(SIDE_OPS);
+    if (!hat) for (let i = 0; i < PIXEL_GRID.w; i++) if (g[4][i] === "h") g[4][i] = "S";
+  } else {
+    fill(LEGS_OPS[gender]);
+    lay(TORSO_TEMPLATES[gender][tpl?.torso ?? "hoodie"], TORSO_Y);
+    lay(HEAD_TEMPLATES[gender][tpl?.head ?? (hat ? "beanie" : "none")], HEAD_Y);
+    if (tpl?.face) lay(FACE_TEMPLATES[gender][tpl.face], HEAD_Y);
+  }
   if (bag) fill(BAG_OPS[pose]);
   return g.map((r) => r.join(""));
 }
@@ -50,6 +63,6 @@ export function figureGrid(pose: Pose, bag: boolean, hat: boolean, gender: "men"
 const cache = memoMarkup();
 /** inner SVG markup (rects, viewBox 0 0 20 40) of the figure; memoized per pose + colours */
 export function figureMarkup(s: FigureSpec, pose: Pose = PIXEL_FIGURE_POSE): string {
-  const g = s.gender === "women" ? "women" : "men", pal = figurePalette(s), hat = !!s.head && g === "men", bag = !!s.bag;
-  return cache(`${g}|${pose}|${hat ? 1 : 0}${bag ? 1 : 0}|${Object.values(pal).join("")}`, () => rectsMarkup(pixelRects(figureGrid(pose, bag, hat, g), pal)));
+  const g = s.gender === "women" ? "women" : "men", pal = figurePalette(s), t = specTemplates(s), bag = !!s.bag;
+  return cache(`${g}|${pose}|${t.torso}|${t.head}|${t.face ?? ""}|${bag ? 1 : 0}|${Object.values(pal).join("")}`, () => rectsMarkup(pixelRects(figureGrid(pose, bag, t.head !== "none", g, t), pal)));
 }

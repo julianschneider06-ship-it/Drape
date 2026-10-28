@@ -11,28 +11,364 @@ export const PIXEL_GRID = { w: 20, h: 40 } as const;
  *  W shoe, w shoe sole / far shoe, v far-shoe sole, X bag, x bag handle, L women's hair. */
 export type PixelOp = readonly [key: string, x: number, y: number, w: number, h: number];
 
-export const FRONT_OPS: readonly PixelOp[] = [
-  ["H", 5, 0, 10, 3], ["h", 5, 3, 10, 2], ["S", 5, 5, 10, 6], ["K", 7, 7, 1, 2], ["K", 12, 7, 1, 2],
-  ["B", 5, 11, 10, 16], ["B", 2, 11, 3, 11], ["B", 15, 11, 3, 11], ["b", 4, 12, 1, 10], ["b", 15, 12, 1, 10],
-  ["S", 2, 22, 3, 2], ["S", 15, 22, 3, 2], ["c", 8, 12, 1, 6], ["c", 11, 12, 1, 6],
-  ["B", 4, 24, 12, 4], ["b", 7, 24, 6, 3], ["b", 4, 27, 12, 1],
-  ["P", 4, 28, 12, 3], ["P", 4, 31, 5, 6], ["p", 8, 31, 1, 6], ["P", 11, 31, 5, 6], ["p", 15, 31, 1, 6],
-  ["q", 4, 37, 5, 1], ["q", 11, 37, 5, 1],
-  ["W", 4, 38, 5, 1], ["w", 4, 39, 5, 1], ["W", 11, 38, 5, 1], ["w", 11, 39, 5, 1],
-];
+/** Legs and shoes of the front figure (the same for every template); torso, head and face come from the templates below. */
+export const LEGS_OPS: Record<"men" | "women", readonly PixelOp[]> = {
+  men: [
+    ["P", 4, 28, 12, 3], ["P", 4, 31, 5, 6], ["p", 8, 31, 1, 6], ["P", 11, 31, 5, 6], ["p", 15, 31, 1, 6],
+    ["q", 4, 37, 5, 1], ["q", 11, 37, 5, 1],
+    ["W", 4, 38, 5, 1], ["w", 4, 39, 5, 1], ["W", 11, 38, 5, 1], ["w", 11, 39, 5, 1],
+  ],
+  women: [
+    ["P", 5, 27, 10, 3], ["P", 4, 30, 5, 7], ["P", 11, 30, 5, 7], ["p", 8, 30, 1, 7], ["p", 15, 30, 1, 7],
+    ["q", 4, 37, 5, 1], ["q", 11, 37, 5, 1],
+    ["W", 4, 38, 5, 1], ["w", 4, 39, 5, 1], ["W", 11, 38, 5, 1], ["w", 11, 39, 5, 1],
+  ],
+};
 
-/** Women's figure (front only): slimmer head, shoulders and torso, long hair with a ponytail instead of the beanie, tee, wide trousers, sneakers.
- *  Same grid and keys as the men's figure plus L = hair (constant colour, drawn last so it falls over the shoulders). Headwear is not drawn on it.
- *  Other poses fall back to the men's shape. */
-export const WOMEN_FRONT_OPS: readonly PixelOp[] = [
-  ["S", 7, 3, 6, 7], ["K", 8, 6, 1, 2], ["K", 11, 6, 1, 2], ["S", 9, 10, 2, 1],
-  ["B", 6, 11, 8, 16], ["S", 8, 11, 4, 1], ["B", 4, 11, 2, 10], ["B", 14, 11, 2, 10], ["b", 4, 12, 1, 9], ["b", 15, 12, 1, 9],
-  ["S", 4, 21, 2, 2], ["S", 14, 21, 2, 2], ["b", 6, 26, 8, 1],
-  ["P", 5, 27, 10, 3], ["P", 4, 30, 5, 7], ["P", 11, 30, 5, 7], ["p", 8, 30, 1, 7], ["p", 15, 30, 1, 7],
-  ["q", 4, 37, 5, 1], ["q", 11, 37, 5, 1],
-  ["W", 4, 38, 5, 1], ["w", 4, 39, 5, 1], ["W", 11, 38, 5, 1], ["w", 11, 39, 5, 1],
-  ["L", 6, 0, 8, 3], ["L", 7, 3, 6, 1], ["L", 5, 3, 2, 10], ["L", 13, 3, 2, 10], ["L", 15, 2, 2, 2], ["L", 16, 4, 2, 8],   // hair: crown, fringe, long sides, ponytail
-];
+/** Ready-made pixel templates (front pose). Rows of 20 characters (the figure grid width); "." = empty, the other characters are the op keys above plus
+ *  z = jacket zip line, G = sunglasses, F = glasses frame. A template is laid over the grid at its row offset; later layers overwrite earlier ones
+ *  (legs, torso, head, face, bag). Nothing is computed per outfit: the outfit only picks a key. The women's head templates keep the long hair + ponytail
+ *  with no head accessory; with a cap / beanie / hat only the ponytail end shows. */
+export const TORSO_Y = 11, TORSO_ROWS = 17, HEAD_Y = 0, HEAD_ROWS = 13;
+export type Gender = "men" | "women";
+export const TORSO_KEYS = ["hoodie", "jacket", "tee"] as const;
+export const HEAD_KEYS = ["none", "beanie", "cap", "hat"] as const;
+export const FACE_KEYS = ["sunglasses", "glasses"] as const;
+export type TorsoKey = (typeof TORSO_KEYS)[number];
+export type HeadKey = (typeof HEAD_KEYS)[number];
+export type FaceKey = (typeof FACE_KEYS)[number];
+
+export const TORSO_TEMPLATES: Record<Gender, Record<TorsoKey, readonly string[]>> = {
+  men: {
+    hoodie: [
+      "..BBBBBBBBBBBBBBBB..",
+      "..BBbBBBcBBcBBBbBB..",
+      "..BBbBBBcBBcBBBbBB..",
+      "..BBbBBBcBBcBBBbBB..",
+      "..BBbBBBcBBcBBBbBB..",
+      "..BBbBBBcBBcBBBbBB..",
+      "..BBbBBBcBBcBBBbBB..",
+      "..BBbBBBBBBBBBBbBB..",
+      "..BBbBBBBBBBBBBbBB..",
+      "..BBbBBBBBBBBBBbBB..",
+      "..BBbBBBBBBBBBBbBB..",
+      "..SSSBBBBBBBBBBSSS..",
+      "..SSSBBBBBBBBBBSSS..",
+      "....BBBbbbbbbBBB....",
+      "....BBBbbbbbbBBB....",
+      "....BBBbbbbbbBBB....",
+      "....bbbbbbbbbbbb....",
+    ],
+    jacket: [
+      "..BBBbbbbSSbbbbBBB..",
+      "..BBbBbbbBBbbbBbBB..",
+      "..BBbBBBBzbBBBBbBB..",
+      "..BBbBBBBzbBBBBbBB..",
+      "..BBbBBBBzbBBBBbBB..",
+      "..BBbBBBBzbBBBBbBB..",
+      "..BBbBBBBzbBBBBbBB..",
+      "..BBbBBBBzbBBBBbBB..",
+      "..BBbBBBBzbBBBBbBB..",
+      "..BBbBBBBzbBBBBbBB..",
+      "..bbbBBBBzbBBBBbbb..",
+      "..SSSBBBBzbBBBBSSS..",
+      "..SSSBbbBzbBbbBSSS..",
+      ".....BBBBzbBBBB.....",
+      ".....BBBBzbBBBB.....",
+      ".....BBBBzbBBBB.....",
+      ".....bbbbbbbbbb.....",
+    ],
+    tee: [
+      "..BBBBBbSSSSbBBBBB..",
+      "..BBBBBBBBBBBBBBBB..",
+      "..BBBBBBBBBBBBBBBB..",
+      "..BBBBBBBBBBBBBBBB..",
+      "..bbbBBBBBBBBBBbbb..",
+      "..SSSBBBBBBBBBBSSS..",
+      "..SSSBBBBBBBBBBSSS..",
+      "..SSSBBBBBBBBBBSSS..",
+      "..SSSBBBBBBBBBBSSS..",
+      "..SSSBBBBBBBBBBSSS..",
+      "..SSSBBBBBBBBBBSSS..",
+      "..SSSBBBBBBBBBBSSS..",
+      "..SSSBBBBBBBBBBSSS..",
+      ".....BBBBBBBBBB.....",
+      ".....BBBBBBBBBB.....",
+      ".....BBBBBBBBBB.....",
+      ".....bbbbbbbbbb.....",
+    ],
+  },
+  women: {
+    hoodie: [
+      "....BBBBSSSSBBBB....",
+      "....bBBBcBBcBBBb....",
+      "....bBBBcBBcBBBb....",
+      "....bBBBcBBcBBBb....",
+      "....bBBBcBBcBBBb....",
+      "....bBBBcBBcBBBb....",
+      "....bBBBBBBBBBBb....",
+      "....bBBBBBBBBBBb....",
+      "....bBBBBBBBBBBb....",
+      "....bBBBBBBBBBBb....",
+      "....SSBBBBBBBBSS....",
+      "....SSBBbbbbBBSS....",
+      "......BBbbbbBB......",
+      "......BBbbbbBB......",
+      "......BBBBBBBB......",
+      "......bbbbbbbb......",
+      "....................",
+    ],
+    jacket: [
+      "....BBbbbSSbbbBB....",
+      "....bBbbBzbBbbBb....",
+      "....bBBBBzbBBBBb....",
+      "....bBBBBzbBBBBb....",
+      "....bBBBBzbBBBBb....",
+      "....bBBBBzbBBBBb....",
+      "....bBBBBzbBBBBb....",
+      "....bBBBBzbBBBBb....",
+      "....bBBBBzbBBBBb....",
+      "....bbBBBzbBBBbb....",
+      "....SSBBBzbBBBSS....",
+      "....SSbbBzbBbbSS....",
+      "......BBBzbBBB......",
+      "......BBBzbBBB......",
+      "......BBBzbBBB......",
+      "......bbbbbbbb......",
+      "....................",
+    ],
+    tee: [
+      "....BBBbSSSSbBBB....",
+      "....BBBBBBBBBBBB....",
+      "....BBBBBBBBBBBB....",
+      "....BBBBBBBBBBBB....",
+      "....bbBBBBBBBBbb....",
+      "....SSBBBBBBBBSS....",
+      "....SSBBBBBBBBSS....",
+      "....SSBBBBBBBBSS....",
+      "....SSBBBBBBBBSS....",
+      "....SSBBBBBBBBSS....",
+      "....SSBBBBBBBBSS....",
+      "......BBBBBBBB......",
+      "......BBBBBBBB......",
+      "......BBBBBBBB......",
+      "......BBBBBBBB......",
+      "......bbbbbbbb......",
+      "....................",
+    ],
+  },
+};
+export const HEAD_TEMPLATES: Record<Gender, Record<HeadKey, readonly string[]>> = {
+  men: {
+    none: [
+      "......LLLLLLLL......",
+      ".....LLLLLLLLLL.....",
+      ".....LLLLLLLLLL.....",
+      ".....LLLLLLLLLL.....",
+      ".....SSSSSSSSSS.....",
+      ".....SSSSSSSSSS.....",
+      ".....SSSSSSSSSS.....",
+      ".....SSKSSSSKSS.....",
+      ".....SSKSSSSKSS.....",
+      ".....SSSSSSSSSS.....",
+      ".....SSSSSSSSSS.....",
+      "....................",
+      "....................",
+    ],
+    beanie: [
+      ".......HHHHHH.......",
+      "......HHHHHHHH......",
+      ".....HHHHHHHHHH.....",
+      "....hhhhhhhhhhhh....",
+      "....hhhhhhhhhhhh....",
+      ".....SSSSSSSSSS.....",
+      ".....SSSSSSSSSS.....",
+      ".....SSKSSSSKSS.....",
+      ".....SSKSSSSKSS.....",
+      ".....SSSSSSSSSS.....",
+      ".....SSSSSSSSSS.....",
+      "....................",
+      "....................",
+    ],
+    cap: [
+      ".......HHHHHH.......",
+      "......HHHHHHHH......",
+      ".....HHHHHHHHHH.....",
+      ".....HHHHHHHHHH.....",
+      "...hhhhhhhhhhhhhh...",
+      ".....ShhhhhhhhS.....",
+      ".....SSSSSSSSSS.....",
+      ".....SSKSSSSKSS.....",
+      ".....SSKSSSSKSS.....",
+      ".....SSSSSSSSSS.....",
+      ".....SSSSSSSSSS.....",
+      "....................",
+      "....................",
+    ],
+    hat: [
+      ".......HHHHHH.......",
+      "......HHHHHHHH......",
+      "......HHHHHHHH......",
+      "..hhhhhhhhhhhhhhhh..",
+      "...hhhhhhhhhhhhhh...",
+      ".....SSSSSSSSSS.....",
+      ".....SSSSSSSSSS.....",
+      ".....SSKSSSSKSS.....",
+      ".....SSKSSSSKSS.....",
+      ".....SSSSSSSSSS.....",
+      ".....SSSSSSSSSS.....",
+      "....................",
+      "....................",
+    ],
+  },
+  women: {
+    none: [
+      "......LLLLLLLL......",
+      "......LLLLLLLL......",
+      "......LLLLLLLL.LL...",
+      ".....LLLLLLLLLLLL...",
+      ".....LLSSSSSSLL.LL..",
+      ".....LLSSSSSSLL.LL..",
+      ".....LLSKSSKSLL.LL..",
+      ".....LLSKSSKSLL.LL..",
+      ".....LLSSSSSSLL.LL..",
+      ".....LLSSSSSSLL.LL..",
+      ".....LL..SS..LL.LL..",
+      ".....LL......LL.LL..",
+      ".....LL......LL.....",
+    ],
+    beanie: [
+      "........HHHH........",
+      ".......HHHHHH.......",
+      "......HHHHHHHH......",
+      "......hhhhhhhh......",
+      "......hhhhhhhh......",
+      ".......SSSSSS.LL....",
+      ".......SKSSKS..LL...",
+      ".......SKSSKS..LL...",
+      ".......SSSSSS..LL...",
+      ".......SSSSSS..LL...",
+      ".........SS....LL...",
+      "...............LL...",
+      "....................",
+    ],
+    cap: [
+      "........HHHH........",
+      ".......HHHHHH.......",
+      ".......HHHHHH.......",
+      ".......HHHHHH.......",
+      ".....hhhhhhhhhh.....",
+      ".......SSSSSS.LL....",
+      ".......SKSSKS..LL...",
+      ".......SKSSKS..LL...",
+      ".......SSSSSS..LL...",
+      ".......SSSSSS..LL...",
+      ".........SS....LL...",
+      "...............LL...",
+      "....................",
+    ],
+    hat: [
+      "........HHHH........",
+      ".......HHHHHH.......",
+      ".......HHHHHH.......",
+      "....hhhhhhhhhhhh....",
+      ".....hhhhhhhhhh.....",
+      ".......SSSSSS.LL....",
+      ".......SKSSKS..LL...",
+      ".......SKSSKS..LL...",
+      ".......SSSSSS..LL...",
+      ".......SSSSSS..LL...",
+      ".........SS....LL...",
+      "...............LL...",
+      "....................",
+    ],
+  },
+};
+/** drawn on top of the head template, over the eyes; they combine with cap / beanie / hat */
+export const FACE_TEMPLATES: Record<Gender, Record<FaceKey, readonly string[]>> = {
+  men: {
+    sunglasses: [
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      ".....GGGGGGGGGG.....",
+      "......GGG..GGG......",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+    ],
+    glasses: [
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "......FFF..FFF......",
+      ".....FF.FFFF.FF.....",
+      "......F.F..F.F......",
+      "......FFF..FFF......",
+      "....................",
+      "....................",
+      "....................",
+    ],
+  },
+  women: {
+    sunglasses: [
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      ".......GGGGGG.......",
+      ".......GG..GG.......",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+    ],
+    glasses: [
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      ".......FFFFFF.......",
+      ".......F.FF.F.......",
+      ".......F.FF.F.......",
+      ".......FFFFFF.......",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+    ],
+  },
+};
+
+/** Category -> template lookups (keys are lower-case classification subcategories / accessory types, see `templateKey`). Real values of the catalogue; add more as they appear.
+ *  Unknown top category = `TORSO_FALLBACK`. Any head accessory type not listed = no head template; any face type not listed = none. */
+export const TORSO_FALLBACK: TorsoKey = "hoodie";
+export const TORSO_BY_CATEGORY: Readonly<Record<string, TorsoKey>> = {
+  hoodie: "hoodie", sweatshirt: "hoodie", pullover: "hoodie", fleece: "hoodie", "quarter zip": "hoodie", sweater: "hoodie", jumper: "hoodie", knit: "hoodie", "knit sweater": "hoodie",
+  "knit top": "hoodie", "polo sweater": "hoodie", turtleneck: "hoodie", thermal: "hoodie", "thermal shirt": "hoodie", longsleeve: "hoodie", "long sleeve tee": "hoodie", "long sleeve top": "hoodie",
+  "rugby shirt": "hoodie", tracksuit: "hoodie",
+  jacket: "jacket", blazer: "jacket", cardigan: "jacket", coat: "jacket", "bomber jacket": "jacket", "chore jacket": "jacket", "shirt jacket": "jacket", overshirt: "jacket", vest: "jacket",
+  "puffer jacket": "jacket", "fleece jacket": "jacket", "leather jacket": "jacket", "denim jacket": "jacket", "trench coat": "jacket", parka: "jacket", "track jacket": "jacket", "padded jacket": "jacket",
+  "down jacket": "jacket", "field jacket": "jacket", "trucker jacket": "jacket", "suede jacket": "jacket", "varsity jacket": "jacket", "zip jacket": "jacket", "hooded jacket": "jacket",
+  "rain jacket": "jacket", raincoat: "jacket", windbreaker: "jacket", anorak: "jacket", "sweater vest": "jacket",
+  tshirt: "tee", "t shirt": "tee", tee: "tee", shirt: "tee", polo: "tee", "polo shirt": "tee", "tank top": "tee", blouse: "tee", henley: "tee", jersey: "tee", "flannel shirt": "tee", "sleeveless shirt": "tee",
+  "crop top": "tee", cami: "tee", camisole: "tee", top: "tee", bodysuit: "tee", "halter top": "tee", "peplum top": "tee", dress: "tee", jumpsuit: "tee",
+};
+export const HEAD_BY_TYPE: Readonly<Record<string, Exclude<HeadKey, "none">>> = { cap: "cap", beanie: "beanie", hat: "hat" };
+export const FACE_BY_TYPE: Readonly<Record<string, FaceKey>> = { sunglasses: "sunglasses", glasses: "glasses", eyeglasses: "glasses" };
+export const BAG_TYPES: readonly string[] = ["bag", "backpack"];
 
 /** the figure faces right */
 export const SIDE_OPS: readonly PixelOp[] = [
@@ -49,13 +385,13 @@ export const BAG_OPS = {
   side: [["x", 10, 24, 2, 1], ["X", 9, 25, 4, 6]],
 } as const satisfies Record<"front" | "side", readonly PixelOp[]>;
 
-export const PIXEL_KEYS = "HhSKBbcPpqWwvXxL";
+export const PIXEL_KEYS = "HhSKBbcPpqWwvXxLzGF";
 
 /** Colour rules. Shades multiply every channel by the factor; the constants never follow the outfit. */
 export const PIXEL_COLORS = {
-  skin: "#e6c4a2", eyes: "#1a1a1a", hair: "#3a2e28",   // men's no-beanie hair and the women's long hair
+  skin: "#e6c4a2", eyes: "#1a1a1a", hair: "#3a2e28", sunglasses: "#17171b", glasses: "#3b3b40",   // men's no-beanie hair and the women's long hair
   fallback: { top: "#4a4a4f", bottom: "#8fa0b3", shoes: "#f1efe9" },   // used when a part has no usable colour
-  shade: { b: 0.72, p: 0.78, q: 0.65, w: 0.87, v: 0.71, h: 0.81, x: 0.7 },
+  shade: { z: 0.55, b: 0.72, p: 0.78, q: 0.65, w: 0.87, v: 0.71, h: 0.81, x: 0.7 },
   strings: { onDark: "#d8d8d8", onLight: "#8a8a8a", lightAbove: 0.6 },   // drawstrings: pale on a dark hoodie, grey when the hoodie luminance is above `lightAbove`
   maxLuminance: 0.88, mixTo: "#bdbdbd",                                  // outfit colours lighter than this are mixed toward `mixTo` so they show on white
 } as const;

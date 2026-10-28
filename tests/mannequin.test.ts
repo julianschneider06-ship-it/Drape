@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { effectiveMini, figureLeft, figureWidth, mannequinSpec, pieceColor, pieceHex } from "../src/lib/mannequin";
+import { effectiveMini, figureLeft, figureWidth, mannequinSpec, pieceColor, pieceHex, torsoKey } from "../src/lib/mannequin";
 import { MANNEQUIN } from "../src/config/mannequin";
-import { BAG_OPS, DECO_MAX_COUNT, FRONT_OPS, PIXEL_COLORS, PIXEL_GRID, PIXEL_KEYS, PIXEL_FIGURE_POSE, SIDE_OPS, WOMEN_FRONT_OPS } from "../src/config/pixel-figure";
+import { BAG_OPS, BAG_TYPES, DECO_MAX_COUNT, FACE_BY_TYPE, FACE_KEYS, FACE_TEMPLATES, HEAD_BY_TYPE, HEAD_KEYS, HEAD_ROWS, HEAD_TEMPLATES, LEGS_OPS, PIXEL_COLORS, PIXEL_GRID, PIXEL_KEYS, PIXEL_FIGURE_POSE, SIDE_OPS,
+  TORSO_BY_CATEGORY, TORSO_FALLBACK, TORSO_KEYS, TORSO_ROWS, TORSO_TEMPLATES, TORSO_Y } from "../src/config/pixel-figure";
 import { clampLight, figureGrid, figureMarkup, figurePalette, luminance, shade, type FigureSpec } from "../src/lib/pixel-figure";
 import { pixelRects } from "../src/lib/pixel-art";
 import { DEFAULT_PREFS, cleanPrefs } from "../src/lib/shop-pref";
@@ -16,7 +17,7 @@ const outfit = (top: FeedCard, bottom: FeedCard | null, shoes: FeedCard, accesso
 
 test("grid: every op lies inside 20x40 and uses a known key", () => {
   assert.deepEqual([PIXEL_GRID.w, PIXEL_GRID.h], [20, 40]);
-  for (const ops of [FRONT_OPS, WOMEN_FRONT_OPS, SIDE_OPS, BAG_OPS.front, BAG_OPS.side]) for (const [k, x, y, w, h] of ops) {
+  for (const ops of [LEGS_OPS.men, LEGS_OPS.women, SIDE_OPS, BAG_OPS.front, BAG_OPS.side]) for (const [k, x, y, w, h] of ops) {
     assert.ok(PIXEL_KEYS.includes(k), `key ${k}`);
     assert.ok(w > 0 && h > 0 && x >= 0 && y >= 0 && x + w <= 20 && y + h <= 40, `op ${k} ${x},${y} ${w}x${h}`);
   }
@@ -28,10 +29,10 @@ test("grid: every op lies inside 20x40 and uses a known key", () => {
   }
 });
 
-test("grid: hair instead of a hat turns the cuff row into skin, hat keeps it", () => {
-  assert.equal(figureGrid("front", false, true)[4].slice(5, 15), "hhhhhhhhhh");
+test("grid: beanie keeps its cuff rows, hair instead of a hat turns them into hair + forehead", () => {
+  assert.equal(figureGrid("front", false, true)[4].slice(4, 16), "hhhhhhhhhhhh");
   assert.equal(figureGrid("front", false, false)[4].slice(5, 15), "SSSSSSSSSS");
-  assert.equal(figureGrid("front", false, false)[3].slice(5, 15), "hhhhhhhhhh");   // row 3 stays the (hair) colour via the palette
+  assert.equal(figureGrid("front", false, false)[3].slice(5, 15), "LLLLLLLLLL");
 });
 
 const spec = (o: Partial<FigureSpec> = {}): FigureSpec => ({ top: "#e0221b", bottom: "#1f2a55", shoes: "#1a1a1a", head: null, bag: null, ...o });
@@ -74,12 +75,12 @@ test("colour: first colour of the piece, null / grey when missing / multicolor /
   assert.equal(pieceColor(card("x", "top", null)), MANNEQUIN.fallbackColor);
 });
 
-test("outfit spec: headwear and bag only, others ignored, fixed fallbacks, outer layer as top", () => {
+test("outfit spec: head / face / bag templates, others ignored, fixed fallbacks, outer layer as top", () => {
   const s = mannequinSpec(outfit(card("Tee", "top", { col: "white" }), card("Jeans", "bottom", { col: "blue" }), card("Boots", "shoes", { col: "black" }),
     [acc("watch"), acc("cap", "red"), acc("beanie"), acc("sunglasses"), acc("bag", "brown"), acc("belt")]));
-  assert.deepEqual(s, { top: "#ffffff", bottom: "#2f6fd0", shoes: "#1a1a1a", head: "#e0221b", bag: "#7b4a2d" });   // first head item only
+  assert.deepEqual(s, { top: "#ffffff", bottom: "#2f6fd0", shoes: "#1a1a1a", head: "#e0221b", bag: "#7b4a2d", torso: "hoodie", headType: "cap", face: "sunglasses" });   // first head item only
   const n = mannequinSpec(outfit(card("Top", "top", null), card("Pants", "bottom", null), card("Shoe", "shoes", null), [acc("hat"), acc("backpack")]));
-  assert.deepEqual(n, { top: "#4a4a4f", bottom: "#8fa0b3", shoes: "#f1efe9", head: MANNEQUIN.fallbackColor, bag: MANNEQUIN.fallbackColor });
+  assert.deepEqual(n, { top: "#4a4a4f", bottom: "#8fa0b3", shoes: "#f1efe9", head: MANNEQUIN.fallbackColor, bag: MANNEQUIN.fallbackColor, torso: "hoodie", headType: "hat", face: null });
   const none = mannequinSpec(outfit(card("Tee", "top", { col: "red" }), card("Jeans", "bottom", { col: "blue" }), card("Boots", "shoes", { col: "black" }), [acc("watch")]));
   assert.deepEqual([none.head, none.bag], [null, null]);
   const o = mannequinSpec(outfit(card("Bomber", "top", { outer: true, col: "olive" }), card("Jeans", "bottom", { col: "blue" }), card("Boots", "shoes", { col: "black" })));
@@ -137,11 +138,11 @@ test("position: the safe right margin pulls the figure in when the tab centre is
 
 test("women's figure: own slim shape, hair + ponytail instead of the beanie, same grid and optional bag", () => {
   assert.equal(PIXEL_FIGURE_POSE, "front");
-  const m = figureGrid("front", false, true), w = figureGrid("front", false, false, "women");
+  const m = figureGrid("front", false, true, "men", { head: "beanie" }), w = figureGrid("front", false, false, "women");
   assert.notDeepEqual(w, m);
   assert.equal(w.length, 40); assert.ok(w.every((r) => r.length === 20));
   const count = (g: string[], ch: string) => g.join("").split(ch).length - 1;
-  assert.equal(count(m, "H"), 30); assert.equal(count(w, "H"), 0); assert.equal(count(w, "h"), 0);   // no beanie
+  assert.ok(count(m, "H") > 0); assert.equal(count(w, "H"), 0); assert.equal(count(w, "h"), 0);   // no beanie
   assert.ok(count(w, "L") > 30 && w.slice(4, 12).some((r) => r.slice(16, 18) === "LL"));              // long hair, ponytail beside the body
   assert.ok(count(w, "B") < count(m, "B"));                                                          // slimmer top
   assert.equal(figureGrid("front", true, false, "women").some((r) => /[Xx]/.test(r)), true);
@@ -149,7 +150,7 @@ test("women's figure: own slim shape, hair + ponytail instead of the beanie, sam
   assert.deepEqual(figureGrid("side", false, true, "women"), figureGrid("side", false, true));       // other poses keep the men's shape
 });
 
-test("women's figure: selected by the spec's gender, colours still come from the outfit, headwear is ignored", () => {
+test("women's figure: selected by the spec's gender, colours still come from the outfit, a cap hides the hair", () => {
   const o = outfit(card("Tee", "top", { col: "red" }), card("Jeans", "bottom", { col: "blue" }), card("Boots", "shoes", { col: "black" }), [acc("cap", "green"), acc("bag", "brown")]);
   assert.equal(mannequinSpec(o).gender, undefined);   // men: no gender key
   const ws = mannequinSpec(o, "women");
@@ -157,11 +158,84 @@ test("women's figure: selected by the spec's gender, colours still come from the
   assert.deepEqual([ws.top, ws.bottom, ws.shoes, ws.bag], ["#e0221b", "#2f6fd0", "#1a1a1a", "#7b4a2d"]);   // same colour rules as the men's figure
   const men = figureMarkup(mannequinSpec(o)), women = figureMarkup(ws);
   assert.notEqual(men, women);
-  assert.ok(women.includes(PIXEL_COLORS.hair) && women.includes("#e0221b") && !women.includes("#2f9e5b"));   // hair, top colour; no green cap
+  assert.ok(women.includes(PIXEL_COLORS.hair) && women.includes("#e0221b") && women.includes("#2f9e5b"));   // ponytail end, top colour, green cap
   assert.ok(men.includes("#2f9e5b"));
-  const same = { ...ws, head: null };
-  assert.equal(figureMarkup(same), women);                                                                 // headwear never changes the women's figure
+  const bare = { ...ws, head: null, headType: null };
+  assert.notEqual(figureMarkup(bare), women);                                                              // the cap changes the women's figure too
   assert.equal(figurePalette(spec({ gender: "women" })).L, PIXEL_COLORS.hair);
   const light = figurePalette(spec({ gender: "women", top: "#ffffff" }));
   assert.ok(luminance(light.B) <= 0.88);                                                                   // same brightness clamp
+});
+
+// ---- ready-made templates ----
+
+test("templates: every bitmap has the same width and the row count of its kind, and only known keys", () => {
+  const W = PIXEL_GRID.w, keys = PIXEL_KEYS + ".";
+  for (const g of ["men", "women"] as const) {
+    for (const [set, rows, names] of [[TORSO_TEMPLATES[g], TORSO_ROWS, TORSO_KEYS], [HEAD_TEMPLATES[g], HEAD_ROWS, HEAD_KEYS], [FACE_TEMPLATES[g], HEAD_ROWS, FACE_KEYS]] as const) {
+      assert.deepEqual(Object.keys(set).sort(), [...names].sort(), `${g} template names`);
+      for (const [name, bm] of Object.entries(set)) {
+        assert.equal(bm.length, rows, `${g} ${name} rows`);
+        for (const r of bm) { assert.equal(r.length, W, `${g} ${name} width`); assert.ok([...r].every((c) => keys.includes(c)), `${g} ${name} key`); }
+      }
+    }
+  }
+  assert.ok(TORSO_Y + TORSO_ROWS <= PIXEL_GRID.h && HEAD_ROWS <= TORSO_Y + 2);
+});
+
+test("templates: lookup tables only point at existing templates; known categories, fallback, odd spellings", () => {
+  for (const v of Object.values(TORSO_BY_CATEGORY)) assert.ok((TORSO_KEYS as readonly string[]).includes(v));
+  for (const v of Object.values(HEAD_BY_TYPE)) assert.ok((HEAD_KEYS as readonly string[]).includes(v));
+  for (const v of Object.values(FACE_BY_TYPE)) assert.ok((FACE_KEYS as readonly string[]).includes(v));
+  assert.ok(Object.keys(TORSO_BY_CATEGORY).every((k) => k === k.toLowerCase()));
+  const t = (sub: string | null) => torsoKey(card("x", "top", { sub }));
+  assert.deepEqual(["hoodie", "sweatshirt", "bomber jacket", "blazer", "cardigan", "coat", "tshirt", "polo", "shirt", "tank top"].map(t),
+    ["hoodie", "hoodie", "jacket", "jacket", "jacket", "jacket", "tee", "tee", "tee", "tee"]);
+  assert.equal(t("Bomber  Jacket"), "jacket"); assert.equal(t("T-Shirt"), "tee");   // case, spaces and hyphens do not matter
+  assert.equal(t("spacesuit"), TORSO_FALLBACK); assert.equal(t(null), TORSO_FALLBACK); assert.equal(t("constructor"), TORSO_FALLBACK);
+  assert.equal(torsoKey(card("x", "top", null)), TORSO_FALLBACK); assert.equal(torsoKey(null), TORSO_FALLBACK);
+  assert.equal(TORSO_FALLBACK, "hoodie");
+  assert.deepEqual([HEAD_BY_TYPE.cap, HEAD_BY_TYPE.beanie, HEAD_BY_TYPE.hat, HEAD_BY_TYPE.scarf], ["cap", "beanie", "hat", undefined]);
+  assert.deepEqual([FACE_BY_TYPE.sunglasses, FACE_BY_TYPE.glasses, FACE_BY_TYPE.watch], ["sunglasses", "glasses", undefined]);
+  assert.deepEqual(BAG_TYPES, ["bag", "backpack"]);
+});
+
+test("templates: selection from a sample outfit", () => {
+  const base = [card("Jeans", "bottom", { col: "blue" }), card("Boots", "shoes", { col: "black" })] as const;
+  const a = mannequinSpec(outfit(card("Bomber", "top", { sub: "bomber jacket", col: "olive" }), base[0], base[1], [acc("beanie", "grey")]));
+  assert.deepEqual([a.torso, a.headType, a.face], ["jacket", "beanie", null]);
+  const b = mannequinSpec(outfit(card("Tee", "top", { sub: "tshirt", col: "white" }), base[0], base[1], [acc("cap", "red"), acc("sunglasses")]));
+  assert.deepEqual([b.torso, b.headType, b.face], ["tee", "cap", "sunglasses"]);
+  const c = mannequinSpec(outfit(card("Tee", "top", { sub: "tshirt" }), base[0], base[1], [acc("watch"), acc("glasses")]));
+  assert.deepEqual([c.headType, c.head, c.face], [null, null, "glasses"]);
+  const d = mannequinSpec(outfit(card("Odd", "top", { sub: "poncho" }), base[0], base[1]));
+  assert.deepEqual([d.torso, d.headType, d.face, d.head], ["hoodie", null, null, null]);
+});
+
+test("templates: the grid shows the chosen templates (both genders), and face goes over any head", () => {
+  const rows = (g: string[], y0: number, y1: number) => g.slice(y0, y1).join("");
+  for (const gender of ["men", "women"] as const) {
+    const jacket = figureGrid("front", false, false, gender, { torso: "jacket" }), tee = figureGrid("front", false, false, gender, { torso: "tee" }), hood = figureGrid("front", false, false, gender, { torso: "hoodie" });
+    assert.ok(rows(jacket, 11, 28).includes("z") && !rows(hood, 11, 28).includes("z") && !rows(tee, 11, 28).includes("z"));
+    assert.ok(rows(hood, 11, 28).includes("c") && !rows(tee, 11, 28).includes("c"));
+    assert.notDeepEqual(jacket, tee);
+    const heads = (["none", "beanie", "cap", "hat"] as const).map((h) => figureGrid("front", false, true, gender, { head: h }));
+    assert.equal(new Set(heads.map((g) => g.join())).size, 4);
+    for (const face of ["sunglasses", "glasses"] as const) for (const h of ["none", "beanie", "cap", "hat"] as const) {
+      const g = figureGrid("front", false, true, gender, { head: h, face }), key = face === "sunglasses" ? "G" : "F";
+      assert.ok(rows(g, 0, 11).includes(key), `${gender} ${h} ${face}`);
+      assert.notDeepEqual(g, figureGrid("front", false, true, gender, { head: h }));
+    }
+  }
+  // cap: brim wider than the head; beanie: folded cuff row wider than the head; hat: brim all around (widest)
+  const span = (r: string) => r.replace(/\./g, " ").trimEnd().length - r.replace(/\./g, " ").search(/\S/);
+  const m = (h: "cap" | "beanie" | "hat") => figureGrid("front", false, true, "men", { head: h });
+  assert.equal(span(m("cap")[4]), 14); assert.equal(span(m("beanie")[3]), 12); assert.ok(span(m("hat")[3]) > span(m("cap")[4]));
+  // women: long hair with no head accessory, only the ponytail end with one
+  const wn = figureGrid("front", false, false, "women", { head: "none" }).join(""), wc = figureGrid("front", false, true, "women", { head: "cap" }).join("");
+  assert.ok(wn.split("L").length - 1 > 30 && wc.split("L").length - 1 > 0 && wc.split("L").length - 1 < 15);
+  // spec -> markup: same templates and colours give the same cached markup; a different template differs
+  const o = (sub: string) => mannequinSpec(outfit(card("T", "top", { sub, col: "red" }), card("J", "bottom", { col: "blue" }), card("B", "shoes", { col: "black" })));
+  assert.equal(figureMarkup(o("blazer")), figureMarkup(o("coat")));
+  assert.notEqual(figureMarkup(o("blazer")), figureMarkup(o("tshirt")));
 });

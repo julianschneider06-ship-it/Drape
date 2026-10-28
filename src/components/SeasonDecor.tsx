@@ -24,7 +24,7 @@ function Meadow({ width }: { width: number }) {
 
 /** two fixed spots of static pixel pieces, positions snapped to the decoration pixel grid */
 function Spots({ kind, width, height }: { kind: "autumn" | "winter"; width: number; height: number }) {
-  const html = useMemo(() => (kind === "autumn" ? leafMarkup() : snowMarkup()), [kind]), px = decoPx(), size = DECO_BITMAP_SIZE * px;
+  const html = useMemo(() => (kind === "autumn" ? leafMarkup() : snowMarkup()), [kind]), px = decoPx(), size = DECO_BITMAP_SIZE * px * (kind === "autumn" ? C.leaves.scale : C.snow.scale);
   const pieces = useMemo(() => C.spots.places.map((pl, i) => spotPieces(i, width).map((p) => ({ key: p.seed, left: snap(pl.x * width + p.dx), top: snap((pl.y0 + p.yFrac * (pl.y1 - pl.y0)) * height) }))), [width, height]);
   if (!(width > 0 && height > 0)) return null;
   return (

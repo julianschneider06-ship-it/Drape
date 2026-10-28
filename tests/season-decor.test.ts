@@ -61,7 +61,7 @@ test("deco bitmaps are exactly 16x16 and use only known characters", () => {
     assert.equal(b.length, DECO_BITMAP_SIZE);
     for (const row of b) { assert.equal(row.length, DECO_BITMAP_SIZE); assert.ok([...row].every((c) => DECO_BITMAP_CHARS.includes(c)), row); }
   }
-  assert.ok(SNOWFLAKE_BITMAP.every((r) => !r.includes("v")) && LEAF_BITMAP.some((r) => r.includes("v")));
+  assert.ok(SNOWFLAKE_BITMAP.every((r) => !r.includes("v")) && LEAF_BITMAP.every((r) => !r.includes("v")));
 });
 
 test("deco pixel = DECO_PX_MULT x figure pixel (finer than the old 2), positions snap to it", () => {
@@ -75,7 +75,7 @@ test("deco pixel = DECO_PX_MULT x figure pixel (finer than the old 2), positions
 test("drawing is deterministic, flat and the config is sane", () => {
   assert.equal(snowMarkup(), snowMarkup());
   for (const m of [snowMarkup(), leafMarkup(), sunMarkup(), meadowMarkup(400).html]) assert.ok(m.startsWith("<rect ") && !/stroke|opacity|filter|gradient/i.test(m));
-  assert.ok(leafMarkup().includes(SEASON_DECOR.leaves.vein) && snowMarkup().includes(SEASON_DECOR.snow.color) && sunMarkup().includes(SEASON_DECOR.sun.color));
+  assert.ok(leafMarkup().includes(SEASON_DECOR.leaves.color) && snowMarkup().includes(SEASON_DECOR.snow.color) && sunMarkup().includes(SEASON_DECOR.sun.color));
   assert.deepEqual(meadowGrid(400), meadowGrid(400));
   const g = meadowGrid(400); assert.ok(g.every((r) => r.length === g[0].length) && g[g.length - 1] === "#".repeat(g[0].length));
   assert.ok(g.slice(0, g.length - 3).join("").includes("#"));   // blades stand above the strip

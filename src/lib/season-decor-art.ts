@@ -1,4 +1,4 @@
-// Seasonal decorations as flat pixel art: 16x16 bitmaps (# = pixel, v = vein, . = empty) and a pixel meadow strip. Pure, deterministic, memoized markup.
+// Seasonal decorations as flat pixel art: 16x16 bitmaps (# = pixel, . = empty) and a pixel meadow strip. Pure, deterministic, memoized markup.
 import { DECO_MAX_COUNT, DECO_PX_MULT, PIXEL_GRID } from "@/config/pixel-figure";
 import { MANNEQUIN } from "@/config/mannequin";
 import { SEASON_DECOR as C } from "@/config/season-decor";
@@ -27,24 +27,24 @@ export const SNOWFLAKE_BITMAP: readonly string[] = [
   ".....#.##.#.....",
   ".......##.......",
 ];
-/** Leaf, 16x16: stem bottom left, tip top right, a vein along the middle and a lightly notched outline. */
+/** Maple leaf, 16x16: pointed lobes (top, two sides, two lower tips) and a short stem at the bottom, symmetric, one colour. */
 export const LEAF_BITMAP: readonly string[] = [
-  "..........##....",
-  "......##########",
-  "....#.#######v##",
-  "....########v###",
-  "....#######v###.",
-  "...#######v#####",
-  "...######v######",
-  "...#####v######.",
-  "..#####v#######.",
-  "..####v########.",
-  "...##v#######...",
-  "...#v#########..",
-  "...v#######.....",
-  "..v.............",
-  ".v..............",
-  "v...............",
+  ".......##.......",
+  "......####......",
+  ".#....####....#.",
+  ".##..######..##.",
+  ".###.######.###.",
+  "..############..",
+  ".##############.",
+  "..############..",
+  "...##########...",
+  "..#..######..#..",
+  ".....######.....",
+  "......####......",
+  ".......##.......",
+  ".......##.......",
+  ".......##.......",
+  "................",
 ];
 /** Sun, 16x16: a disc centred on the top right corner (only the visible quarter is drawn) with single-pixel rays around it. */
 export const SUN_BITMAP: readonly string[] = [
@@ -79,7 +79,7 @@ export const bitmapMarkup = (name: string, bitmap: readonly string[], colors: Re
   cache(`${name}|${Object.values(colors).join("")}`, () => rectsMarkup(pixelRects(bitmap, colors)));
 
 export const snowMarkup = () => bitmapMarkup("snow", SNOWFLAKE_BITMAP, { "#": C.snow.color });
-export const leafMarkup = () => bitmapMarkup("leaf", LEAF_BITMAP, { "#": C.leaves.color, v: C.leaves.vein });
+export const leafMarkup = () => bitmapMarkup("leaf", LEAF_BITMAP, { "#": C.leaves.color });
 export const sunMarkup = () => bitmapMarkup("sun", SUN_BITMAP, { "#": C.sun.color });
 
 /** Meadow strip: `rows` full rows of green blocks with single-pixel blades standing on it. The strip's top edge is slightly uneven (a fringe row of loose blocks), blades differ in height and

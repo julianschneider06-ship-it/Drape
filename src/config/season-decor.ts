@@ -27,6 +27,6 @@ export const SEASON_DECOR = {
     ],
   },
 
-  leaves: { color: "#c98b5e", vein: "#a56a40" },   // pixel maple leaf and its vein
-  snow: { color: "#9db4c8" },                      // pixel snowflake
+  leaves: { color: "#c1352a", scale: 1 },     // pixel maple leaf: one uniform deep red; scale = size relative to a full decoration bitmap
+  snow: { color: "#9db4c8", scale: 0.6 },     // pixel snowflake; scale 0.6 = about 60 % of the former size (count and positions unchanged)
 } as const;
