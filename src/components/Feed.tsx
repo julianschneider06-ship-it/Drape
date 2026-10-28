@@ -36,6 +36,8 @@ import { TASTE } from "@/lib/personalization/config";
 import SeasonDecor from "./SeasonDecor";
 import { dominantSeason } from "@/lib/season-decor";
 import { useSeasonDecor } from "@/lib/client/season-decor";
+import { useMiniPreview } from "@/lib/client/mannequin";
+import { mannequinSpec } from "@/lib/mannequin";
 import { applySwaps, loopSize, slotKeyOf, type SwapEvt, type SwapState } from "@/lib/client/swap";
 import type { SlotName } from "@/lib/layout/engine";
 
@@ -112,6 +114,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const seasonOn = useSeasonDecor();
   const seasons = useMemo(() => items.map((o) => dominantSeason(o.tags)), [items]);   // decoration per outfit (swaps do not change the outfit's tags)
   const shown = useMemo(() => items.map((o) => applySwaps(o, swaps[o.id])), [items, swaps]);   // the outfits as the user sees them after swaps
+  const miniOn = useMiniPreview();
+  const minis = useMemo(() => (miniOn ? { specs: shown.map(mannequinSpec), searchOn } : null), [miniOn, shown, searchOn]);   // outfit preview figures follow swaps
   itemsRef.current = shown;
 
   // onboarding: only on the first visit (flag in localStorage) or when forced with ?onboarding=1; any failure just skips it
@@ -437,7 +441,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     <main className="h-dvh bg-white" style={{ "--nav-h": navOn ? `calc(${NAV_PX}px + env(safe-area-inset-bottom))` : "0px", "--safe-b": navOn ? "0px" : "env(safe-area-inset-bottom)" } as React.CSSProperties}>
       <SaleInkDefs />
       <Layer active={layers.feedActive} shiftPx={0}>
-        {seasonOn && obPhase === "off" && <SeasonDecor scroller={scroller} seasons={seasons} className="fixed inset-x-0 top-0" style={DECOR_BOX} sunFront />}
+        {(seasonOn || miniOn) && obPhase === "off" && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="fixed inset-x-0 top-0" style={DECOR_BOX} sunFront />}
         <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
           <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
           <Segmented id="gender" label="Section" disabled={obHeader} value={gender as Gender} onChange={setGender} options={[{ id: "women", label: "Women" }, { id: "men", label: "Men" }]} />
@@ -481,7 +485,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       )}
       <AnimatePresence>
         {navOn && layers.wishlistOpen && (
-          <WishlistView key="wishlist" icons={iconsOn} customize={customizeOn} gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
+          <WishlistView key="wishlist" searchOn={searchOn} icons={iconsOn} customize={customizeOn} gender={gender ?? "women"} liked={liked} tab={wishTab} onTab={setWishTab} onOpen={openFromSearch} onLike={likeFromCard}
             onToggle={(card) => toggleLike(card, null, 0, "sheet")}
             onOpenProduct={(card) => setSheet({ card, outfit: null, index: 0, slot: "top" })} sheetOpen={!!sheet} />
         )}

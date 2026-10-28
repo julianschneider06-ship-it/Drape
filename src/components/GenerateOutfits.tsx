@@ -8,6 +8,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SeasonDecor from "./SeasonDecor";
 import { dominantSeason } from "@/lib/season-decor";
 import { useSeasonDecor } from "@/lib/client/season-decor";
+import { useMiniPreview } from "@/lib/client/mannequin";
+import { mannequinSpec } from "@/lib/mannequin";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 import type { SlotName } from "@/lib/layout/engine";
 import { canvasSize } from "@/lib/layout/engine";
@@ -24,13 +26,13 @@ const MAX_MISSES = 3;   // pages in a row without any outfit before the list end
 const dimFor = (o: FeedOutfit, liked: ReadonlySet<number>) => (slot: SlotName) => isGrey(o, slot, liked);   // grey = filler that is not liked right now
 
 /** Wishlist > Generate Outfits: a vertical feed of outfits built from the liked products; filler pieces are greyed out and cannot be tapped. Nothing is recorded by generating. */
-function GenerateOutfits({ icons, gender, likedIds, liked, shuffleKey, onOpen, onLike }: {
-  icons?: boolean; gender: "women" | "men"; likedIds: number[]; liked: ReadonlySet<number>; shuffleKey: number;
+function GenerateOutfits({ searchOn, icons, gender, likedIds, liked, shuffleKey, onOpen, onLike }: {
+  searchOn: boolean; icons?: boolean; gender: "women" | "men"; likedIds: number[]; liked: ReadonlySet<number>; shuffleKey: number;
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const root = useRef<HTMLDivElement>(null), tail = useRef<HTMLElement>(null);
   const reduced = useReducedMotion();
-  const seasonOn = useSeasonDecor();
+  const seasonOn = useSeasonDecor(), miniOn = useMiniPreview();
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
   const [items, setItems] = useState<FeedOutfit[]>([]);
   const [status, setStatus] = useState<Status>("loading");
@@ -76,13 +78,14 @@ function GenerateOutfits({ icons, gender, likedIds, liked, shuffleKey, onOpen, o
   }, [status, more, items.length, load]);
 
   const seasons = useMemo(() => items.map((o) => dominantSeason(o.tags)), [items]);
+  const minis = useMemo(() => (miniOn ? { specs: items.map(mannequinSpec), searchOn } : null), [miniOn, items, searchOn]);
   const dimCache = useRef<{ liked: ReadonlySet<number>; m: Map<FeedOutfit, (slot: SlotName) => boolean> }>({ liked, m: new Map() });   // one stable callback per outfit and liked set (the canvas re-checks sale labels when it changes)
   if (dimCache.current.liked !== liked) dimCache.current = { liked, m: new Map() };
   const dimOf = (o: FeedOutfit) => { const c = dimCache.current; let f = c.m.get(o); if (!f) { f = dimFor(o, liked); c.m.set(o, f); } return f; };
   return (
     <>
     <WishlistBackground />
-    {seasonOn && <SeasonDecor scroller={root} seasons={seasons} className="absolute inset-0" />}
+    {(seasonOn || miniOn) && <SeasonDecor scroller={root} seasons={seasonOn ? seasons : null} minis={minis} className="absolute inset-0" />}
     <div ref={root} className="no-scrollbar absolute inset-0 snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
       {status === "empty" && !items.length && (
         <m.section className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center" {...fadeSlide(reduced, MENU.hintShiftPx)}>

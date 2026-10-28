@@ -2,6 +2,8 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { SEASON_DECOR as C } from "@/config/season-decor";
 import { decorClip, decorWindow, type DecorSeason } from "@/lib/season-decor";
+import Mannequin from "./Mannequin";
+import type { MannequinSpec } from "@/lib/mannequin";
 import { flakeArt, leafArt, meadowArt, spotPieces, sunArt } from "@/lib/season-decor-art";
 
 // Screen-anchored seasonal decoration. One layer sits over the scroll area; for the (at most 3) outfits near the viewport it holds that outfit's decoration,
@@ -59,12 +61,13 @@ const Art = ({ season, width, sun, safeTop }: { season: DecorSeason; width: numb
   season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Spots kind={season} width={width} />;
 
 /** `scroller` = the snap scroller the outfits live in (offset and height are read from it); `seasons[i]` = decoration of outfit i (null = none).
+ *  `minis` = outfit preview figures (same clipping, drawn in front of the season art and still behind the products): `specs[i]` is outfit i's figure, `searchOn` places it over the Wishlist tab.
  *  `className`/`style` give the layer its box (same box as the scroller). `sunFront`: the layer starts under the status/safe area (feed), so the sun is offset by it. Everything sits behind the products (no z-index). */
-function SeasonDecor({ scroller, seasons, className, style, sunFront }: { scroller: RefObject<HTMLElement | null>; seasons: (DecorSeason | null)[]; className: string; style?: CSSProperties; sunFront?: boolean }) {
+function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: { scroller: RefObject<HTMLElement | null>; seasons: (DecorSeason | null)[] | null; minis?: { specs: MannequinSpec[]; searchOn: boolean } | null; className: string; style?: CSSProperties; sunFront?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const [win, setWin] = useState<number[]>([]);
   const [width, setWidth] = useState(0);
-  const winKey = useRef(""), count = seasons.length;
+  const winKey = useRef(""), count = Math.max(seasons?.length ?? 0, minis?.specs.length ?? 0);
 
   const apply = () => {   // clip every group to where its outfit is on screen (direct DOM writes)
     const sc = scroller.current, el = root.current; if (!sc || !el) return;
@@ -92,11 +95,16 @@ function SeasonDecor({ scroller, seasons, className, style, sunFront }: { scroll
     on();
     return () => { sc.removeEventListener("scroll", on); ro.disconnect(); };
   }, [scroller]);
-  useEffect(() => { syncRef.current(); }, [count, seasons]);   // new outfits appended / list replaced
+  useEffect(() => { syncRef.current(); }, [count, seasons, minis]);   // new outfits appended / list replaced
   useLayoutEffect(() => { apply(); });   // freshly mounted groups get their clip before the first paint
 
-  const shown = win.filter((i) => seasons[i]);
-  const group = (i: number, sun: boolean) => <div key={`${i}-${seasons[i]}`} data-i={i} className="sd-group absolute inset-0"><Art season={seasons[i]!} width={width} sun={sun} safeTop={!!sunFront} /></div>;
+  const shown = win.filter((i) => seasons?.[i] || minis?.specs[i]);
+  const group = (i: number, sun: boolean) => (
+    <div key={`${i}-${seasons?.[i]}`} data-i={i} className="sd-group absolute inset-0">
+      {seasons?.[i] && <Art season={seasons[i]!} width={width} sun={sun} safeTop={!!sunFront} />}
+      {minis?.specs[i] && <Mannequin spec={minis.specs[i]} layerWidth={width} searchOn={minis.searchOn} />}
+    </div>
+  );
   return (
     <div ref={root} aria-hidden style={{ display: "contents" }}>
       <div className={`pointer-events-none ${className}`} style={style}>{shown.map((i) => group(i, true))}</div>

@@ -17,8 +17,8 @@ export type WishTab = "products" | "outfits" | "mine";
 const TABS: { id: WishTab; label: string }[] = [{ id: "products", label: "Products" }, { id: "outfits", label: "Generate Outfits" }, { id: "mine", label: "My Outfits" }];
 
 /** The Wishlist tab (fades in over the feed, fades out when left): title, a Products | Generate Outfits switcher, and the chosen view below (the bottom bar stays visible). */
-export default function WishlistView({ icons, customize, gender, liked, tab, onTab, onToggle, onOpen, onLike, onOpenProduct, sheetOpen }: {
-  icons?: boolean; customize?: boolean; gender: "women" | "men"; liked: Set<number>; onOpenProduct: (card: FeedCard) => void; sheetOpen: boolean; tab: WishTab; onTab: (t: WishTab) => void; onToggle: (card: FeedCard) => void;
+export default function WishlistView({ searchOn, icons, customize, gender, liked, tab, onTab, onToggle, onOpen, onLike, onOpenProduct, sheetOpen }: {
+  searchOn: boolean; icons?: boolean; customize?: boolean; gender: "women" | "men"; liked: Set<number>; onOpenProduct: (card: FeedCard) => void; sheetOpen: boolean; tab: WishTab; onTab: (t: WishTab) => void; onToggle: (card: FeedCard) => void;
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const reduced = useReducedMotion(), present = useIsPresent();
@@ -48,7 +48,7 @@ export default function WishlistView({ icons, customize, gender, liked, tab, onT
         <AnimatePresence>
           {tab === "outfits" && (
             <m.div key="outfits" className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn) }}>
-              <GenerateOutfits icons={icons} gender={gender} likedIds={entryIds} liked={liked} shuffleKey={shuffle} onOpen={onOpen} onLike={onLike} />
+              <GenerateOutfits searchOn={searchOn} icons={icons} gender={gender} likedIds={entryIds} liked={liked} shuffleKey={shuffle} onOpen={onOpen} onLike={onLike} />
             </m.div>
           )}
         </AnimatePresence>

@@ -7,6 +7,7 @@ export const PROFILE_TEXT = {
   saleLabel: "Sale marker",
   bgLabel: "Drape Background",
   seasonLabel: "Seasonal decoration",
+  miniLabel: "Outfit preview",
   saleGlobalOff: "Currently off for everyone",
   shopsHeading: "Shops",
   searchPlaceholder: "Search shops",

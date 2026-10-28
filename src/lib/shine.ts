@@ -1,7 +1,7 @@
 import { SHINE } from "@/config/search";
 
 /** The colour names of the taxonomy as display colours (the product's main colour is the first entry of its colour list). */
-const HEX: Record<string, string> = {
+export const COLOR_HEX: Record<string, string> = {
   black: "#1a1a1a", white: "#ffffff", grey: "#8b9099", beige: "#d8c3a5", brown: "#7b4a2d", navy: "#1f2a55", blue: "#2f6fd0", green: "#2f9e5b", olive: "#6b6b2a",
   red: "#e0221b", burgundy: "#7a1f3d", pink: "#f4a6c0", purple: "#7a3fb0", orange: "#f08a24", yellow: "#f2c230", cream: "#f3ead3", silver: "#b8bcc4", gold: "#d4a017",
 };
@@ -27,7 +27,7 @@ const hue = (h: string): { h: number; s: number } => {
 /** Stroke colour for the searched piece: its main colour, darkened just enough to be readable on white; light grey without a usable colour,
  *  and light grey when the piece has the red sale outline and the colour is red or close to it (so strokes and outline do not blend). */
 export function shineColor(name: string | null | undefined, onSale: boolean, cfg = SHINE): string {
-  let c = name ? HEX[name] : undefined;   // multicolor / unknown names have no single colour
+  let c = name ? COLOR_HEX[name] : undefined;   // multicolor / unknown names have no single colour
   if (!c) return cfg.fallback;
   for (let k = 0; contrastOnWhite(c) < cfg.minContrast && k < 40; k++) c = hex(rgb(c).map((v) => v * 0.94));
   if (onSale) { const { h, s } = hue(c); if (s > 0.25 && (h <= cfg.redTolerance || h >= 360 - cfg.redTolerance)) return cfg.fallback; }
