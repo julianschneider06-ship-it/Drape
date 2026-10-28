@@ -74,3 +74,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - 70. Spring livelier green, strip halved, 20 blades; autumn red-orange pointed leaves; all decorations (incl. sun) behind products, 8326452+
 - 71. Outfit preview: small mannequin figure (variants from card name/hood/slot + new mq hints, one colour per part) in the SeasonDecor layer over the Wishlist tab, Profile toggle Outfit preview, ?mini=0|1, b9e84b3
 - 72. Pixel-art mannequin (one fixed 20x40 streetwear figure, outfit colours only) and pixel-art season decorations (9x9 snowflake/leaf/sun, pixel meadow), 277a800
+- 73. Pixel figure moved over the Profile tab (anchorTab + safe margin), women's pixel figure (long hair, ponytail) by feed direction, 16x16 finer season decorations with livelier meadow, 7db926f
