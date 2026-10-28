@@ -72,3 +72,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - 68. UI fully English (html lang en, Profile toggle Seasonal decoration), spring meadow one green with 10 blades, sun one yellow lowered to sun.topOffsetPx, 839cf84
 - 69. Autumn/winter decoration simplified: static orange maple leaves, one light blue 4-stroke snowflakes, animation removed, 85cfbea
 - 70. Spring livelier green, strip halved, 20 blades; autumn red-orange pointed leaves; all decorations (incl. sun) behind products, 8326452+
+- 71. Outfit preview: small mannequin figure (variants from card name/hood/slot + new mq hints, one colour per part) in the SeasonDecor layer over the Wishlist tab, Profile toggle Outfit preview, ?mini=0|1, b9e84b3
