@@ -1,11 +1,11 @@
 // Pixel-art figure: ops -> 20x40 grid -> palette from the outfit's colours -> merged SVG rects (cached per pose + palette). Pure, no React.
-import { BAG_OPS, FACE_TEMPLATES, HEAD_TEMPLATES, HEAD_Y, LEGS_OPS, PIXEL_COLORS as K, PIXEL_FIGURE_POSE, PIXEL_GRID, SIDE_OPS, TORSO_TEMPLATES, TORSO_Y, type FaceKey, type HeadKey, type TorsoKey } from "@/config/pixel-figure";
+import { BAG_OPS, FACE_TEMPLATES, HEAD_TEMPLATES, HEAD_Y, LEGS_OPS, PATTERN_BITMAPS, PATTERN_COLOR, PIXEL_COLORS as K, PIXEL_FIGURE_POSE, PIXEL_GRID, SHORTS_OPS, SIDE_OPS, TORSO_TEMPLATES, TORSO_Y, type FaceKey, type HeadKey, type LegsKey, type PatternKey, type TorsoKey } from "@/config/pixel-figure";
 import { memoMarkup, pixelRects, rectsMarkup } from "@/lib/pixel-art";
 
 /** Resolved colours of the shown outfit (hex). `head` / `bag` null = the outfit has none. */
 /** `gender` picks the body: "women" = slim figure, anything else / unset = the men's figure. `torso` / `headType` / `face` pick the ready-made templates (see src/config/pixel-figure.ts);
- *  unset torso = hoodie, unset headType = beanie when `head` has a colour, else none (hair), unset face = none. Front pose only; the side pose ignores them. */
-export interface FigureSpec { top: string; bottom: string; shoes: string; head: string | null; bag: string | null; gender?: "men" | "women"; torso?: TorsoKey; headType?: Exclude<HeadKey, "none"> | null; face?: FaceKey | null }
+ *  unset torso = hoodie, unset headType = beanie when `head` has a colour, else none (hair), unset face = none, unset legs = trousers, unset pattern = solid (`accent` = the second colour of the top for the pattern). Front pose only; the side pose ignores them. */
+export interface FigureSpec { top: string; bottom: string; shoes: string; head: string | null; bag: string | null; gender?: "men" | "women"; torso?: TorsoKey; headType?: Exclude<HeadKey, "none"> | null; face?: FaceKey | null; legs?: LegsKey; pattern?: PatternKey | null; accent?: string | null }
 export type Pose = "front" | "side";
 export type Palette = Record<string, string>;
 
@@ -35,15 +35,25 @@ export function figurePalette(s: FigureSpec): Palette {
     W, w: shade(W, K.shade.w), v: shade(W, K.shade.v),
   };
   if (X) { p.X = X; p.x = shade(X, K.shade.x); }
+  if (s.pattern) { p.Q = patternColor(s.top, s.accent); p.y = shade(p.Q, PATTERN_COLOR.shadeY); }
   return p;
 }
 
 /** The templates a spec resolves to (defaults applied). */
-export const specTemplates = (s: FigureSpec): { torso: TorsoKey; head: HeadKey; face: FaceKey | null } =>
-  ({ torso: s.torso ?? "hoodie", head: s.headType ?? (s.head ? "beanie" : "none"), face: s.face ?? null });
+export const specTemplates = (s: FigureSpec): { torso: TorsoKey; head: HeadKey; face: FaceKey | null; legs: LegsKey; pattern: PatternKey | null } =>
+  ({ torso: s.torso ?? "hoodie", head: s.headType ?? (s.head ? "beanie" : "none"), face: s.face ?? null, legs: s.legs ?? "trousers", pattern: s.pattern ?? null });
+
+/** Pattern colour: the product's second colour (clamped like every outfit colour), else a darker variant of a light top / a lighter variant of a dark one. */
+export function patternColor(main: string, accent: string | null | undefined): string {
+  if (accent) return clampLight(accent);
+  const B = clampLight(main);
+  if (luminance(B) > PATTERN_COLOR.lightAbove) return shade(B, PATTERN_COLOR.darken);
+  const a = rgb(B);
+  return hex(a.map((v) => v + (255 - v) * PATTERN_COLOR.lighten));
+}
 
 /** the figure as rows of op keys ("." = empty). Front: legs, then the torso, head and face templates, then the bag. Side: the fixed side shape (`hat` = beanie or hair). */
-export function figureGrid(pose: Pose, bag: boolean, hat: boolean, gender: "men" | "women" = "men", tpl?: { torso?: TorsoKey; head?: HeadKey; face?: FaceKey | null }): string[] {
+export function figureGrid(pose: Pose, bag: boolean, hat: boolean, gender: "men" | "women" = "men", tpl?: { torso?: TorsoKey; head?: HeadKey; face?: FaceKey | null; legs?: LegsKey; pattern?: PatternKey | null }): string[] {
   const g = Array.from({ length: PIXEL_GRID.h }, () => Array<string>(PIXEL_GRID.w).fill("."));
   const fill = (ops: readonly (readonly [string, number, number, number, number])[]) => { for (const [k, x, y, w, h] of ops) for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) g[j][i] = k; };
   const lay = (rows: readonly string[], y0: number) => rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] !== ".") g[y0 + j][i] = r[i]; });
@@ -51,8 +61,10 @@ export function figureGrid(pose: Pose, bag: boolean, hat: boolean, gender: "men"
     fill(SIDE_OPS);
     if (!hat) for (let i = 0; i < PIXEL_GRID.w; i++) if (g[4][i] === "h") g[4][i] = "S";
   } else {
-    fill(LEGS_OPS[gender]);
-    lay(TORSO_TEMPLATES[gender][tpl?.torso ?? "hoodie"], TORSO_Y);
+    fill(tpl?.legs === "shorts" ? SHORTS_OPS[gender] : LEGS_OPS[gender]);
+    const torso = TORSO_TEMPLATES[gender][tpl?.torso ?? "hoodie"];
+    lay(torso, TORSO_Y);
+    if (tpl?.pattern) PATTERN_BITMAPS[tpl.pattern].forEach((r, j) => { for (let i = 0; i < r.length; i++) { const t = torso[j][i]; if (r[i] === "1" && (t === "B" || t === "b")) g[TORSO_Y + j][i] = t === "B" ? "Q" : "y"; } });   // masked to the torso
     lay(HEAD_TEMPLATES[gender][tpl?.head ?? (hat ? "beanie" : "none")], HEAD_Y);
     if (tpl?.face) lay(FACE_TEMPLATES[gender][tpl.face], HEAD_Y);
   }
@@ -64,5 +76,5 @@ const cache = memoMarkup();
 /** inner SVG markup (rects, viewBox 0 0 20 40) of the figure; memoized per pose + colours */
 export function figureMarkup(s: FigureSpec, pose: Pose = PIXEL_FIGURE_POSE): string {
   const g = s.gender === "women" ? "women" : "men", pal = figurePalette(s), t = specTemplates(s), bag = !!s.bag;
-  return cache(`${g}|${pose}|${t.torso}|${t.head}|${t.face ?? ""}|${bag ? 1 : 0}|${Object.values(pal).join("")}`, () => rectsMarkup(pixelRects(figureGrid(pose, bag, t.head !== "none", g, t), pal)));
+  return cache(`${g}|${pose}|${t.torso}|${t.head}|${t.face ?? ""}|${t.legs}|${t.pattern ?? ""}|${bag ? 1 : 0}|${Object.values(pal).join("")}`, () => rectsMarkup(pixelRects(figureGrid(pose, bag, t.head !== "none", g, t), pal)));
 }
