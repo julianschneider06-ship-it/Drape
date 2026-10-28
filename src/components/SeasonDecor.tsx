@@ -59,7 +59,7 @@ const Art = ({ season, width, sun, safeTop }: { season: DecorSeason; width: numb
   season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Spots kind={season} width={width} />;
 
 /** `scroller` = the snap scroller the outfits live in (offset and height are read from it); `seasons[i]` = decoration of outfit i (null = none).
- *  `className`/`style` give the layer its box (same box as the scroller). `sunFront`: the sun sits above a translucent header (nothing else does). */
+ *  `className`/`style` give the layer its box (same box as the scroller). `sunFront`: the layer starts under the status/safe area (feed), so the sun is offset by it. Everything sits behind the products (no z-index). */
 function SeasonDecor({ scroller, seasons, className, style, sunFront }: { scroller: RefObject<HTMLElement | null>; seasons: (DecorSeason | null)[]; className: string; style?: CSSProperties; sunFront?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const [win, setWin] = useState<number[]>([]);
@@ -99,8 +99,7 @@ function SeasonDecor({ scroller, seasons, className, style, sunFront }: { scroll
   const group = (i: number, sun: boolean) => <div key={`${i}-${seasons[i]}`} data-i={i} className="sd-group absolute inset-0"><Art season={seasons[i]!} width={width} sun={sun} safeTop={!!sunFront} /></div>;
   return (
     <div ref={root} aria-hidden style={{ display: "contents" }}>
-      <div className={`pointer-events-none ${className}`} style={style}>{shown.map((i) => group(i, !sunFront))}</div>
-      {sunFront && <div className={`pointer-events-none z-[31] ${className}`} style={style}>{shown.filter((i) => seasons[i] === "summer").map((i) => group(i, true))}</div>}
+      <div className={`pointer-events-none ${className}`} style={style}>{shown.map((i) => group(i, true))}</div>
     </div>
   );
 }

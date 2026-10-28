@@ -50,7 +50,7 @@ export function meadowArt(width: number) {
 
 /** Maple leaf in a 24 x 24 box: one continuous outline with pointed lobes, plus a short stem. */
 export function leafArt(seed: number) {
-  const pts: P[] = [[12, 1.5], [14.3, 7], [19.5, 5.5], [17.8, 11], [22.5, 12.5], [17.5, 15.5], [18.5, 19.5], [13.2, 17.8], [12, 20], [10.8, 17.8], [5.5, 19.5], [6.5, 15.5], [1.5, 12.5], [6.2, 11], [4.5, 5.5], [9.7, 7]];
+  const pts: P[] = [[12, 0.3], [13.6, 7.2], [20.5, 3], [17, 10.8], [23.7, 11.5], [16.8, 15], [19.5, 20.5], [13, 17.6], [12, 20], [11, 17.6], [4.5, 20.5], [7.2, 15], [0.3, 11.5], [7, 10.8], [3.5, 3], [10.4, 7.2]];
   return { body: wobblyLine(pts, seed, 0.5, true), stem: wobblyLine([[12, 18], [12, 23]], seed + 1, 0.3) };
 }
 

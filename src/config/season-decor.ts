@@ -14,9 +14,9 @@ export const SEASON_DECOR = {
   },
 
   meadow: {
-    heightPx: 30, blades: 10,          // strip height; number of grass blades spread over the full width
+    heightPx: 15, blades: 20,          // strip height; number of grass blades spread over the full width
     bladeMin: 9, bladeMax: 20, lean: 4,   // blade height range and sideways lean (px)
-    color: "#a9dc86",                  // one uniform light green for strip, edge and blades
+    color: "#5ccf3a",                  // one uniform lively green for strip, edge and blades
   },
 
   spots: {
@@ -30,6 +30,6 @@ export const SEASON_DECOR = {
     opacity: [0.7, 1] as [number, number],
   },
 
-  leaves: { color: "#f28c28" },        // one uniform warm orange for all maple leaves
+  leaves: { color: "#e8541c" },        // one uniform strong red-orange for all maple leaves
   snow: { color: "#8cc8f0" },          // one uniform light blue for all snowflakes
 } as const;
