@@ -1,6 +1,6 @@
 // Pixel-art outfit preview figure + pixel-art seasonal decoration (display only). Tunables first, then the figure's pixel data and colour rules.
 export const PIXEL_FIGURE_POSE: "front" | "side" = "front";
-export const DECO_PX_MULT = 2;     // one decoration pixel = this many figure pixels
+export const DECO_PX_MULT = 1.25;  // one decoration pixel = this many figure pixels (the decorations are 16x16 bitmaps, so their pixels are finer than the old 9x9 ones at 2)
 export const DECO_MAX_COUNT = 6;   // most snowflakes / leaves per spot (the two spots stay)
 
 /** Figure grid in pixels: 20 columns x 40 rows (the SVG viewBox is in these units). */
@@ -8,7 +8,7 @@ export const PIXEL_GRID = { w: 20, h: 40 } as const;
 
 /** Ops are [key, x, y, w, h], filled in order (later ops overwrite earlier ones). Origin top-left, x to the right, y down.
  *  Keys: H beanie dome, h beanie cuff, S skin, K eyes, B hoodie, b hoodie shade, c drawstrings, P trousers, p trousers shade, q trousers hem / far leg,
- *  W shoe, w shoe sole / far shoe, v far-shoe sole, X bag, x bag handle. */
+ *  W shoe, w shoe sole / far shoe, v far-shoe sole, X bag, x bag handle, L women's hair. */
 export type PixelOp = readonly [key: string, x: number, y: number, w: number, h: number];
 
 export const FRONT_OPS: readonly PixelOp[] = [
@@ -19,6 +19,19 @@ export const FRONT_OPS: readonly PixelOp[] = [
   ["P", 4, 28, 12, 3], ["P", 4, 31, 5, 6], ["p", 8, 31, 1, 6], ["P", 11, 31, 5, 6], ["p", 15, 31, 1, 6],
   ["q", 4, 37, 5, 1], ["q", 11, 37, 5, 1],
   ["W", 4, 38, 5, 1], ["w", 4, 39, 5, 1], ["W", 11, 38, 5, 1], ["w", 11, 39, 5, 1],
+];
+
+/** Women's figure (front only): slimmer head, shoulders and torso, long hair with a ponytail instead of the beanie, tee, wide trousers, sneakers.
+ *  Same grid and keys as the men's figure plus L = hair (constant colour, drawn last so it falls over the shoulders). Headwear is not drawn on it.
+ *  Other poses fall back to the men's shape. */
+export const WOMEN_FRONT_OPS: readonly PixelOp[] = [
+  ["S", 7, 3, 6, 7], ["K", 8, 6, 1, 2], ["K", 11, 6, 1, 2], ["S", 9, 10, 2, 1],
+  ["B", 6, 11, 8, 16], ["S", 8, 11, 4, 1], ["B", 4, 11, 2, 10], ["B", 14, 11, 2, 10], ["b", 4, 12, 1, 9], ["b", 15, 12, 1, 9],
+  ["S", 4, 21, 2, 2], ["S", 14, 21, 2, 2], ["b", 6, 26, 8, 1],
+  ["P", 5, 27, 10, 3], ["P", 4, 30, 5, 7], ["P", 11, 30, 5, 7], ["p", 8, 30, 1, 7], ["p", 15, 30, 1, 7],
+  ["q", 4, 37, 5, 1], ["q", 11, 37, 5, 1],
+  ["W", 4, 38, 5, 1], ["w", 4, 39, 5, 1], ["W", 11, 38, 5, 1], ["w", 11, 39, 5, 1],
+  ["L", 6, 0, 8, 3], ["L", 7, 3, 6, 1], ["L", 5, 3, 2, 10], ["L", 13, 3, 2, 10], ["L", 15, 2, 2, 2], ["L", 16, 4, 2, 8],   // hair: crown, fringe, long sides, ponytail
 ];
 
 /** the figure faces right */
@@ -36,11 +49,11 @@ export const BAG_OPS = {
   side: [["x", 10, 24, 2, 1], ["X", 9, 25, 4, 6]],
 } as const satisfies Record<"front" | "side", readonly PixelOp[]>;
 
-export const PIXEL_KEYS = "HhSKBbcPpqWwvXx";
+export const PIXEL_KEYS = "HhSKBbcPpqWwvXxL";
 
 /** Colour rules. Shades multiply every channel by the factor; the constants never follow the outfit. */
 export const PIXEL_COLORS = {
-  skin: "#e6c4a2", eyes: "#1a1a1a", hair: "#3a2e28",
+  skin: "#e6c4a2", eyes: "#1a1a1a", hair: "#3a2e28",   // men's no-beanie hair and the women's long hair
   fallback: { top: "#4a4a4f", bottom: "#8fa0b3", shoes: "#f1efe9" },   // used when a part has no usable colour
   shade: { b: 0.72, p: 0.78, q: 0.65, w: 0.87, v: 0.71, h: 0.81, x: 0.7 },
   strings: { onDark: "#d8d8d8", onLight: "#8a8a8a", lightAbove: 0.6 },   // drawstrings: pale on a dark hoodie, grey when the hoodie luminance is above `lightAbove`

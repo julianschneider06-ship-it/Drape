@@ -4,7 +4,7 @@ export const SEASON_DECOR = {
   minFit: 0.4,                         // outfit season fit (tags.season_fit) below this = no clear season = no decoration
 
   sun: {
-    pxMult: 2,                         // sun pixel = this x a decoration pixel (the 9x9 sun is chunkier so it keeps about its old size)
+    pxMult: 1,                         // sun pixel = this x a decoration pixel (16x16 sun: about 46 px wide, like the old 9x9 one)
     topOffsetPx: 64,                   // vertical offset of the sun box from the top of the outfit area (the feed adds the status/safe area); raise to move the sun down
     color: "#ffd23f",                  // one uniform yellow
   },
@@ -12,6 +12,10 @@ export const SEASON_DECOR = {
   meadow: {
     heightPx: 15, blades: 20,          // strip height; number of grass blades spread over the full width
     bladeMin: 9, bladeMax: 20,         // blade height range (px, rounded to whole decoration pixels)
+    fringe: 0.4,                       // share of loose blocks on the strip's top edge (uneven edge)
+    leanNone: 0.35,                    // share of blades that stand straight; the rest lean left or right
+    bendRows: 2,                       // a leaning blade bends over its top this many pixels
+    tuft: 0.4, tuftScale: 0.6,         // share of blades with a shorter neighbour, and that neighbour's height relative to the blade
     color: "#5ccf3a",                  // one uniform lively green for strip, edge and blades
   },
 

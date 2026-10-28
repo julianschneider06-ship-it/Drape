@@ -78,7 +78,7 @@ function GenerateOutfits({ searchOn, icons, gender, likedIds, liked, shuffleKey,
   }, [status, more, items.length, load]);
 
   const seasons = useMemo(() => items.map((o) => dominantSeason(o.tags)), [items]);
-  const minis = useMemo(() => (miniOn ? { specs: items.map(mannequinSpec), searchOn } : null), [miniOn, items, searchOn]);
+  const minis = useMemo(() => (miniOn ? { specs: items.map((o) => mannequinSpec(o, gender)), searchOn } : null), [miniOn, items, searchOn, gender]);
   const dimCache = useRef<{ liked: ReadonlySet<number>; m: Map<FeedOutfit, (slot: SlotName) => boolean> }>({ liked, m: new Map() });   // one stable callback per outfit and liked set (the canvas re-checks sale labels when it changes)
   if (dimCache.current.liked !== liked) dimCache.current = { liked, m: new Map() };
   const dimOf = (o: FeedOutfit) => { const c = dimCache.current; let f = c.m.get(o); if (!f) { f = dimFor(o, liked); c.m.set(o, f); } return f; };

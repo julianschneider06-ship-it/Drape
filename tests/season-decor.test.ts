@@ -55,7 +55,8 @@ test("setting: link wins, otherwise the device choice; default on and saved with
   assert.equal(cleanPrefs({ v: 1, sale: false }).season, true);   // old saves keep working
 });
 
-test("deco bitmaps are exactly 9x9 and use only known characters", () => {
+test("deco bitmaps are exactly 16x16 and use only known characters", () => {
+  assert.equal(DECO_BITMAP_SIZE, 16);
   for (const b of [SNOWFLAKE_BITMAP, LEAF_BITMAP, SUN_BITMAP]) {
     assert.equal(b.length, DECO_BITMAP_SIZE);
     for (const row of b) { assert.equal(row.length, DECO_BITMAP_SIZE); assert.ok([...row].every((c) => DECO_BITMAP_CHARS.includes(c)), row); }
@@ -63,7 +64,8 @@ test("deco bitmaps are exactly 9x9 and use only known characters", () => {
   assert.ok(SNOWFLAKE_BITMAP.every((r) => !r.includes("v")) && LEAF_BITMAP.some((r) => r.includes("v")));
 });
 
-test("deco pixel = DECO_PX_MULT x figure pixel, positions snap to it", () => {
+test("deco pixel = DECO_PX_MULT x figure pixel (finer than the old 2), positions snap to it", () => {
+  assert.ok(DECO_PX_MULT < 2 && DECO_PX_MULT > 0);
   assert.equal(figurePx(), MANNEQUIN.heightPx / 40);
   assert.equal(decoPx(), figurePx() * DECO_PX_MULT);
   const px = decoPx();
@@ -77,6 +79,7 @@ test("drawing is deterministic, flat and the config is sane", () => {
   assert.deepEqual(meadowGrid(400), meadowGrid(400));
   const g = meadowGrid(400); assert.ok(g.every((r) => r.length === g[0].length) && g[g.length - 1] === "#".repeat(g[0].length));
   assert.ok(g.slice(0, g.length - 3).join("").includes("#"));   // blades stand above the strip
+  assert.ok(new Set(g.slice(0, g.length - 3).map((r) => r.split("#").length)).size > 2);   // blades differ in height
   assert.equal(spotPieces(0, 400).length, Math.min(SEASON_DECOR.spots.count, DECO_MAX_COUNT));
   assert.deepEqual(spotPieces(1, 400), spotPieces(1, 400));
   assert.equal(SEASON_DECOR.spots.places.length, 2);

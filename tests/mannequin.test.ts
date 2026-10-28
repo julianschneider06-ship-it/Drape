@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { effectiveMini, figureLeft, figureWidth, mannequinSpec, pieceColor, pieceHex } from "../src/lib/mannequin";
 import { MANNEQUIN } from "../src/config/mannequin";
-import { BAG_OPS, DECO_MAX_COUNT, FRONT_OPS, PIXEL_COLORS, PIXEL_GRID, PIXEL_KEYS, SIDE_OPS } from "../src/config/pixel-figure";
+import { BAG_OPS, DECO_MAX_COUNT, FRONT_OPS, PIXEL_COLORS, PIXEL_GRID, PIXEL_KEYS, PIXEL_FIGURE_POSE, SIDE_OPS, WOMEN_FRONT_OPS } from "../src/config/pixel-figure";
 import { clampLight, figureGrid, figureMarkup, figurePalette, luminance, shade, type FigureSpec } from "../src/lib/pixel-figure";
 import { pixelRects } from "../src/lib/pixel-art";
 import { DEFAULT_PREFS, cleanPrefs } from "../src/lib/shop-pref";
@@ -16,7 +16,7 @@ const outfit = (top: FeedCard, bottom: FeedCard | null, shoes: FeedCard, accesso
 
 test("grid: every op lies inside 20x40 and uses a known key", () => {
   assert.deepEqual([PIXEL_GRID.w, PIXEL_GRID.h], [20, 40]);
-  for (const ops of [FRONT_OPS, SIDE_OPS, BAG_OPS.front, BAG_OPS.side]) for (const [k, x, y, w, h] of ops) {
+  for (const ops of [FRONT_OPS, WOMEN_FRONT_OPS, SIDE_OPS, BAG_OPS.front, BAG_OPS.side]) for (const [k, x, y, w, h] of ops) {
     assert.ok(PIXEL_KEYS.includes(k), `key ${k}`);
     assert.ok(w > 0 && h > 0 && x >= 0 && y >= 0 && x + w <= 20 && y + h <= 40, `op ${k} ${x},${y} ${w}x${h}`);
   }
@@ -117,10 +117,51 @@ test("setting: link wins, otherwise the device choice; default on and saved with
   assert.equal(cleanPrefs({ v: 1, season: false }).mini, true);   // old saves keep working
 });
 
-test("position: centred over the Wishlist tab (3rd of 4, or 2nd of 3 without Search), bar capped at its max width", () => {
-  const w = figureWidth();
-  assert.equal(figureLeft(400, true, w), Math.round(400 * 0.625 - w / 2 + MANNEQUIN.xShiftPx));
-  assert.equal(figureLeft(400, false, w), Math.round(200 - w / 2 + MANNEQUIN.xShiftPx));
+test("position: centred over the Profile tab (last of 4, or 3), bar capped at its max width", () => {
+  assert.equal(MANNEQUIN.anchorTab, "profile");
+  const w = figureWidth(), m = MANNEQUIN.safeMarginPx;
+  assert.equal(figureLeft(400, true, w), Math.round(400 * 0.875 - w / 2 + MANNEQUIN.xShiftPx));
+  assert.equal(figureLeft(400, false, w), Math.round(400 * (5 / 6) - w / 2 + MANNEQUIN.xShiftPx));
   const wide = 1000, barW = MANNEQUIN.barMaxWidthPx;
-  assert.equal(figureLeft(wide, true, w), Math.round((wide - barW) / 2 + barW * 0.625 - w / 2 + MANNEQUIN.xShiftPx));
+  assert.equal(figureLeft(wide, true, w), Math.round((wide - barW) / 2 + barW * 0.875 - w / 2 + MANNEQUIN.xShiftPx));
+  for (const lw of [280, 320, 375, 430, 1000]) for (const s of [true, false]) {
+    const l = figureLeft(lw, s, w);
+    assert.ok(l >= m && l + w <= lw - m, `${lw} ${s}`);   // never cut off at the edge
+  }
+});
+
+test("position: the safe right margin pulls the figure in when the tab centre is too close to the edge", () => {
+  const w = figureWidth();
+  assert.equal(figureLeft(60, false, w), Math.max(MANNEQUIN.safeMarginPx, 60 - MANNEQUIN.safeMarginPx - w));
+});
+
+test("women's figure: own slim shape, hair + ponytail instead of the beanie, same grid and optional bag", () => {
+  assert.equal(PIXEL_FIGURE_POSE, "front");
+  const m = figureGrid("front", false, true), w = figureGrid("front", false, false, "women");
+  assert.notDeepEqual(w, m);
+  assert.equal(w.length, 40); assert.ok(w.every((r) => r.length === 20));
+  const count = (g: string[], ch: string) => g.join("").split(ch).length - 1;
+  assert.equal(count(m, "H"), 30); assert.equal(count(w, "H"), 0); assert.equal(count(w, "h"), 0);   // no beanie
+  assert.ok(count(w, "L") > 30 && w.slice(4, 12).some((r) => r.slice(16, 18) === "LL"));              // long hair, ponytail beside the body
+  assert.ok(count(w, "B") < count(m, "B"));                                                          // slimmer top
+  assert.equal(figureGrid("front", true, false, "women").some((r) => /[Xx]/.test(r)), true);
+  assert.equal(figureGrid("front", false, false, "women").some((r) => /[Xx]/.test(r)), false);
+  assert.deepEqual(figureGrid("side", false, true, "women"), figureGrid("side", false, true));       // other poses keep the men's shape
+});
+
+test("women's figure: selected by the spec's gender, colours still come from the outfit, headwear is ignored", () => {
+  const o = outfit(card("Tee", "top", { col: "red" }), card("Jeans", "bottom", { col: "blue" }), card("Boots", "shoes", { col: "black" }), [acc("cap", "green"), acc("bag", "brown")]);
+  assert.equal(mannequinSpec(o).gender, undefined);   // men: no gender key
+  const ws = mannequinSpec(o, "women");
+  assert.equal(ws.gender, "women");
+  assert.deepEqual([ws.top, ws.bottom, ws.shoes, ws.bag], ["#e0221b", "#2f6fd0", "#1a1a1a", "#7b4a2d"]);   // same colour rules as the men's figure
+  const men = figureMarkup(mannequinSpec(o)), women = figureMarkup(ws);
+  assert.notEqual(men, women);
+  assert.ok(women.includes(PIXEL_COLORS.hair) && women.includes("#e0221b") && !women.includes("#2f9e5b"));   // hair, top colour; no green cap
+  assert.ok(men.includes("#2f9e5b"));
+  const same = { ...ws, head: null };
+  assert.equal(figureMarkup(same), women);                                                                 // headwear never changes the women's figure
+  assert.equal(figurePalette(spec({ gender: "women" })).L, PIXEL_COLORS.hair);
+  const light = figurePalette(spec({ gender: "women", top: "#ffffff" }));
+  assert.ok(luminance(light.B) <= 0.88);                                                                   // same brightness clamp
 });

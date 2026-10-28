@@ -4,7 +4,7 @@ import { MANNEQUIN as C } from "@/config/mannequin";
 import { figureLeft, figureWidth, type MannequinSpec } from "@/lib/mannequin";
 import { figureMarkup } from "@/lib/pixel-figure";
 
-/** The outfit preview figure of one outfit (pixel-art inline SVG, static, pointer-events none). Position: centred over the Wishlist tab, feet just above the bottom bar. */
+/** The outfit preview figure of one outfit (pixel-art inline SVG, static, pointer-events none). Position: centred over the Profile tab, feet just above the bottom bar. */
 function Mannequin({ spec, layerWidth, searchOn }: { spec: MannequinSpec; layerWidth: number; searchOn: boolean }) {
   const html = useMemo(() => figureMarkup(spec), [spec]);
   if (!(layerWidth > 0)) return null;

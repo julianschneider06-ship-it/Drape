@@ -115,7 +115,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const seasons = useMemo(() => items.map((o) => dominantSeason(o.tags)), [items]);   // decoration per outfit (swaps do not change the outfit's tags)
   const shown = useMemo(() => items.map((o) => applySwaps(o, swaps[o.id])), [items, swaps]);   // the outfits as the user sees them after swaps
   const miniOn = useMiniPreview();
-  const minis = useMemo(() => (miniOn ? { specs: shown.map(mannequinSpec), searchOn } : null), [miniOn, shown, searchOn]);   // outfit preview figures follow swaps
+  const minis = useMemo(() => (miniOn ? { specs: shown.map((o) => mannequinSpec(o, gender ?? "women")), searchOn } : null), [miniOn, shown, searchOn, gender]);   // outfit preview figures follow swaps
   itemsRef.current = shown;
 
   // onboarding: only on the first visit (flag in localStorage) or when forced with ?onboarding=1; any failure just skips it

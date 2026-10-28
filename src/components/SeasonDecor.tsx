@@ -38,7 +38,7 @@ const Art = ({ season, width, height, sun, safeTop }: { season: DecorSeason; wid
   season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Spots kind={season} width={width} height={height} />;
 
 /** `scroller` = the snap scroller the outfits live in (offset and height are read from it); `seasons[i]` = decoration of outfit i (null = none).
- *  `minis` = outfit preview figures (same clipping, drawn in front of the season art and still behind the products): `specs[i]` is outfit i's figure, `searchOn` places it over the Wishlist tab.
+ *  `minis` = outfit preview figures (same clipping, drawn in front of the season art and still behind the products): `specs[i]` is outfit i's figure, `searchOn` places it over the Profile tab.
  *  `className`/`style` give the layer its box (same box as the scroller). `sunFront`: the layer starts under the status/safe area (feed), so the sun is offset by it. Everything sits behind the products (no z-index). */
 function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: { scroller: RefObject<HTMLElement | null>; seasons: (DecorSeason | null)[] | null; minis?: { specs: MannequinSpec[]; searchOn: boolean } | null; className: string; style?: CSSProperties; sunFront?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
