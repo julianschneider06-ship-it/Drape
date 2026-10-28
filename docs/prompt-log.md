@@ -69,4 +69,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 65: Profile toggle "Drape Background" (device only, ?bg=0|1) for the wishlist background (last commit on main: see git log)
 - 66. Nike/adidas count in both Awin feeds, 0 footwear pages left to import, a6be609
 - 67. Seasonal decoration (sun / meadow / leaves / snow) anchored to the screen, clipped per outfit, Profile toggle Jahreszeitenverzierung (?season=0|1), 2f2fc5e
-- 68. UI fully English (html lang en, Profile toggle Seasonal decoration), spring meadow one green with 10 blades, sun one yellow lowered to sun.topOffsetPx, MAINHASH
+- 68. UI fully English (html lang en, Profile toggle Seasonal decoration), spring meadow one green with 10 blades, sun one yellow lowered to sun.topOffsetPx, 839cf84
