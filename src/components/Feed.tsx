@@ -33,6 +33,9 @@ import { compactTags } from "@/outfits/tags";
 import type { Signal } from "@/outfits/taste-codec";
 import { likeSignal } from "@/lib/like-signal";
 import { TASTE } from "@/lib/personalization/config";
+import SeasonDecor from "./SeasonDecor";
+import { dominantSeason } from "@/lib/season-decor";
+import { useSeasonDecor } from "@/lib/client/season-decor";
 import { applySwaps, loopSize, slotKeyOf, type SwapEvt, type SwapState } from "@/lib/client/swap";
 import type { SlotName } from "@/lib/layout/engine";
 
@@ -46,6 +49,7 @@ const store = {
 };
 
 const PERSONALIZE_FROM = TASTE.personalizeFrom, OUTBOX_MAX = TASTE.outboxMax;
+const DECOR_BOX = { height: "calc(100dvh - var(--nav-h, 0px))" } as const;   // same box as the feed scroller
 const shownIds = (o: FeedOutfit) => [o.top.id, ...(o.bottom ? [o.bottom.id] : []), o.shoes.id];
 const tg = (o: FeedOutfit) => (o.tags ? (({ se, oc, pk, si, fo, w, ct }) => ({ se, oc, pk, si, fo, w, ct }))(compactTags(o.tags)) : null);
 
@@ -105,6 +109,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const interacted = useRef(new Set<number>());
   const prefetched = useRef(new Set<string>());
   const exhausted = useRef(false);
+  const seasonOn = useSeasonDecor();
+  const seasons = useMemo(() => items.map((o) => dominantSeason(o.tags)), [items]);   // decoration per outfit (swaps do not change the outfit's tags)
   const shown = useMemo(() => items.map((o) => applySwaps(o, swaps[o.id])), [items, swaps]);   // the outfits as the user sees them after swaps
   itemsRef.current = shown;
 
@@ -431,6 +437,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     <main className="h-dvh bg-white" style={{ "--nav-h": navOn ? `calc(${NAV_PX}px + env(safe-area-inset-bottom))` : "0px", "--safe-b": navOn ? "0px" : "env(safe-area-inset-bottom)" } as React.CSSProperties}>
       <SaleInkDefs />
       <Layer active={layers.feedActive} shiftPx={0}>
+        {seasonOn && obPhase === "off" && <SeasonDecor scroller={scroller} seasons={seasons} className="fixed inset-x-0 top-0" style={DECOR_BOX} sunFront />}
         <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
           <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
           <Segmented id="gender" label="Section" disabled={obHeader} value={gender as Gender} onChange={setGender} options={[{ id: "women", label: "Women" }, { id: "men", label: "Men" }]} />

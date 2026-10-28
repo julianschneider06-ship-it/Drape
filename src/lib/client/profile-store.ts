@@ -12,6 +12,7 @@ export const getPrefs = (): ProfilePrefs => (prefs ??= readPrefs(ls(), PROFILE_K
 const commit = (p: ProfilePrefs) => { prefs = p; writePrefs(ls(), PROFILE_KEY, p); subs.forEach((f) => f()); };
 export const setSaleLocal = (on: boolean) => commit({ ...getPrefs(), sale: on });
 export const setBgLocal = (on: boolean) => commit({ ...getPrefs(), bg: on });
+export const setSeasonLocal = (on: boolean) => commit({ ...getPrefs(), season: on });
 export function setShopLevel(id: string, level: ShopLevel) {
   const shops = { ...getPrefs().shops };
   if (level === "normal") delete shops[id]; else shops[id] = level;

@@ -73,9 +73,9 @@ test("storage: empty, garbage, wrong version and blocked storage give defaults",
 });
 test("storage: round trip and cleaning of stored values", () => {
   let saved = "";
-  assert.equal(writePrefs({ setItem: (_k, v) => { saved = v; } }, "k", { v: 1, sale: false, bg: true, shops: { kith: "more" } }), true);
-  assert.deepEqual(readPrefs({ getItem: () => saved }, "k"), { v: 1, sale: false, bg: true, shops: { kith: "more" } });
-  assert.deepEqual(cleanPrefs({ v: 1, sale: "yes", shops: { kith: "normal", ok: "less", "BAD ID": "more", x: 3 } }), { v: 1, sale: true, bg: true, shops: { ok: "less" } });
+  assert.equal(writePrefs({ setItem: (_k, v) => { saved = v; } }, "k", { v: 1, sale: false, bg: true, season: true, shops: { kith: "more" } }), true);
+  assert.deepEqual(readPrefs({ getItem: () => saved }, "k"), { v: 1, sale: false, bg: true, season: true, shops: { kith: "more" } });
+  assert.deepEqual(cleanPrefs({ v: 1, sale: "yes", shops: { kith: "normal", ok: "less", "BAD ID": "more", x: 3 } }), { v: 1, sale: true, bg: true, season: true, shops: { ok: "less" } });
 });
 
 test("shop filter: case-insensitive, instant, empty query matches nothing", () => {

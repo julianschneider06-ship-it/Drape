@@ -42,3 +42,11 @@ img { -webkit-user-drag: none; }
 @keyframes obFade { from { opacity: 0; } to { opacity: 1; } }
 .ob-nudge { animation: obNudge 1.6s ease-in-out infinite; will-change: transform; }   /* the arrow is a pre-rendered image: moving it is a pure GPU transform */
 .ob-fade { animation: obFade .3s ease-out both; }
+
+/* Seasonal decoration: falling leaves / snow. Only transform + opacity; static for reduced motion; hidden outfits' groups are paused. */
+@keyframes sdFall { 0% { transform: translate3d(0, -14%, 0); opacity: 0; } 12% { opacity: var(--sd-o, 1); } 85% { opacity: var(--sd-o, 1); } 100% { transform: translate3d(0, 100%, 0); opacity: 0; } }
+@keyframes sdSway { 0%, 100% { transform: translate3d(calc(var(--sd-sway, 8px) * -1), 0, 0) rotate(calc(var(--sd-deg, 20deg) * -1)); } 50% { transform: translate3d(var(--sd-sway, 8px), 0, 0) rotate(var(--sd-deg, 20deg)); } }
+.sd-fall { animation: sdFall var(--sd-fall, 12s) linear infinite; will-change: transform, opacity; }
+.sd-sway { animation: sdSway var(--sd-swayd, 4s) ease-in-out infinite; will-change: transform; }
+.sd-group[data-off] .sd-fall, .sd-group[data-off] .sd-sway { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .sd-fall, .sd-sway { animation: none; will-change: auto; } }
