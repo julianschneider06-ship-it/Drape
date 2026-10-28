@@ -48,38 +48,33 @@ export function meadowArt(width: number) {
   return { band, blades, height: total };
 }
 
-/** Falling leaf in a 24 x 24 box: pointed oval with a vein. */
+/** Maple leaf in a 24 x 24 box: one continuous outline with pointed lobes, plus a short stem. */
 export function leafArt(seed: number) {
-  return { body: wobblyLine([[12, 1.5], [18.5, 7], [19, 14], [12, 22.5], [5, 14], [5.5, 7]], seed, 0.7, true), vein: wobblyLine([[12, 4], [12, 12], [12, 22]], seed + 1, 0.4) };
+  const pts: P[] = [[12, 1.5], [14.3, 7], [19.5, 5.5], [17.8, 11], [22.5, 12.5], [17.5, 15.5], [18.5, 19.5], [13.2, 17.8], [12, 20], [10.8, 17.8], [5.5, 19.5], [6.5, 15.5], [1.5, 12.5], [6.2, 11], [4.5, 5.5], [9.7, 7]];
+  return { body: wobblyLine(pts, seed, 0.5, true), stem: wobblyLine([[12, 18], [12, 23]], seed + 1, 0.3) };
 }
 
-/** Snowflake in a 24 x 24 box: three crossing arms with a small V at the end of each. */
+/** Snowflake in a 24 x 24 box: four straight strokes crossing at the centre (8 points). */
 export function flakeArt(seed: number) {
-  const arms: string[] = [];
-  for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * Math.PI, x = Math.cos(a) * 10, y = Math.sin(a) * 10;
-    arms.push(wobblyLine([[12 - x, 12 - y], [12 + x, 12 + y]], seed + i, 0.4));
-    for (const sgn of [1, -1]) {
-      const bx = 12 + x * 0.62 * sgn, by = 12 + y * 0.62 * sgn, ex = 12 + x * sgn, ey = 12 + y * sgn;
-      for (const k of [-1, 1]) arms.push(wobblyLine([[bx, by], [bx + (ex - bx) * 0.5 + -(ey - by) * 0.35 * k, by + (ey - by) * 0.5 + (ex - bx) * 0.35 * k]], seed + 9 + i + k, 0.2));
-    }
+  let d = "";
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI, x = Math.cos(a) * 10.5, y = Math.sin(a) * 10.5;
+    d += wobblyLine([[12 - x, 12 - y], [12 + x, 12 + y]], seed + i, 0.5);
   }
-  return arms.join("");
+  return d;
 }
 
-/** One falling piece: where it sits next to the place's left edge, its size, colours' index, timings. Seeded, so the picture never changes between renders. */
-export interface FallPiece { dx: number; size: number; fill: number; fallS: number; swayS: number; delayS: number; swayDelayS: number; opacity: number; startPct: number; seed: number }
-export function fallPieces(placeIdx: number, widthPx: number): FallPiece[] {
-  const F = C.fall, r = seededRnd(500 + placeIdx * 17), u = () => r() + 0.5;   // 0..1
+/** One static piece: offset next to the place's left edge, position inside the band (0..1), size, tilt, opacity. Seeded, so the picture never changes between renders. */
+export interface SpotPiece { dx: number; yFrac: number; size: number; tilt: number; opacity: number; seed: number }
+export function spotPieces(placeIdx: number, widthPx: number): SpotPiece[] {
+  const F = C.spots, r = seededRnd(500 + placeIdx * 17), u = () => r() + 0.5;   // 0..1
   const span = F.places[placeIdx].spread * widthPx;
-  return Array.from({ length: F.count }, (_, k) => {
-    const dur = F.durationS[0] + u() * (F.durationS[1] - F.durationS[0]);
-    return {
-      dx: (((k * 3) % F.count) / Math.max(1, F.count - 1)) * span + r() * 8,   // x and fall phase use different orders, so the pieces do not line up diagonally
- size: F.sizePx[0] + u() * (F.sizePx[1] - F.sizePx[0]), fill: k,
-      fallS: dur, swayS: F.swayS[0] + u() * (F.swayS[1] - F.swayS[0]),
-      delayS: (((k * 2) % F.count) / F.count) * dur, swayDelayS: u() * 3,   // staggered, so the pieces are spread over the band from the first frame
-      opacity: F.opacity[0] + u() * (F.opacity[1] - F.opacity[0]), startPct: 10 + (((k * 2) % F.count) / F.count) * 70, seed: 800 + placeIdx * 31 + k * 5,
-    };
-  });
+  return Array.from({ length: F.count }, (_, k) => ({
+    dx: (((k * 3) % F.count) / Math.max(1, F.count - 1)) * span + r() * 8,
+    yFrac: (((k * 2) % F.count) + u() * 0.8) / F.count * 0.9,
+    size: F.sizePx[0] + u() * (F.sizePx[1] - F.sizePx[0]),
+    tilt: (u() * 2 - 1) * F.tiltDeg,
+    opacity: F.opacity[0] + u() * (F.opacity[1] - F.opacity[0]),
+    seed: 800 + placeIdx * 31 + k * 5,
+  }));
 }

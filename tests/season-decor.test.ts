@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { dominantSeason, decorClip, decorWindow, effectiveSeason } from "../src/lib/season-decor";
-import { meadowArt, sunArt, fallPieces, wobblyLine } from "../src/lib/season-decor-art";
+import { meadowArt, sunArt, spotPieces, wobblyLine } from "../src/lib/season-decor-art";
 import { SEASON_DECOR } from "../src/config/season-decor";
 import { DEFAULT_PREFS, cleanPrefs } from "../src/lib/shop-pref";
 
@@ -58,9 +58,9 @@ test("drawing is deterministic and the config is sane", () => {
   assert.deepEqual(sunArt(), sunArt());
   assert.deepEqual(meadowArt(400), meadowArt(400));
   assert.equal(sunArt().rays.length, SEASON_DECOR.sun.rays);
-  assert.equal(fallPieces(0, 400).length, SEASON_DECOR.fall.count);
-  assert.deepEqual(fallPieces(1, 400), fallPieces(1, 400));
-  assert.equal(SEASON_DECOR.fall.places.length, 2);
-  for (const p of SEASON_DECOR.fall.places) assert.ok(p.y0 >= 0 && p.y1 <= 1 && p.y0 < p.y1 && p.x >= 0 && p.x < 1);
-  assert.ok(!SEASON_DECOR.fall.places.some((p) => p.x < 0.3 && p.y0 < 0.2));   // not over the attribute icons (top left)
+  assert.equal(spotPieces(0, 400).length, SEASON_DECOR.spots.count);
+  assert.deepEqual(spotPieces(1, 400), spotPieces(1, 400));
+  assert.equal(SEASON_DECOR.spots.places.length, 2);
+  for (const p of SEASON_DECOR.spots.places) assert.ok(p.y0 >= 0 && p.y1 <= 1 && p.y0 < p.y1 && p.x >= 0 && p.x < 1);
+  assert.ok(!SEASON_DECOR.spots.places.some((p) => p.x < 0.3 && p.y0 < 0.2));   // not over the attribute icons (top left)
 });

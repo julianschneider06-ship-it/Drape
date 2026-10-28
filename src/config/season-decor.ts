@@ -19,19 +19,17 @@ export const SEASON_DECOR = {
     color: "#a9dc86",                  // one uniform light green for strip, edge and blades
   },
 
-  fall: {
-    count: 5,                          // pieces per place
-    places: [                          // two fixed spots; x = left edge of the spot, y0..y1 = vertical band the pieces fall through (kept away from the top-left icons)
+  spots: {
+    count: 5,                          // pieces per place (static, they just lie there)
+    places: [                          // two fixed spots; x = left edge of the spot, y0..y1 = vertical band the pieces sit in (kept away from the top-left icons)
       { x: 0.60, y0: 0.08, y1: 0.46, spread: 0.2 },
       { x: 0.04, y0: 0.50, y1: 0.88, spread: 0.2 },
     ],
     sizePx: [20, 32] as [number, number],
-    durationS: [10, 16] as [number, number],   // one fall
-    swayS: [3.2, 5.2] as [number, number],     // one sway
-    swayPx: 9, swayDeg: 24,
+    tiltDeg: 35,                       // each piece is turned by a seeded angle within +-this
     opacity: [0.7, 1] as [number, number],
   },
 
-  leaves: { fills: ["#f28c28", "#d9432b", "#b8651b", "#e8b630"], stroke: "#7a3b12" },
-  snow: { fill: "#f4fbff", outline: "#6aa6d8", stroke: "#e6f4ff" },
+  leaves: { color: "#f28c28" },        // one uniform warm orange for all maple leaves
+  snow: { color: "#8cc8f0" },          // one uniform light blue for all snowflakes
 } as const;

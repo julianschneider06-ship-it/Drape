@@ -2,7 +2,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { SEASON_DECOR as C } from "@/config/season-decor";
 import { decorClip, decorWindow, type DecorSeason } from "@/lib/season-decor";
-import { fallPieces, flakeArt, leafArt, meadowArt, sunArt } from "@/lib/season-decor-art";
+import { flakeArt, leafArt, meadowArt, spotPieces, sunArt } from "@/lib/season-decor-art";
 
 // Screen-anchored seasonal decoration. One layer sits over the scroll area; for the (at most 3) outfits near the viewport it holds that outfit's decoration,
 // clipped to the part of the screen where THAT outfit is visible. The decorations never move; only the clip windows follow the scroll offset, written
@@ -31,31 +31,23 @@ function Meadow({ width }: { width: number }) {
   );
 }
 
-function Falling({ kind, width }: { kind: "autumn" | "winter"; width: number }) {
-  const places = useMemo(() => C.fall.places.map((_, i) => fallPieces(i, width)), [width]);
-  const pieces = useMemo(() => places.map((ps) => ps.map((p) => ({ p, leaf: leafArt(p.seed), flake: flakeArt(p.seed) }))), [places]);
+function Spots({ kind, width }: { kind: "autumn" | "winter"; width: number }) {
+  const pieces = useMemo(() => C.spots.places.map((_, i) => spotPieces(i, width).map((p) => ({ p, leaf: leafArt(p.seed), flake: flakeArt(p.seed) }))), [width]);
   return (
     <>
-      {C.fall.places.map((pl, pi) => (
+      {C.spots.places.map((pl, pi) => (
         <div key={pi} className="absolute" style={{ left: `${pl.x * 100}%`, top: `${pl.y0 * 100}%`, height: `${(pl.y1 - pl.y0) * 100}%`, width: 1 }}>
           {pieces[pi].map(({ p, leaf, flake }) => (
-            <div key={p.seed} className="sd-fall absolute top-0" style={{ left: p.dx, width: p.size, height: "100%", opacity: p.opacity, transform: `translate3d(0, ${p.startPct}%, 0)`, animationDuration: `${p.fallS}s`, animationDelay: `-${p.delayS}s`, ["--sd-o" as string]: p.opacity } as CSSProperties}>
-              <div className="sd-sway" style={{ width: p.size, height: p.size, animationDuration: `${p.swayS}s`, animationDelay: `-${p.swayDelayS}s`, ["--sd-sway" as string]: `${C.fall.swayPx}px`, ["--sd-deg" as string]: `${C.fall.swayDeg}deg` } as CSSProperties}>
-                <svg width={p.size} height={p.size} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                  {kind === "autumn" ? (
-                    <>
-                      <path d={leaf.body} fill={C.leaves.fills[p.fill % C.leaves.fills.length]} stroke={C.leaves.stroke} strokeWidth={INK.width * 0.8} {...nonScaling} />
-                      <path d={leaf.vein} stroke={C.leaves.stroke} strokeWidth={INK.width * 0.6} {...nonScaling} />
-                    </>
-                  ) : (
-                    <>
-                      <path d={flake} stroke={C.snow.outline} strokeWidth={INK.outline} {...nonScaling} />
-                      <path d={flake} stroke={C.snow.stroke} strokeWidth={INK.width * 0.6} {...nonScaling} />
-                    </>
-                  )}
-                </svg>
-              </div>
-            </div>
+            <svg key={p.seed} className="absolute" style={{ left: p.dx, top: `${p.yFrac * 100}%`, opacity: p.opacity, transform: `rotate(${p.tilt}deg)` }} width={p.size} height={p.size} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+              {kind === "autumn" ? (
+                <>
+                  <path d={leaf.body} fill={C.leaves.color} stroke={C.leaves.color} strokeWidth={INK.width * 0.8} {...nonScaling} />
+                  <path d={leaf.stem} stroke={C.leaves.color} strokeWidth={INK.width * 0.8} {...nonScaling} />
+                </>
+              ) : (
+                <path d={flake} stroke={C.snow.color} strokeWidth={INK.width} {...nonScaling} />
+              )}
+            </svg>
           ))}
         </div>
       ))}
@@ -64,7 +56,7 @@ function Falling({ kind, width }: { kind: "autumn" | "winter"; width: number }) 
 }
 
 const Art = ({ season, width, sun, safeTop }: { season: DecorSeason; width: number; sun: boolean; safeTop: boolean }) =>
-  season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Falling kind={season} width={width} />;
+  season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Spots kind={season} width={width} />;
 
 /** `scroller` = the snap scroller the outfits live in (offset and height are read from it); `seasons[i]` = decoration of outfit i (null = none).
  *  `className`/`style` give the layer its box (same box as the scroller). `sunFront`: the sun sits above a translucent header (nothing else does). */
@@ -81,7 +73,6 @@ function SeasonDecor({ scroller, seasons, className, style, sunFront }: { scroll
       const c = decorClip(Number(g.dataset.i), st, h);
       g.style.clipPath = c ? `inset(${c.top}px 0px ${c.bottom}px 0px)` : "";
       g.style.visibility = c ? "" : "hidden";
-      if (c) delete g.dataset.off; else g.dataset.off = "1";
     });
   };
   const sync = () => {
