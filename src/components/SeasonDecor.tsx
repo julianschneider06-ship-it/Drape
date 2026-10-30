@@ -1,4 +1,5 @@
 "use client";
+import { viewHeight } from "@/lib/view-height";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { SEASON_DECOR as C } from "@/config/season-decor";
 import { decorClip, decorWindow, type DecorSeason } from "@/lib/season-decor";
@@ -48,7 +49,7 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: {
 
   const apply = () => {   // clip every group to where its outfit is on screen (direct DOM writes)
     const sc = scroller.current, el = root.current; if (!sc || !el) return;
-    const h = sc.clientHeight, st = sc.scrollTop;
+    const h = viewHeight(sc), st = sc.scrollTop;
     el.querySelectorAll<HTMLElement>(".sd-group").forEach((g) => {
       const c = decorClip(Number(g.dataset.i), st, h);
       g.style.clipPath = c ? `inset(${c.top}px 0px ${c.bottom}px 0px)` : "";
@@ -57,9 +58,9 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: {
   };
   const sync = () => {
     const sc = scroller.current; if (!sc) return;
-    const w = decorWindow(sc.scrollTop, sc.clientHeight, count), k = w.join(",");
+    const w = decorWindow(sc.scrollTop, viewHeight(sc), count), k = w.join(",");
     if (k !== winKey.current) { winKey.current = k; setWin(w); }
-    setSize((p) => (p.w === sc.clientWidth && p.h === sc.clientHeight ? p : { w: sc.clientWidth, h: sc.clientHeight }));
+    setSize((p) => (p.w === sc.clientWidth && p.h === viewHeight(sc) ? p : { w: sc.clientWidth, h: viewHeight(sc) }));
     apply();
   };
   const syncRef = useRef(sync); syncRef.current = sync;

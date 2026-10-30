@@ -96,7 +96,7 @@ export default function ProfileView() {
               <Switch label={T.miniLabel} on={prefs.mini} onChange={setMiniLocal} />
             </SettingRow>
             <SettingRow label={T.stripeLabel}>
-              <Switch label={T.stripeLabel} on={prefs.stripe} onChange={setStripeLocal} />
+              <Segmented compact id="stripe-mode" label={T.stripeLabel} options={[...T.stripeOptions]} value={prefs.stripe} onChange={setStripeLocal} />
             </SettingRow>
           </ul>
 

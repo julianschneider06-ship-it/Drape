@@ -51,7 +51,8 @@ export const STRIPE_BG = {
   crossfadeMs: 450,
   // grey glass pieces for the controls (header + bottom bar) while the stripe background is on in the For You feed
   glass: {
-    fill: "rgba(150,150,158,0.62)",     // grey semi-transparent fill
+    rgb: "150,150,158",                 // grey of the fill (Colorful); Simple uses simple.glassRgb
+    fillAlpha: 0.5,                     // translucency, SHARED by header and tab bar in both modes (the stripes and the products show through)
     edge: "rgba(255,255,255,0.4)",      // 1 px light edge
     edgeWidthPx: 1,
     specularAlpha: 0.22,                // faint top-left highlight
@@ -62,5 +63,23 @@ export const STRIPE_BG = {
     stripeShiftPx: 3,                   // ... and shifted sideways by this
     textOn: "#000000",                  // active tab on the glass
     textOff: "#3a3a42",                 // inactive tab on the glass (contrast >= 4.5 on the fill)
-  },           // colour change between two outfits (opacity only)
-} as const;
+  },
+  // Simple mode: mostly white with a little grey; no outfit colour anywhere. Stored locally, ?stripe=simple.
+  simple: {
+    bgTop: "#ffffff",                   // soft vertical gradient, top ...
+    bgBottom: "#eeeeee",                // ... to very light grey at the bottom
+    secondOpacityMult: 0.33,
+    stops: [                            // very faint grey reeded stripes (black alphas only, low)
+      { pos: 0, c: "k", a: 0 },
+      { pos: 8, c: "k", a: 0.02 },
+      { pos: 30, c: "k", a: 0.008 },
+      { pos: 60, c: "k", a: 0 },
+      { pos: 88, c: "k", a: 0.02 },
+      { pos: 96, c: "k", a: 0.045 },
+      { pos: 100, c: "k", a: 0 },
+    ],
+    glassRgb: "214,214,214",            // lighter grey for header + tab bar
+    shadow: { offsetPx: 5, blurPx: 7, alpha: 0.22 },   // contact shadow under every product cutout
+    imprint: { scale: 1.14, alpha: 0.1 },              // faint grey blob behind each product, slightly larger than it
+  },
+} as const;   // crossfadeMs: colour change between two outfits (opacity only)

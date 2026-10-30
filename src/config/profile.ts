@@ -9,6 +9,7 @@ export const PROFILE_TEXT = {
   seasonLabel: "Seasonal decoration",
   miniLabel: "Outfit preview",
   stripeLabel: "Stripe background",
+  stripeOptions: [{ id: "off", label: "Off" }, { id: "colorful", label: "Colorful" }, { id: "simple", label: "Simple" }] as const,
   saleGlobalOff: "Currently off for everyone",
   shopsHeading: "Shops",
   searchPlaceholder: "Search shops",

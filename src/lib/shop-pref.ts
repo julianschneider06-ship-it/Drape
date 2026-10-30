@@ -43,8 +43,10 @@ export function shopWeights(prefs: ReadonlyMap<string, "less" | "more">): Map<st
 /** Effective sale marker. A link parameter (?sale=on|off) wins (testing); otherwise the global app setting AND the user's choice: global off always beats local on. */
 export const effectiveSale = (link: string | null, globalOn: boolean, localOn: boolean): boolean => (link === "on" ? true : link === "off" ? false : globalOn && localOn);
 
-export interface ProfilePrefs { v: 1; sale: boolean; bg: boolean; season: boolean; mini: boolean; stripe: boolean; shops: ShopPrefs }
-export const DEFAULT_PREFS: ProfilePrefs = { v: 1, sale: true, bg: true, season: true, mini: true, stripe: false, shops: {} };
+/** Stripe background: off | colorful (outfit-colour gradient) | simple (white/grey). Older saves stored a boolean (true = colorful). */
+export type StripeMode = "off" | "colorful" | "simple";
+export interface ProfilePrefs { v: 1; sale: boolean; bg: boolean; season: boolean; mini: boolean; stripe: StripeMode; shops: ShopPrefs }
+export const DEFAULT_PREFS: ProfilePrefs = { v: 1, sale: true, bg: true, season: true, mini: true, stripe: "off", shops: {} };
 
 /** Effective Drape background (Wishlist Generate Outfits + My Outfits): ?bg=0|1 wins (testing), otherwise the user's choice. */
 export const effectiveBg = (link: string | null, localOn: boolean): boolean => (link === "1" ? true : link === "0" ? false : localOn);
@@ -61,7 +63,7 @@ export function cleanPrefs(raw: unknown): ProfilePrefs {
       if ((l === "less" || l === "more") && SHOP_PREF_LIMITS.idPattern.test(id)) { shops[id] = l; if (++n >= SHOP_PREF_LIMITS.maxEntries) break; }
     }
   }
-  return { v: 1, sale: typeof r.sale === "boolean" ? r.sale : true, bg: typeof r.bg === "boolean" ? r.bg : true, season: typeof r.season === "boolean" ? r.season : true, mini: typeof r.mini === "boolean" ? r.mini : true, stripe: typeof r.stripe === "boolean" ? r.stripe : false, shops };
+  return { v: 1, sale: typeof r.sale === "boolean" ? r.sale : true, bg: typeof r.bg === "boolean" ? r.bg : true, season: typeof r.season === "boolean" ? r.season : true, mini: typeof r.mini === "boolean" ? r.mini : true, stripe: r.stripe === true || r.stripe === "colorful" ? "colorful" : r.stripe === "simple" ? "simple" : "off", shops };
 }
 
 /** read / write with the storage passed in, every access guarded (blocked storage = defaults, nothing thrown) */

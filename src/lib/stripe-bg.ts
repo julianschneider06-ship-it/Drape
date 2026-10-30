@@ -2,6 +2,7 @@
 import { STRIPE_BG as C } from "@/config/stripe-bg";
 import type React from "react";
 import { COLOR_HEX } from "@/lib/shine";
+import type { StripeMode } from "@/lib/shop-pref";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 
 type Cfg = typeof C;
@@ -102,14 +103,26 @@ export function curveSlices(cfg: Cfg = C): CurveSlice[] {
 }
 
 /** CSS of one grey glass piece (header / tab bar): fill + specular + refracted stripes (boosted, shifted) + light edge, soft shadow, small radius */
-export function glassPieceStyle(cfg: Cfg = C): React.CSSProperties {
-  const g = cfg.glass;
+export function glassPieceStyle(mode: StripeMode = "colorful", cfg: Cfg = C): React.CSSProperties {
+  const g = cfg.glass, simple = mode === "simple";
   return {
-    background: `${specularCss(cfg, g.specularAlpha)}, ${stripeCss(cfg, g.stripeBoost, g.stripeShiftPx)}, ${g.fill}`,
+    background: `${specularCss(cfg, g.specularAlpha)}, ${simple ? stripeCss(simpleCfg(cfg), g.stripeBoost, g.stripeShiftPx) : stripeCss(cfg, g.stripeBoost, g.stripeShiftPx)}, ${glassFill(mode, cfg)}`,
     boxShadow: `inset 0 0 0 ${g.edgeWidthPx}px ${g.edge}, ${g.shadow}`,
     borderRadius: g.radiusPx,
   };
 }
 
-/** Effective setting: ?stripe=0|1 link wins (testing), otherwise the Profile choice (device only, default off). */
-export const effectiveStripe = (link: string | null, localOn: boolean): boolean => (link === "1" ? true : link === "0" ? false : localOn);
+/** Effective mode: ?stripe=0|1|simple link wins (1 = colorful, unknown values ignored), otherwise the Profile choice (device only, default off). */
+export const effectiveStripe = (link: string | null, local: StripeMode): StripeMode => (link === "1" ? "colorful" : link === "0" ? "off" : link === "simple" ? "simple" : local);
+
+/** Config view of the Simple mode: its own stripe stops (grey only, very faint), same period / second layer. */
+const simpleCfg = (cfg: Cfg = C): Cfg => ({ ...cfg, stops: cfg.simple.stops as unknown as Cfg["stops"], secondOpacityMult: cfg.simple.secondOpacityMult });
+export const simpleStripeCss = (cfg: Cfg = C): string => stripeCss(simpleCfg(cfg));
+/** Simple background: soft vertical white -> very light grey gradient */
+export const simpleBackgroundCss = (cfg: Cfg = C): string => `linear-gradient(180deg, ${cfg.simple.bgTop} 0%, ${cfg.simple.bgBottom} 100%)`;
+/** Glass fill: colour of the mode, translucency shared (`glass.fillAlpha`) */
+export const glassFill = (mode: StripeMode = "colorful", cfg: Cfg = C): string => `rgba(${mode === "simple" ? cfg.simple.glassRgb : cfg.glass.rgb},${cfg.glass.fillAlpha})`;
+/** Contact shadow under a product cutout (Simple mode): CSS filter drop-shadow */
+export const productShadowCss = (cfg: Cfg = C): string => `drop-shadow(0 ${cfg.simple.shadow.offsetPx}px ${cfg.simple.shadow.blurPx}px rgba(0,0,0,${cfg.simple.shadow.alpha}))`;
+/** Faint grey imprint blob behind a product (Simple mode): a radial gradient that fades to nothing, no blur filter */
+export const productImprintCss = (cfg: Cfg = C): string => `radial-gradient(ellipse at 50% 55%, rgba(0,0,0,${cfg.simple.imprint.alpha}) 0%, rgba(0,0,0,${+(cfg.simple.imprint.alpha * 0.5).toFixed(4)}) 55%, rgba(0,0,0,0) 72%)`;

@@ -35,7 +35,8 @@ import { likeSignal } from "@/lib/like-signal";
 import { TASTE } from "@/lib/personalization/config";
 import SeasonDecor from "./SeasonDecor";
 import StripeBackground from "./StripeBackground";
-import { useStripeBackground } from "@/lib/client/stripe-bg";
+import { viewHeight } from "@/lib/view-height";
+import { useStripeMode } from "@/lib/client/stripe-bg";
 import { outfitStripePalette, glassPieceStyle } from "@/lib/stripe-bg";
 import { STRIPE_BG } from "@/config/stripe-bg";
 import { dominantSeason } from "@/lib/season-decor";
@@ -118,9 +119,9 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const seasonOn = useSeasonDecor();
   const seasons = useMemo(() => items.map((o) => dominantSeason(o.tags)), [items]);   // decoration per outfit (swaps do not change the outfit's tags)
   const shown = useMemo(() => items.map((o) => applySwaps(o, swaps[o.id])), [items, swaps]);   // the outfits as the user sees them after swaps
-  const stripeOn = useStripeBackground();
+  const stripeMode = useStripeMode(), stripeOn = stripeMode !== "off";
   const miniOn = useMiniPreview();
-  const stripeColors = useMemo(() => (stripeOn && shown[railIdx] ? outfitStripePalette(shown[railIdx]) : []), [stripeOn, shown, railIdx]);   // palette of the outfit in view (follows swaps)
+  const stripeColors = useMemo(() => (stripeMode === "colorful" && shown[railIdx] ? outfitStripePalette(shown[railIdx]) : []), [stripeMode, shown, railIdx]);   // palette of the outfit in view (follows swaps)
   const minis = useMemo(() => (miniOn ? { specs: shown.map((o) => mannequinSpec(o, gender ?? "women")), searchOn } : null), [miniOn, shown, searchOn, gender]);   // outfit preview figures follow swaps
   itemsRef.current = shown;
 
@@ -175,8 +176,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     const probe = document.createElement("div");
     probe.style.cssText = "position:fixed;left:0;bottom:0;visibility:hidden;pointer-events:none;padding-bottom:var(--safe-b,env(safe-area-inset-bottom))";
     (el.parentElement ?? document.body).appendChild(probe);   // inside <main>: it sees --safe-b (0 while the bottom bar covers the safe area)
-    const measure = () => setCanvas((p) => { const safe = parseFloat(getComputedStyle(probe).paddingBottom) || 0; const n = canvasSize(el.clientWidth, el.clientHeight, safe); return p && p.w === n.w && p.h === n.h ? p : n; });
-      setFeedCanvas((p) => { const safe = parseFloat(getComputedStyle(probe).paddingBottom) || 0; const n = canvasSize(el.clientWidth, el.clientHeight, safe, { barPx: 0, railPx: ACTION_RAIL_WIDTH }); return p && p.w === n.w && p.h === n.h ? p : n; });
+    const measure = () => setCanvas((p) => { const safe = parseFloat(getComputedStyle(probe).paddingBottom) || 0; const n = canvasSize(el.clientWidth, viewHeight(el), safe); return p && p.w === n.w && p.h === n.h ? p : n; });
+      setFeedCanvas((p) => { const safe = parseFloat(getComputedStyle(probe).paddingBottom) || 0; const n = canvasSize(el.clientWidth, viewHeight(el), safe, { barPx: 0, railPx: ACTION_RAIL_WIDTH }); return p && p.w === n.w && p.h === n.h ? p : n; });
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -434,7 +435,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const likeFromCard = useCallback((card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => { toggleLike(card, outfit, index, slot); return likeResult.current; }, [toggleLike]);
   const backToForYou = useCallback(() => goTab("foryou"), [goTab]);
   const layers = tabLayers(tab, searchSeen);   // panels crossfade (Layer); visibility keeps the scroll position, nothing re-renders
-  const glassUi = stripeOn && obPhase === "off" && tab === "foryou";   // grey glass header + tab bar over the stripe background (For You only)
+  const glassUi = stripeOn && obPhase === "off" && tab === "foryou" ? stripeMode : false;   // grey glass header + tab bar over the stripe background (For You only)
   const obHeader = obPhase !== "off";   // header controls rest during the tutorial
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
@@ -448,21 +449,21 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     <main className="h-dvh bg-white" style={{ "--nav-h": navOn ? `calc(${NAV_PX}px + env(safe-area-inset-bottom))` : "0px", "--safe-b": navOn ? "0px" : "env(safe-area-inset-bottom)" } as React.CSSProperties}>
       <SaleInkDefs />
       <Layer active={layers.feedActive} shiftPx={0}>
-        {stripeOn && obPhase === "off" && <StripeBackground colors={stripeColors} className="fixed inset-0" />}
+        {stripeOn && obPhase === "off" && <StripeBackground mode={stripeMode} colors={stripeColors} className="fixed inset-0" />}
         {(seasonOn || miniOn) && obPhase === "off" && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="fixed inset-x-0 top-0" style={DECOR_BOX} sunFront />}
         <header className={glassUi ? "fixed z-30 flex items-center justify-between px-3 pb-2 pt-2" : "fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur"}
-          style={glassUi ? { ...glassPieceStyle(), left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : undefined}>
+          style={glassUi ? { ...glassPieceStyle(glassUi || "colorful"), left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : undefined}>
           <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
           <Segmented id="gender" label="Section" disabled={obHeader} value={gender as Gender} onChange={setGender} options={[{ id: "women", label: "Women" }, { id: "men", label: "Men" }]} />
           <span className="w-16" aria-hidden />
         </header>
 
-        <div ref={scroller} className="no-scrollbar snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ height: H }}>
+        <div ref={scroller} className="no-scrollbar snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ height: glassUi ? "100dvh" : H }}>   {/* glass bar: the scroller runs down to the screen edge so passing outfits show through the bar; sections keep height H, a spacer keeps the last snap position reachable */}
           {obPhase === "off" && shown.map((o, i) => (
             <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)" }}>
               {feedCanvas && (
                 <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>   {/* the right ACTION_RAIL_WIDTH px stay empty: the fixed rail overlay sits there */}
-                  <OutfitCanvas outfit={o} canvas={feedCanvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => { if (feedDoubleTap(liked.has(c.id)) === "replay") return true; toggleLike(c, o, i, slot); return likeResult.current; }} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
+                  <OutfitCanvas outfit={o} canvas={feedCanvas} greyAccent={glassUi === "simple"} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => { if (feedDoubleTap(liked.has(c.id)) === "replay") return true; toggleLike(c, o, i, slot); return likeResult.current; }} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
                     onLayout={(layout, mode, slots) => { layoutInfo.current.set(o.id, { layout, mode }); const k = slots.join(","); setPlaced((p) => (p[o.id] === k ? p : { ...p, [o.id]: k })); }} />
                 </div>
               )}
@@ -475,6 +476,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
               {error ? <button onClick={() => loadMore()} className="rounded-full border border-neutral-300 px-4 py-2 text-neutral-700">Try again</button> : loading || !gender ? "Loading…" : "No outfits yet."}
             </section>
           )}
+          {glassUi && <div aria-hidden style={{ height: "var(--nav-h, 0px)" }} />}
         </div>
 
         {obPhase === "off" && feedCanvas && shown[railIdx] && (   // fixed action rail: never moves with the cards; acts on the outfit in view
