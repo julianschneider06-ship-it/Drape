@@ -36,7 +36,8 @@ import { TASTE } from "@/lib/personalization/config";
 import SeasonDecor from "./SeasonDecor";
 import StripeBackground from "./StripeBackground";
 import { useStripeBackground } from "@/lib/client/stripe-bg";
-import { outfitStripePalette } from "@/lib/stripe-bg";
+import { outfitStripePalette, glassPieceStyle } from "@/lib/stripe-bg";
+import { STRIPE_BG } from "@/config/stripe-bg";
 import { dominantSeason } from "@/lib/season-decor";
 import { useSeasonDecor } from "@/lib/client/season-decor";
 import { useMiniPreview } from "@/lib/client/mannequin";
@@ -433,6 +434,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const likeFromCard = useCallback((card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => { toggleLike(card, outfit, index, slot); return likeResult.current; }, [toggleLike]);
   const backToForYou = useCallback(() => goTab("foryou"), [goTab]);
   const layers = tabLayers(tab, searchSeen);   // panels crossfade (Layer); visibility keeps the scroll position, nothing re-renders
+  const glassUi = stripeOn && obPhase === "off" && tab === "foryou";   // grey glass header + tab bar over the stripe background (For You only)
   const obHeader = obPhase !== "off";   // header controls rest during the tutorial
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
@@ -446,9 +448,10 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     <main className="h-dvh bg-white" style={{ "--nav-h": navOn ? `calc(${NAV_PX}px + env(safe-area-inset-bottom))` : "0px", "--safe-b": navOn ? "0px" : "env(safe-area-inset-bottom)" } as React.CSSProperties}>
       <SaleInkDefs />
       <Layer active={layers.feedActive} shiftPx={0}>
-        {stripeOn && obPhase === "off" && <StripeBackground colors={stripeColors} className="fixed inset-x-0 top-0" style={DECOR_BOX} />}
+        {stripeOn && obPhase === "off" && <StripeBackground colors={stripeColors} className="fixed inset-0" />}
         {(seasonOn || miniOn) && obPhase === "off" && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="fixed inset-x-0 top-0" style={DECOR_BOX} sunFront />}
-        <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
+        <header className={glassUi ? "fixed z-30 flex items-center justify-between px-3 pb-2 pt-2" : "fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur"}
+          style={glassUi ? { ...glassPieceStyle(), left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : undefined}>
           <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
           <Segmented id="gender" label="Section" disabled={obHeader} value={gender as Gender} onChange={setGender} options={[{ id: "women", label: "Women" }, { id: "men", label: "Men" }]} />
           <span className="w-16" aria-hidden />
@@ -497,7 +500,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         )}
       </AnimatePresence>
       <AnimatePresence>{navOn && layers.profileOpen && <ProfileView key="profile" />}</AnimatePresence>
-      {navOn && <BottomNav tab={tab} onTab={goTab} searchOn={searchOn} />}
+      {navOn && <BottomNav tab={tab} onTab={goTab} searchOn={searchOn} glass={glassUi} />}
 
       {obPhase === "welcome" && <Welcome onDone={finishWelcome} onGender={fetchOb} />}
       {obPhase === "on" && feedCanvas && <TutorialFeed items={obItems} canvas={feedCanvas} onFinish={finishOb} onSkip={skipOb} onWarm={warmFeed} />}

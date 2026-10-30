@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { STRIPE_BG as C } from "../src/config/stripe-bg";
 import { COLOR_HEX } from "../src/lib/shine";
 import { DEFAULT_PREFS, cleanPrefs } from "../src/lib/shop-pref";
-import { effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, edgeCss, panelCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
+import { effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, bendPaths, glassPieceStyle, specularCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
 
 const card = (col: string | null) => ({ id: 1, mq: { sub: null, col, fit: null, sil: null, outer: false } }) as never;
 const outfit = (cols: (string | null)[], acc: (string | null)[] = []) => ({ top: card(cols[0]), bottom: card(cols[1]), shoes: card(cols[2]), accessories: acc.map((c) => ({ type: "bag", card: card(c) })) }) as never;
@@ -12,8 +12,8 @@ test("config values are sane", () => {
   assert.ok(C.periodPx > 0 && C.stops[0].pos === 0 && C.stops[C.stops.length - 1].pos === 100);
   assert.ok(C.stops.every((s, i) => i === 0 || s.pos > C.stops[i - 1].pos) && C.stops.every((s) => s.a >= 0 && s.a <= 0.25));
   assert.ok(C.stops[0].a === 0 && C.stops[C.stops.length - 1].a === 0);
-  assert.ok(C.panel.radiusPx >= 28 && C.panel.radiusPx <= 36 && C.panel.gapBottomPx >= 8 && C.panel.gapBottomPx <= 12 && C.panel.roundTop === false);
-  assert.ok(C.edge.borderAlpha >= 0.35 && C.edge.borderAlpha <= 0.5);
+  assert.ok(C.bend.zoneHeightPx >= 60 && C.bend.zoneHeightPx <= 100 && C.bend.minRadiusPx + C.bend.groupSpanPx <= C.bend.zoneHeightPx && C.bend.fadeFromPx < C.bend.fadeToPx && C.bend.fadeToPx <= C.bend.zoneHeightPx);
+  assert.ok(C.glass.radiusPx <= 16 && C.glass.marginPx > 0 && C.glass.stripeBoost >= 1);
   assert.ok(C.minColors === 2 && C.maxColors === 3 && C.blobs.length >= C.maxColors);
   assert.ok(C.lightnessMin < C.lightnessMax && C.saturationMin <= C.saturationMax && C.crossfadeMs > 0);
   assert.match(C.fallbackColor, /^#[0-9a-f]{6}$/);
@@ -56,12 +56,10 @@ test("css strings use the config", () => {
   const s = stripeCss();
   assert.ok(s.startsWith("repeating-linear-gradient(90deg") && s.includes(`${C.periodPx}px`) && !s.includes("blur"));
   assert.ok(!stripeCss({ ...C, secondEnabled: false } as unknown as typeof C).includes(`${+(C.periodPx * C.secondPeriodMult).toFixed(3)}px`));
-  const p = panelCss();
-  assert.equal(p.borderRadius, `0 0 ${C.panel.radiusPx}px ${C.panel.radiusPx}px`);
-  assert.equal(panelCss({ ...C, panel: { ...C.panel, roundTop: true } } as unknown as typeof C).borderRadius, `${C.panel.radiusPx}px`);
-  const e = edgeCss();
-  assert.ok(String(e.boxShadow).includes(`inset 0 0 0 ${C.edge.borderWidthPx}px`) && String(e.background).includes(`${C.edge.specularAngleDeg}deg`));
-  assert.ok(!String(edgeCss({ ...C, edge: { ...C.edge, refractionEnabled: false } } as unknown as typeof C).boxShadow).includes(`${C.edge.refractionPx}px rgba`));
+  assert.ok(!stripeCss().includes("blur") && specularCss().includes(`${C.specular.angleDeg}deg`));
+  const gs = glassPieceStyle();
+  assert.ok(String(gs.background).includes(C.glass.fill) && String(gs.boxShadow).includes(C.glass.edge) && gs.borderRadius === C.glass.radiusPx);
+  assert.notEqual(stripeCss(C, C.glass.stripeBoost, C.glass.stripeShiftPx), stripeCss());
   const g = gradientCss(["#aabbcc", "#ddeeff"]);
   assert.ok(g.includes("#aabbcc") && g.includes(`${C.angleDeg}deg`) && g.endsWith(C.baseColor));
 });
@@ -76,4 +74,14 @@ test("switch: default off, link wins, old saves stay valid", () => {
   assert.equal(cleanPrefs({ v: 1, stripe: true }).stripe, true);
   assert.equal(cleanPrefs({ v: 1, stripe: "yes" }).stripe, false);
   assert.equal(cleanPrefs({ v: 1, season: false }).stripe, false);
+});
+
+test("floor bend: concentric inside a group, radius grows with the stripe, everything fits the zone", () => {
+  const paths = bendPaths(390);
+  assert.ok(paths.length >= C.stops.length - 2);
+  const rs = [...paths[0].d.matchAll(/A([\d.]+) /g)].map((m) => +m[1]);
+  assert.ok(rs.every((r) => r >= C.bend.minRadiusPx - 0.01 && r <= C.bend.minRadiusPx + C.bend.groupSpanPx + 0.01 && r <= C.bend.zoneHeightPx));
+  assert.ok(new Set(rs.map((r) => Math.round(r))).size > 1);
+  // first stripe: straight down from y 0, quarter circle (sweep 1) to the left, then a horizontal run
+  assert.match(paths[0].d, /^M[\d.]+ 0V0A[\d.]+ [\d.]+ 0 0 1 [-\d.]+ [\d.]+H[-\d.]+/);
 });

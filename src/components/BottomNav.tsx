@@ -4,6 +4,8 @@ import * as m from "motion/react-m";
 import { navTabs, TAB_LABELS, type Tab } from "@/lib/nav-tabs";
 import { MENU, MENU_COLORS, SPRING, DURATION_MS, sec } from "@/config/motion";
 import { useReducedMotion } from "@/lib/motion";
+import { STRIPE_BG } from "@/config/stripe-bg";
+import { glassPieceStyle } from "@/lib/stripe-bg";
 import { pressProps, stateTransition } from "@/lib/menu-motion";
 
 export type { Tab };
@@ -17,14 +19,15 @@ const Icon = ({ tab }: { tab: Tab }) => (
 );
 
 /** Slim bottom bar (white, thin grey line on top). Active tab black, inactive grey (colour fades); a short black indicator glides over the line to the active tab; a pressed tab springs to 0.94. Switching only toggles visibility; nothing is recorded. Tapping Search while in Search is passed on too (the configurator reopens). */
-function BottomNav({ tab, onTab, searchOn }: { tab: Tab; onTab: (t: Tab) => void; searchOn: boolean }) {
+function BottomNav({ tab, onTab, searchOn, glass = false }: { tab: Tab; onTab: (t: Tab) => void; searchOn: boolean; glass?: boolean }) {
   const reduced = useReducedMotion();
   return (
-    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)]" style={{ height: `calc(${NAV_PX}px + env(safe-area-inset-bottom))` }}>
-      <div className="mx-auto flex h-[49px] max-w-md" role="tablist">
+    <nav aria-label="Main" className={`fixed inset-x-0 bottom-0 z-30 pb-[env(safe-area-inset-bottom)] ${glass ? "" : "border-t border-neutral-200 bg-white"}`} style={{ height: `calc(${NAV_PX}px + env(safe-area-inset-bottom))` }}>
+      {glass && <div aria-hidden className="absolute" style={{ ...glassPieceStyle(), left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: 2, bottom: "calc(env(safe-area-inset-bottom) + 2px)" }} />}
+      <div className="relative mx-auto flex h-[49px] max-w-md" role="tablist">
         {navTabs(searchOn).map((t) => (
           <m.button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => (tab !== t || t === "search") && onTab(t)}
-            {...pressProps(reduced, MENU.pressScale)} initial={false} animate={{ color: tab === t ? MENU_COLORS.nav.on : MENU_COLORS.nav.off }} transition={stateTransition(reduced)}
+            {...pressProps(reduced, MENU.pressScale)} initial={false} animate={{ color: tab === t ? (glass ? STRIPE_BG.glass.textOn : MENU_COLORS.nav.on) : (glass ? STRIPE_BG.glass.textOff : MENU_COLORS.nav.off) }} transition={stateTransition(reduced)}
             className="relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium">
             {tab === t && (reduced
               ? <m.span aria-hidden className="absolute -top-px left-1/2 -ml-4 h-0.5 w-8 rounded-full bg-black" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: sec(DURATION_MS.reducedFade) }} />

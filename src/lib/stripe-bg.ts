@@ -71,32 +71,51 @@ export function gradientCss(colors: readonly string[], cfg: Cfg = C): string {
   return [...blobs, `linear-gradient(${cfg.angleDeg}deg, ${colors[0]} 0%, ${colors[colors.length - 1]} 100%)`, cfg.baseColor].join(", ");
 }
 
-/** One seamless flute layer built from the configured stops, repeated every `period` px; alphas scaled by k */
-function fluteLayer(period: number, k: number, cfg: Cfg): string {
-  const st = cfg.stops.map((s) => `${s.c === "w" ? "rgba(255,255,255" : "rgba(0,0,0"},${+(s.a * k).toFixed(4)}) ${+(period * s.pos / 100).toFixed(3)}px`);
+/** One seamless flute layer built from the configured stops, repeated every `period` px; alphas scaled by k, pattern shifted sideways by `shift` px */
+function fluteLayer(period: number, k: number, cfg: Cfg, shift = 0): string {
+  const st = cfg.stops.map((s) => `${s.c === "w" ? "rgba(255,255,255" : "rgba(0,0,0"},${+Math.min(1, s.a * k).toFixed(4)}) ${+(shift + period * s.pos / 100).toFixed(3)}px`);
   return `repeating-linear-gradient(90deg, ${st.join(", ")})`;
 }
 
-/** CSS of the stripe overlay: main flute layer plus (optional) a fainter one with another period */
-export function stripeCss(cfg: Cfg = C): string {
-  const main = fluteLayer(cfg.periodPx, 1, cfg);
-  return cfg.secondEnabled ? `${fluteLayer(cfg.periodPx * cfg.secondPeriodMult, cfg.secondOpacityMult, cfg)}, ${main}` : main;
+/** CSS of the stripe overlay: main flute layer plus (optional) a fainter one with another period. `boost` / `shift` give the refracted copy inside the glass pieces. */
+export function stripeCss(cfg: Cfg = C, boost = 1, shift = 0): string {
+  const main = fluteLayer(cfg.periodPx, boost, cfg, shift);
+  return cfg.secondEnabled ? `${fluteLayer(cfg.periodPx * cfg.secondPeriodMult, cfg.secondOpacityMult * boost, cfg, shift)}, ${main}` : main;
 }
 
-/** Panel box: insets, corner radius and outer shadow (top corners square unless roundTop) */
-export function panelCss(cfg: Cfg = C): React.CSSProperties {
-  const p = cfg.panel, r = `${p.radiusPx}px`;
+/** Top-left specular highlight (whole screen) */
+export const specularCss = (cfg: Cfg = C, alpha: number = cfg.specular.alpha): string => `linear-gradient(${cfg.specular.angleDeg}deg, rgba(255,255,255,${alpha}) 0%, rgba(255,255,255,0) ${cfg.specular.endPct}%)`;
+
+export type BendPath = { d: string; color: string; width: number };
+
+/** The floor zone as SVG paths (y = 0 is the top of the zone): every flute edge line goes straight down for a moment, turns left in a quarter circle (sweep 1) around the centre of its group and runs out to the left.
+ *  One path per layer + stop, all stripes of that stop joined. Concentric inside a group: radius = minRadius + (x - group start). */
+export function bendPaths(width: number, cfg: Cfg = C): BendPath[] {
+  const b = cfg.bend, out: BendPath[] = [];
+  const layers = [{ period: cfg.periodPx, k: 1 }, ...(cfg.secondEnabled ? [{ period: cfg.periodPx * cfg.secondPeriodMult, k: cfg.secondOpacityMult }] : [])];
+  for (const { period, k } of layers) {
+    const n = Math.max(1, Math.floor(b.groupSpanPx / period)), groupW = n * period;
+    for (const s of cfg.stops) {
+      if (s.pos <= 0 || s.pos >= 100 || s.a <= 0) continue;
+      const parts: string[] = [];
+      for (let f = 0; f * period < width + groupW; f++) {
+        const x = f * period + period * s.pos / 100, r = b.minRadiusPx + (x - Math.floor(x / groupW) * groupW), cx = x - r;
+        parts.push(`M${+x.toFixed(2)} 0V0A${+r.toFixed(2)} ${+r.toFixed(2)} 0 0 1 ${+cx.toFixed(2)} ${+r.toFixed(2)}H${+(cx - b.runPx).toFixed(2)}`);
+      }
+      out.push({ d: parts.join(""), color: `${s.c === "w" ? "rgba(255,255,255" : "rgba(0,0,0"},${+Math.min(1, s.a * k).toFixed(4)})`, width: s.a >= b.edgeMinAlpha ? b.edgeWidthPx : b.bodyWidthPx });
+    }
+  }
+  return out;
+}
+
+/** CSS of one grey glass piece (header / tab bar): fill + specular + refracted stripes (boosted, shifted) + light edge, soft shadow, small radius */
+export function glassPieceStyle(cfg: Cfg = C): React.CSSProperties {
+  const g = cfg.glass;
   return {
-    position: "absolute", left: p.gapSidePx, right: p.gapSidePx, bottom: p.gapBottomPx, top: p.roundTop ? p.gapTopPx : 0,
-    borderRadius: p.roundTop ? r : `0 0 ${r} ${r}`, overflow: "hidden", boxShadow: cfg.edge.outerShadow,
+    background: `${specularCss(cfg, g.specularAlpha)}, ${stripeCss(cfg, g.stripeBoost, g.stripeShiftPx)}, ${g.fill}`,
+    boxShadow: `inset 0 0 0 ${g.edgeWidthPx}px ${g.edge}, ${g.shadow}`,
+    borderRadius: g.radiusPx,
   };
-}
-
-/** Glass edge overlay (drawn above the stripes): diagonal specular highlight + inset light border, refraction band and inner shadow */
-export function edgeCss(cfg: Cfg = C): React.CSSProperties {
-  const e = cfg.edge, w = (a: number) => `rgba(255,255,255,${a})`;
-  const shadows = [`inset 0 0 0 ${e.borderWidthPx}px ${w(e.borderAlpha)}`, e.refractionEnabled ? `inset 0 0 ${e.refractionPx}px ${w(e.refractionAlpha)}` : "", e.innerShadow].filter(Boolean);
-  return { borderRadius: "inherit", background: `linear-gradient(${e.specularAngleDeg}deg, ${w(e.specularAlpha)} 0%, ${w(0)} ${e.specularEnd}%)`, boxShadow: shadows.join(", ") };
 }
 
 /** Effective setting: ?stripe=0|1 link wins (testing), otherwise the Profile choice (device only, default off). */

@@ -18,26 +18,21 @@ export const STRIPE_BG = {
   secondEnabled: true,
   secondPeriodMult: 1.37,     // period of the second layer = periodPx x this
   secondOpacityMult: 0.33,    // its alphas = main alphas x this
-  // glass panel: floats above the bottom bar, bottom corners rounded
-  panel: {
-    gapSidePx: 10,            // space to the left and right screen edge
-    gapBottomPx: 10,          // space above the bottom tab bar
-    gapTopPx: 0,              // space at the top (used when roundTop is on)
-    radiusPx: 32,             // bottom corner radius
-    roundTop: false,          // true = top corners rounded too (then gapTopPx applies)
-  },
-  // Liquid Glass edge (all static CSS, no filters)
-  edge: {
-    borderWidthPx: 1,
-    borderAlpha: 0.42,        // 1 px inner light border (white)
-    specularAngleDeg: 135,    // diagonal highlight from the top-left
-    specularAlpha: 0.26,
-    specularEnd: 38,          // % of the panel where the highlight is gone
-    refractionEnabled: true,  // slightly brighter band along the rounded edge
-    refractionPx: 14,
-    refractionAlpha: 0.2,
-    innerShadow: "inset -1px -2px 7px rgba(0,0,0,0.12)",   // along the bottom and right edges
-    outerShadow: "0 10px 28px rgba(20,24,40,0.12)",        // very soft shadow under the panel
+  // top-left specular highlight over the whole screen (soft white gradient, static)
+  specular: { angleDeg: 135, alpha: 0.2, endPct: 42 },
+  // stripes bend into the floor: in a short zone just above the bottom bar every stripe turns LEFT in a quarter circle and runs out
+  // horizontally, fading away. Stripes are grouped; inside a group the arcs share one centre (concentric, no overlap), radius = minRadius + distance
+  // from the group's first stripe. The CSS stripes end at the top of the zone; the zone itself is a static SVG.
+  bend: {
+    zoneHeightPx: 84,         // height of the zone above the bar
+    minRadiusPx: 14,          // radius of the innermost stripe of a group
+    groupSpanPx: 50,          // width of one concentric group (minRadius + span must fit into the zone)
+    runPx: 46,                // length of the horizontal run after the arc
+    fadeFromPx: 26,           // from this depth into the zone the stripe starts to fade ...
+    fadeToPx: 80,             // ... and is gone at this depth (vanishes into the floor)
+    edgeWidthPx: 1.2,         // stroke of a bright / dark edge stop (alpha >= edgeMinAlpha)
+    bodyWidthPx: 3,           // stroke of the faint body stops
+    edgeMinAlpha: 0.1,
   },
   // gradient
   angleDeg: 160,              // direction of the base gradient
@@ -60,5 +55,19 @@ export const STRIPE_BG = {
   neutralMix: 0.6,            // dropNeutrals false: share of the fallback blended in
   fallbackColor: "#eceef2",   // light grey-white, used when no clear colour remains
   baseColor: "#ffffff",       // under the blobs
-  crossfadeMs: 450,           // colour change between two outfits (opacity only)
+  crossfadeMs: 450,
+  // grey glass pieces for the controls (header + bottom bar) while the stripe background is on in the For You feed
+  glass: {
+    fill: "rgba(150,150,158,0.62)",     // grey semi-transparent fill
+    edge: "rgba(255,255,255,0.4)",      // 1 px light edge
+    edgeWidthPx: 1,
+    specularAlpha: 0.22,                // faint top-left highlight
+    shadow: "0 4px 16px rgba(20,24,40,0.16)",
+    radiusPx: 12,
+    marginPx: 8,                        // distance to the screen edges
+    stripeBoost: 1.7,                   // refracted stripes inside the glass: alphas x this (max 1)
+    stripeShiftPx: 3,                   // ... and shifted sideways by this
+    textOn: "#000000",                  // active tab on the glass
+    textOff: "#3a3a42",                 // inactive tab on the glass (contrast >= 4.5 on the fill)
+  },           // colour change between two outfits (opacity only)
 } as const;
