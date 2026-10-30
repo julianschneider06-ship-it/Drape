@@ -7,7 +7,7 @@ import { useReducedMotion } from "@/lib/motion";
 import { PROFILE_TEXT as T, SHOP_LEVELS } from "@/config/profile";
 import { SHOP_LIST_MAX } from "@/config/shop-pref";
 import { filterShops, yourShops, type ShopRowInfo } from "@/lib/profile-shops";
-import { setBgLocal, setMiniLocal, setSaleLocal, setSeasonLocal, setShopLevel, usePrefs } from "@/lib/client/profile-store";
+import { setBgLocal, setMiniLocal, setSaleLocal, setSeasonLocal, setShopLevel, setStripeLocal, usePrefs } from "@/lib/client/profile-store";
 import { saleGlobalOn } from "@/lib/client/sale";
 import type { ShopLevel } from "@/lib/shop-pref";
 import Segmented from "./Segmented";
@@ -94,6 +94,9 @@ export default function ProfileView() {
             </SettingRow>
             <SettingRow label={T.miniLabel}>
               <Switch label={T.miniLabel} on={prefs.mini} onChange={setMiniLocal} />
+            </SettingRow>
+            <SettingRow label={T.stripeLabel}>
+              <Switch label={T.stripeLabel} on={prefs.stripe} onChange={setStripeLocal} />
             </SettingRow>
           </ul>
 

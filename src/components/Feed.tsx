@@ -34,6 +34,9 @@ import type { Signal } from "@/outfits/taste-codec";
 import { likeSignal } from "@/lib/like-signal";
 import { TASTE } from "@/lib/personalization/config";
 import SeasonDecor from "./SeasonDecor";
+import StripeBackground from "./StripeBackground";
+import { useStripeBackground } from "@/lib/client/stripe-bg";
+import { outfitStripePalette } from "@/lib/stripe-bg";
 import { dominantSeason } from "@/lib/season-decor";
 import { useSeasonDecor } from "@/lib/client/season-decor";
 import { useMiniPreview } from "@/lib/client/mannequin";
@@ -114,7 +117,9 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const seasonOn = useSeasonDecor();
   const seasons = useMemo(() => items.map((o) => dominantSeason(o.tags)), [items]);   // decoration per outfit (swaps do not change the outfit's tags)
   const shown = useMemo(() => items.map((o) => applySwaps(o, swaps[o.id])), [items, swaps]);   // the outfits as the user sees them after swaps
+  const stripeOn = useStripeBackground();
   const miniOn = useMiniPreview();
+  const stripeColors = useMemo(() => (stripeOn && shown[railIdx] ? outfitStripePalette(shown[railIdx]) : []), [stripeOn, shown, railIdx]);   // palette of the outfit in view (follows swaps)
   const minis = useMemo(() => (miniOn ? { specs: shown.map((o) => mannequinSpec(o, gender ?? "women")), searchOn } : null), [miniOn, shown, searchOn, gender]);   // outfit preview figures follow swaps
   itemsRef.current = shown;
 
@@ -441,6 +446,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     <main className="h-dvh bg-white" style={{ "--nav-h": navOn ? `calc(${NAV_PX}px + env(safe-area-inset-bottom))` : "0px", "--safe-b": navOn ? "0px" : "env(safe-area-inset-bottom)" } as React.CSSProperties}>
       <SaleInkDefs />
       <Layer active={layers.feedActive} shiftPx={0}>
+        {stripeOn && obPhase === "off" && <StripeBackground colors={stripeColors} className="fixed inset-x-0 top-0" style={DECOR_BOX} />}
         {(seasonOn || miniOn) && obPhase === "off" && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="fixed inset-x-0 top-0" style={DECOR_BOX} sunFront />}
         <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
           <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>

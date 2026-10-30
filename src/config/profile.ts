@@ -8,6 +8,7 @@ export const PROFILE_TEXT = {
   bgLabel: "Drape Background",
   seasonLabel: "Seasonal decoration",
   miniLabel: "Outfit preview",
+  stripeLabel: "Stripe background",
   saleGlobalOff: "Currently off for everyone",
   shopsHeading: "Shops",
   searchPlaceholder: "Search shops",

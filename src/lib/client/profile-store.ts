@@ -14,6 +14,7 @@ export const setSaleLocal = (on: boolean) => commit({ ...getPrefs(), sale: on })
 export const setBgLocal = (on: boolean) => commit({ ...getPrefs(), bg: on });
 export const setSeasonLocal = (on: boolean) => commit({ ...getPrefs(), season: on });
 export const setMiniLocal = (on: boolean) => commit({ ...getPrefs(), mini: on });
+export const setStripeLocal = (on: boolean) => commit({ ...getPrefs(), stripe: on });
 export function setShopLevel(id: string, level: ShopLevel) {
   const shops = { ...getPrefs().shops };
   if (level === "normal") delete shops[id]; else shops[id] = level;
