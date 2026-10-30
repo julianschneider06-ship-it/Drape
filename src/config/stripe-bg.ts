@@ -4,7 +4,7 @@
 export const STRIPE_BG = {
   // stripes: seamless reeded glass. One period = one flute, smooth stops only (no hard edge, no gap, no solid band).
   // Stop positions are % of the period; the flute is transparent at both ends, so neighbouring periods flow into each other.
-  periodPx: 5,
+  periodPx: 10,
   lightPos: 15,               // % where the highlight (lighter side) peaks
   lightOpacity: 0.13,         // 0..1 white at the peak
   midPos: 55,                 // % where the flute is fully transparent between highlight and shade
