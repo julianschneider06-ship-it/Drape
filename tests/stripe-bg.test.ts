@@ -3,14 +3,17 @@ import assert from "node:assert/strict";
 import { STRIPE_BG as C } from "../src/config/stripe-bg";
 import { COLOR_HEX } from "../src/lib/shine";
 import { DEFAULT_PREFS, cleanPrefs } from "../src/lib/shop-pref";
-import { effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, glassFilter, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
+import { effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, edgeCss, panelCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
 
 const card = (col: string | null) => ({ id: 1, mq: { sub: null, col, fit: null, sil: null, outer: false } }) as never;
 const outfit = (cols: (string | null)[], acc: (string | null)[] = []) => ({ top: card(cols[0]), bottom: card(cols[1]), shoes: card(cols[2]), accessories: acc.map((c) => ({ type: "bag", card: card(c) })) }) as never;
 
 test("config values are sane", () => {
-  assert.ok(C.periodPx > 0 && C.lightPos < C.midPos && C.midPos < C.shadePos && C.shadePos < 100);
-  assert.ok(C.lightOpacity > 0 && C.lightOpacity <= 0.2 && C.shadeOpacity >= 0 && C.shadeOpacity <= 0.1);
+  assert.ok(C.periodPx > 0 && C.stops[0].pos === 0 && C.stops[C.stops.length - 1].pos === 100);
+  assert.ok(C.stops.every((s, i) => i === 0 || s.pos > C.stops[i - 1].pos) && C.stops.every((s) => s.a >= 0 && s.a <= 0.25));
+  assert.ok(C.stops[0].a === 0 && C.stops[C.stops.length - 1].a === 0);
+  assert.ok(C.panel.radiusPx >= 28 && C.panel.radiusPx <= 36 && C.panel.gapBottomPx >= 8 && C.panel.gapBottomPx <= 12 && C.panel.roundTop === false);
+  assert.ok(C.edge.borderAlpha >= 0.35 && C.edge.borderAlpha <= 0.5);
   assert.ok(C.minColors === 2 && C.maxColors === 3 && C.blobs.length >= C.maxColors);
   assert.ok(C.lightnessMin < C.lightnessMax && C.saturationMin <= C.saturationMax && C.crossfadeMs > 0);
   assert.match(C.fallbackColor, /^#[0-9a-f]{6}$/);
@@ -51,10 +54,14 @@ test("neutrals can be softened instead of dropped", () => {
 
 test("css strings use the config", () => {
   const s = stripeCss();
-  assert.ok(s.startsWith("repeating-linear-gradient(90deg") && s.includes(`${C.periodPx}px`) && !s.includes("rgba(0,0,0,0) 0px, rgba(0,0,0,0)"));
+  assert.ok(s.startsWith("repeating-linear-gradient(90deg") && s.includes(`${C.periodPx}px`) && !s.includes("blur"));
   assert.ok(!stripeCss({ ...C, secondEnabled: false } as unknown as typeof C).includes(`${+(C.periodPx * C.secondPeriodMult).toFixed(3)}px`));
-  assert.equal(glassFilter({ ...C, blurPx: 0, saturate: 1 } as unknown as typeof C), "none");
-  assert.ok(glassFilter().startsWith("blur("));
+  const p = panelCss();
+  assert.equal(p.borderRadius, `0 0 ${C.panel.radiusPx}px ${C.panel.radiusPx}px`);
+  assert.equal(panelCss({ ...C, panel: { ...C.panel, roundTop: true } } as unknown as typeof C).borderRadius, `${C.panel.radiusPx}px`);
+  const e = edgeCss();
+  assert.ok(String(e.boxShadow).includes(`inset 0 0 0 ${C.edge.borderWidthPx}px`) && String(e.background).includes(`${C.edge.specularAngleDeg}deg`));
+  assert.ok(!String(edgeCss({ ...C, edge: { ...C.edge, refractionEnabled: false } } as unknown as typeof C).boxShadow).includes(`${C.edge.refractionPx}px rgba`));
   const g = gradientCss(["#aabbcc", "#ddeeff"]);
   assert.ok(g.includes("#aabbcc") && g.includes(`${C.angleDeg}deg`) && g.endsWith(C.baseColor));
 });

@@ -1,5 +1,6 @@
-// Ribbed-glass background, pure logic (no React): outfit -> 2..3 readable colours -> CSS strings, plus the setting.
+// Liquid-glass background, pure logic (no React): outfit -> 2..3 readable colours -> CSS strings, plus the setting.
 import { STRIPE_BG as C } from "@/config/stripe-bg";
+import type React from "react";
 import { COLOR_HEX } from "@/lib/shine";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 
@@ -70,10 +71,10 @@ export function gradientCss(colors: readonly string[], cfg: Cfg = C): string {
   return [...blobs, `linear-gradient(${cfg.angleDeg}deg, ${colors[0]} 0%, ${colors[colors.length - 1]} 100%)`, cfg.baseColor].join(", ");
 }
 
-/** One seamless flute layer: transparent -> soft white highlight -> transparent -> faint dark shade -> transparent, repeated every `period` px */
+/** One seamless flute layer built from the configured stops, repeated every `period` px; alphas scaled by k */
 function fluteLayer(period: number, k: number, cfg: Cfg): string {
-  const at = (pct: number) => `${+(period * pct / 100).toFixed(3)}px`, w = +(cfg.lightOpacity * k).toFixed(4), d = +(cfg.shadeOpacity * k).toFixed(4);
-  return `repeating-linear-gradient(90deg, rgba(255,255,255,0) 0px, rgba(255,255,255,${w}) ${at(cfg.lightPos)}, rgba(0,0,0,0) ${at(cfg.midPos)}, rgba(0,0,0,${d}) ${at(cfg.shadePos)}, rgba(255,255,255,0) ${at(100)})`;
+  const st = cfg.stops.map((s) => `${s.c === "w" ? "rgba(255,255,255" : "rgba(0,0,0"},${+(s.a * k).toFixed(4)}) ${+(period * s.pos / 100).toFixed(3)}px`);
+  return `repeating-linear-gradient(90deg, ${st.join(", ")})`;
 }
 
 /** CSS of the stripe overlay: main flute layer plus (optional) a fainter one with another period */
@@ -82,10 +83,20 @@ export function stripeCss(cfg: Cfg = C): string {
   return cfg.secondEnabled ? `${fluteLayer(cfg.periodPx * cfg.secondPeriodMult, cfg.secondOpacityMult, cfg)}, ${main}` : main;
 }
 
-/** Soft-glass filter for the gradient layers only ("none" when both settings are neutral) */
-export function glassFilter(cfg: Cfg = C): string {
-  const f = [cfg.blurPx > 0 ? `blur(${cfg.blurPx}px)` : "", Number(cfg.saturate) !== 1 ? `saturate(${cfg.saturate})` : ""].filter(Boolean).join(" ");
-  return f || "none";
+/** Panel box: insets, corner radius and outer shadow (top corners square unless roundTop) */
+export function panelCss(cfg: Cfg = C): React.CSSProperties {
+  const p = cfg.panel, r = `${p.radiusPx}px`;
+  return {
+    position: "absolute", left: p.gapSidePx, right: p.gapSidePx, bottom: p.gapBottomPx, top: p.roundTop ? p.gapTopPx : 0,
+    borderRadius: p.roundTop ? r : `0 0 ${r} ${r}`, overflow: "hidden", boxShadow: cfg.edge.outerShadow,
+  };
+}
+
+/** Glass edge overlay (drawn above the stripes): diagonal specular highlight + inset light border, refraction band and inner shadow */
+export function edgeCss(cfg: Cfg = C): React.CSSProperties {
+  const e = cfg.edge, w = (a: number) => `rgba(255,255,255,${a})`;
+  const shadows = [`inset 0 0 0 ${e.borderWidthPx}px ${w(e.borderAlpha)}`, e.refractionEnabled ? `inset 0 0 ${e.refractionPx}px ${w(e.refractionAlpha)}` : "", e.innerShadow].filter(Boolean);
+  return { borderRadius: "inherit", background: `linear-gradient(${e.specularAngleDeg}deg, ${w(e.specularAlpha)} 0%, ${w(0)} ${e.specularEnd}%)`, boxShadow: shadows.join(", ") };
 }
 
 /** Effective setting: ?stripe=0|1 link wins (testing), otherwise the Profile choice (device only, default off). */

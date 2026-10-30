@@ -1,23 +1,44 @@
-// "Ribbed glass" background of the For You feed: a soft colour gradient (colours come from the outfit in view) under fine vertical stripes.
-// CSS only: layered gradients + a repeating stripe overlay. No backdrop-filter (heavy on iPhone Safari), no canvas, no images.
+// "Liquid glass" background of the For You feed: a floating rounded glass panel with a colour gradient (colours come from the outfit in view) under fine crisp vertical stripes.
+// CSS only: layered gradients, a repeating stripe overlay, inset shadows. No backdrop-filter / blur (heavy on iPhone Safari), no canvas, no images.
 // Off by default; Profile switch "Stripe background" (device only), ?stripe=0|1 overrides.
 export const STRIPE_BG = {
-  // stripes: seamless reeded glass. One period = one flute, smooth stops only (no hard edge, no gap, no solid band).
-  // Stop positions are % of the period; the flute is transparent at both ends, so neighbouring periods flow into each other.
+  // stripes: crisp reeded glass. One period = one flute; stops are % of the period, c = w (white) or k (black), a = alpha 0..1.
+  // Every stop fades smoothly into the next (no gap, no solid band): a thin bright edge (~1 px at 10 px period), a faint body highlight, clear middle, a faint shade, a defined shade edge.
   periodPx: 10,
-  lightPos: 15,               // % where the highlight (lighter side) peaks
-  lightOpacity: 0.13,         // 0..1 white at the peak
-  midPos: 55,                 // % where the flute is fully transparent between highlight and shade
-  shadePos: 85,               // % where the shade (darker side) peaks
-  shadeOpacity: 0.065,        // 0..1 black at the peak
+  stops: [
+    { pos: 0, c: "w", a: 0 },
+    { pos: 6, c: "w", a: 0.22 },     // bright highlight edge
+    { pos: 22, c: "w", a: 0.05 },
+    { pos: 50, c: "w", a: 0 },
+    { pos: 80, c: "k", a: 0.04 },
+    { pos: 94, c: "k", a: 0.11 },    // defined faint shadow edge
+    { pos: 100, c: "k", a: 0 },
+  ],
   // second, fainter stripe layer with another period to break the mechanical regularity
   secondEnabled: true,
   secondPeriodMult: 1.37,     // period of the second layer = periodPx x this
   secondOpacityMult: 0.33,    // its alphas = main alphas x this
-  // softening of the gradient layers only (never the products); light on iPhone Safari, 0 = off
-  blurPx: 1.2,
-  saturate: 1.05,             // 1 = unchanged
-  blurInsetPx: 6,             // gradient layers extend this far past the edges so the blur has no pale rim
+  // glass panel: floats above the bottom bar, bottom corners rounded
+  panel: {
+    gapSidePx: 10,            // space to the left and right screen edge
+    gapBottomPx: 10,          // space above the bottom tab bar
+    gapTopPx: 0,              // space at the top (used when roundTop is on)
+    radiusPx: 32,             // bottom corner radius
+    roundTop: false,          // true = top corners rounded too (then gapTopPx applies)
+  },
+  // Liquid Glass edge (all static CSS, no filters)
+  edge: {
+    borderWidthPx: 1,
+    borderAlpha: 0.42,        // 1 px inner light border (white)
+    specularAngleDeg: 135,    // diagonal highlight from the top-left
+    specularAlpha: 0.26,
+    specularEnd: 38,          // % of the panel where the highlight is gone
+    refractionEnabled: true,  // slightly brighter band along the rounded edge
+    refractionPx: 14,
+    refractionAlpha: 0.2,
+    innerShadow: "inset -1px -2px 7px rgba(0,0,0,0.12)",   // along the bottom and right edges
+    outerShadow: "0 10px 28px rgba(20,24,40,0.12)",        // very soft shadow under the panel
+  },
   // gradient
   angleDeg: 160,              // direction of the base gradient
   softness: 0.6,              // 0..1: how far the colour blobs spread (higher = softer, more mixed)
