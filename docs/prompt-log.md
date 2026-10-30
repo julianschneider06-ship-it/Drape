@@ -77,3 +77,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - 73. Pixel figure moved over the Profile tab (anchorTab + safe margin), women's pixel figure (long hair, ponytail) by feed direction, 16x16 finer season decorations with livelier meadow, 7db926f
 - 74. Pixel figure from ready-made templates (torso hoodie/jacket/tee, head cap/beanie/hat/none, sunglasses/glasses, lookup tables by category), 60 % snowflakes, red pixel maple leaf, 378153f
 - 75. Pixel figure: sweater/cardigan/sweatshirt torsos, shorts legs, cap brim left only (hat keeps all-around), torso pattern overlays (stripes/checks/dots/print), keyword fallbacks, 0a771d9
+- Prompt 76: Stripe (ribbed glass) background in the For You feed, colours from the outfit, Profile switch "Stripe background" (default off, ?stripe=0|1); last commit 0e80d8f
