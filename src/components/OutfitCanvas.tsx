@@ -1,6 +1,4 @@
 "use client";
-import { STRIPE_BG } from "@/config/stripe-bg";
-import { productImprintCss, productShadowCss } from "@/lib/stripe-bg";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { SwapEvt } from "@/lib/client/swap";
 import type { FeedAccessory, FeedCard, FeedOutfit } from "@/lib/types";
@@ -27,9 +25,8 @@ import { applyAccLayout, type AccLayout } from "@/lib/my-outfits-acc";
 export const pieceClass = (slot: SlotName, c: FeedCard) => (slot.startsWith("acc") ? "top" : garmentClass(slot as "top" | "bottom" | "shoes" | "full", c.name));
 
 /** One outfit composed on a canvas: pieces at template positions, tap = product sheet (the like button lives in the sheet). */
-function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, likeDim, shine, reserveIcons, priceTag, onLike, accLayout, greyAccent }: {
+function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc = true, priority, onOpen, onLayout, onSwipe, swapEvt, animateLayout = true, dim, likeDim, shine, reserveIcons, priceTag, onLike, accLayout }: {
   /** Simple stripe mode: soft grey contact shadow under every product + a faint grey imprint behind it (static CSS, no size/position/tap-area change) */
-  greyAccent?: boolean;
   outfit: FeedOutfit; canvas: { w: number; h: number }; accLayout?: (AccLayout | null)[]; override?: string[];   // accLayout: My Outfits only, custom vertical position / size per accessory slot (acc1 = index 0)
   debug?: boolean; cut?: CutMode; showAcc?: boolean; priority: boolean;
   onOpen: (c: FeedCard, slot: SlotName) => void; onLayout?: (layout: string, mode: string, slots: string[]) => void;
@@ -229,13 +226,10 @@ function OutfitCanvas({ outfit, canvas, override, debug, cut = "auto", showAcc =
         const bounce = "", dimmed = !!dim?.(p.slot);
         return (
           <div key={p.slot} data-slot={p.slot} className={`absolute ${bounce}`} style={{ left: pct(p.rect.x, W), top: pct(p.rect.y, H), width: pct(p.rect.w, W), height: pct(p.rect.h, H), zIndex: p.z, transform: p.rot ? `rotate(${p.rot}deg)` : undefined, transition: animateLayout ? "left .32s ease, top .32s ease, width .32s ease, height .32s ease" : "none", touchAction: "pan-y", ...(dimmed ? { opacity: 0.4, filter: "saturate(0.35)", ...(likeDim ? {} : { pointerEvents: "none" as const }) } : {}) }} {...(dimmed ? { "data-dim": "1" } : {})}>
-            {greyAccent && !dimmed && <span aria-hidden className="pointer-events-none absolute" data-imprint={p.slot} style={{ left: `${-(STRIPE_BG.simple.imprint.scale - 1) * 50}%`, top: `${-(STRIPE_BG.simple.imprint.scale - 1) * 50}%`, width: `${STRIPE_BG.simple.imprint.scale * 100}%`, height: `${STRIPE_BG.simple.imprint.scale * 100}%`, background: productImprintCss() }} />}
             <button key={`${p.slot}-${c.id}-${isNew ? swapEvt!.seq : 0}`} type="button" onClickCapture={(e) => { if (Date.now() < suppressUntil.current) { e.stopPropagation(); e.preventDefault(); } }} onClick={(e) => { if (!onLike) onOpen(orig(c, p.slot), p.slot); else if (e.detail === 0 && !dimmed) onOpen(orig(c, p.slot), p.slot); }}
               {...(onLike ? { onPointerDown: gDown(c, p.slot), onPointerMove: gMove, onPointerUp: gUp(c, p.slot), onPointerCancel: gCancel, onContextMenu: (e: React.MouseEvent) => e.preventDefault() } : {})} disabled={dimmed && !likeDim} tabIndex={dimmed ? -1 : undefined} aria-label={`${c.brand} ${c.name}`}
               className={`absolute inset-0 select-none ${isNew ? (swapEvt!.dir === "next" ? "swap-in-next" : "swap-in-prev") : ""} ${debug ? "outline outline-1 outline-red-400" : ""}`} style={{ touchAction: "pan-y", WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}>
-              {greyAccent && !dimmed
-                ? <span className="absolute inset-0" data-shadow={p.slot} style={{ filter: productShadowCss() }}><FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} noSale={dimmed} /></span>
-                : <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} noSale={dimmed} />}
+              <FeedImage card={c} src={feedSrc(c, pieceClass(p.slot, c))} fill={1} priority={priority} blend={!c.cut} wShare={p.rect.w / W} noSale={dimmed} />
               {!dimmed && hits[p.slot] && (hits[p.slot].l || hits[p.slot].t || hits[p.slot].r || hits[p.slot].b) ? <span aria-hidden data-hit="1" className="absolute" style={{ left: -hits[p.slot].l, top: -hits[p.slot].t, right: -hits[p.slot].r, bottom: -hits[p.slot].b }} /> : null}
               {onLike && (!dimmed || likeDim) && <LikePop ref={(h) => { pops.current[p.slot] = h; }} />}
               {shine && !dimmed && c.cut && (() => {

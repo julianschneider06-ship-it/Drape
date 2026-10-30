@@ -57,7 +57,9 @@ export const STRIPE_BG = {
     edgeWidthPx: 1,
     specularAlpha: 0.22,                // faint top-left highlight
     shadow: "0 4px 16px rgba(20,24,40,0.16)",
-    radiusPx: 12,
+    capsule: true,                      // header + tab bar are pills: both ends full semicircles (radius = half the bar height)
+    radiusPx: 12,                       // corner radius when capsule is off
+    capsulePadPx: 18,                   // extra inner side padding so logo / toggle / tab icons clear the rounded ends
     marginPx: 8,                        // distance to the screen edges
     stripeBoost: 1.7,                   // refracted stripes inside the glass: alphas x this (max 1)
     stripeShiftPx: 3,                   // ... and shifted sideways by this
@@ -79,7 +81,20 @@ export const STRIPE_BG = {
       { pos: 100, c: "k", a: 0 },
     ],
     glassRgb: "214,214,214",            // lighter grey for header + tab bar
-    shadow: { offsetPx: 5, blurPx: 7, alpha: 0.22 },   // contact shadow under every product cutout
-    imprint: { scale: 1.14, alpha: 0.1 },              // faint grey blob behind each product, slightly larger than it
+    // organic grey areas (soft radial blobs, greys only, no hard edges), placed like the Colorful blobs but with seeded jitter per outfit id
+    grey: {
+      count: 5,                           // blobs per outfit
+      darkCount: 2,                       // of those, this many use the darker grey (the rest the light grey)
+      light: "#e4e4e4",                   // mostly light grey ...
+      dark: "#c9c9c9",                    // ... some darker areas (kept moderate so white / light products stay readable)
+      lightAlpha: 0.75,
+      darkAlpha: 0.55,
+      softness: 0.6,                      // 0..1 like the Colorful `softness`: higher = larger, softer blobs
+      stretch: 0.35,                      // 0..1: how far a blob's width / height may differ (irregular shape)
+      jitterPct: 12,                      // random shift of each blob from its anchor (% of the layer)
+      anchors: [                          // where blobs sit (% of the layer); the first `count` are used
+        { x: 15, y: 12 }, { x: 88, y: 30 }, { x: 40, y: 55 }, { x: 80, y: 82 }, { x: 12, y: 90 },
+      ],
+    },
   },
 } as const;   // crossfadeMs: colour change between two outfits (opacity only)

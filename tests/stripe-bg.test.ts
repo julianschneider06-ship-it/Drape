@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { STRIPE_BG as C } from "../src/config/stripe-bg";
 import { COLOR_HEX } from "../src/lib/shine";
 import { DEFAULT_PREFS, cleanPrefs } from "../src/lib/shop-pref";
-import { effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, curveSlices, glassPieceStyle, glassFill, simpleBackgroundCss, simpleStripeCss, productShadowCss, productImprintCss, specularCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
+import { effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, curveSlices, glassPieceStyle, glassFill, simpleBackgroundCss, simpleStripeCss, greyBlobsCss, CAPSULE_RADIUS, specularCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
 
 const card = (col: string | null) => ({ id: 1, mq: { sub: null, col, fit: null, sil: null, outer: false } }) as never;
 const outfit = (cols: (string | null)[], acc: (string | null)[] = []) => ({ top: card(cols[0]), bottom: card(cols[1]), shoes: card(cols[2]), accessories: acc.map((c) => ({ type: "bag", card: card(c) })) }) as never;
@@ -58,7 +58,7 @@ test("css strings use the config", () => {
   assert.ok(!stripeCss({ ...C, secondEnabled: false } as unknown as typeof C).includes(`${+(C.periodPx * C.secondPeriodMult).toFixed(3)}px`));
   assert.ok(!stripeCss().includes("blur") && specularCss().includes(`${C.specular.angleDeg}deg`));
   const gs = glassPieceStyle();
-  assert.ok(String(gs.background).includes(glassFill("colorful")) && String(gs.boxShadow).includes(C.glass.edge) && gs.borderRadius === C.glass.radiusPx);
+  assert.ok(String(gs.background).includes(glassFill("colorful")) && String(gs.boxShadow).includes(C.glass.edge) && gs.borderRadius === CAPSULE_RADIUS);
   assert.notEqual(stripeCss(C, C.glass.stripeBoost, C.glass.stripeShiftPx), stripeCss());
   const g = gradientCss(["#aabbcc", "#ddeeff"]);
   assert.ok(g.includes("#aabbcc") && g.includes(`${C.angleDeg}deg`) && g.endsWith(C.baseColor));
@@ -94,10 +94,24 @@ test("simple mode: grey only, faint, no colour", () => {
   assert.ok(!simpleStripeCss().includes("255,255,255"));
   assert.match(simpleBackgroundCss(), /^linear-gradient\(180deg, #ffffff 0%, #[0-9a-f]{6} 100%\)$/);
   for (const h of [C.simple.bgTop, C.simple.bgBottom]) { const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); assert.ok(r === g && g === b && r >= 0xe0); }
-  assert.ok(C.simple.shadow.offsetPx > 0 && C.simple.shadow.blurPx > 0 && C.simple.shadow.alpha > 0 && C.simple.shadow.alpha < 0.4);
-  assert.ok(C.simple.imprint.scale > 1 && C.simple.imprint.scale < 1.4 && C.simple.imprint.alpha > 0 && C.simple.imprint.alpha <= 0.2);
-  assert.equal(productShadowCss(), `drop-shadow(0 ${C.simple.shadow.offsetPx}px ${C.simple.shadow.blurPx}px rgba(0,0,0,${C.simple.shadow.alpha}))`);
-  assert.ok(productImprintCss().startsWith("radial-gradient") && !productImprintCss().includes("blur"));
+  assert.ok(!("shadow" in C.simple) && !("imprint" in C.simple));   // product shadow + imprint are gone
+});
+
+test("capsule glass: full semicircle ends, padding keeps content clear; flag off falls back to the small radius", () => {
+  assert.ok(C.glass.capsule && C.glass.capsulePadPx >= 12);
+  assert.equal(glassPieceStyle("simple").borderRadius, CAPSULE_RADIUS);
+  assert.equal(glassPieceStyle("colorful", { ...C, glass: { ...C.glass, capsule: false } } as unknown as typeof C).borderRadius, C.glass.radiusPx);
+});
+
+test("simple grey blobs: greys only, deterministic per seed, varies between seeds, no blur", () => {
+  const g = C.simple.grey, a = greyBlobsCss("outfit-1");
+  assert.equal(a, greyBlobsCss("outfit-1"));
+  assert.notEqual(a, greyBlobsCss("outfit-2"));
+  assert.equal((a.match(/radial-gradient/g) ?? []).length, g.count);
+  assert.ok(!a.includes("blur") && a.endsWith(simpleBackgroundCss()));
+  for (const m of a.matchAll(/rgba\((\d+),(\d+),(\d+),/g)) assert.ok(m[1] === m[2] && m[2] === m[3]);   // r = g = b
+  for (const h of [g.light, g.dark]) { const [r, gg, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); assert.ok(r === gg && gg === b && r >= 0xb8); }   // darkest grey stays moderate
+  assert.ok(g.darkCount < g.count && g.count <= g.anchors.length && g.lightAlpha <= 1 && g.darkAlpha <= 1);
 });
 
 test("bottom curve: tilt grows to maxDeg, slices tile the zone, drift keeps stripes continuous", () => {

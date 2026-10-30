@@ -449,10 +449,10 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     <main className="h-dvh bg-white" style={{ "--nav-h": navOn ? `calc(${NAV_PX}px + env(safe-area-inset-bottom))` : "0px", "--safe-b": navOn ? "0px" : "env(safe-area-inset-bottom)" } as React.CSSProperties}>
       <SaleInkDefs />
       <Layer active={layers.feedActive} shiftPx={0}>
-        {stripeOn && obPhase === "off" && <StripeBackground mode={stripeMode} colors={stripeColors} className="fixed inset-0" />}
+        {stripeOn && obPhase === "off" && <StripeBackground mode={stripeMode} colors={stripeColors} seed={String(shown[railIdx]?.id ?? "")} className="fixed inset-0" />}
         {(seasonOn || miniOn) && obPhase === "off" && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="fixed inset-x-0 top-0" style={DECOR_BOX} sunFront />}
         <header className={glassUi ? "fixed z-30 flex items-center justify-between px-3 pb-2 pt-2" : "fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur"}
-          style={glassUi ? { ...glassPieceStyle(glassUi || "colorful"), left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : undefined}>
+          style={glassUi ? { ...glassPieceStyle(glassUi || "colorful"), paddingLeft: STRIPE_BG.glass.capsulePadPx, paddingRight: STRIPE_BG.glass.capsulePadPx, left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : undefined}>
           <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
           <Segmented id="gender" label="Section" disabled={obHeader} value={gender as Gender} onChange={setGender} options={[{ id: "women", label: "Women" }, { id: "men", label: "Men" }]} />
           <span className="w-16" aria-hidden />
@@ -463,7 +463,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
             <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)" }}>
               {feedCanvas && (
                 <div className="relative" style={{ width: feedCanvas.w + ACTION_RAIL_WIDTH, height: feedCanvas.h }}>   {/* the right ACTION_RAIL_WIDTH px stay empty: the fixed rail overlay sits there */}
-                  <OutfitCanvas outfit={o} canvas={feedCanvas} greyAccent={glassUi === "simple"} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => { if (feedDoubleTap(liked.has(c.id)) === "replay") return true; toggleLike(c, o, i, slot); return likeResult.current; }} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
+                  <OutfitCanvas outfit={o} canvas={feedCanvas} override={dbg.layout} debug={dbg.debug} cut={dbg.cut} showAcc={dbg.acc} reserveIcons={iconsOn} priority={i < 2} onOpen={(c, slot) => open(c, o, i, slot)} onLike={(c, slot) => { if (feedDoubleTap(liked.has(c.id)) === "replay") return true; toggleLike(c, o, i, slot); return likeResult.current; }} swapEvt={swapEvts[o.id]} onSwipe={(slot, dir) => swapPiece(items[i], i, slot, dir)}
                     onLayout={(layout, mode, slots) => { layoutInfo.current.set(o.id, { layout, mode }); const k = slots.join(","); setPlaced((p) => (p[o.id] === k ? p : { ...p, [o.id]: k })); }} />
                 </div>
               )}

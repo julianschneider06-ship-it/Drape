@@ -24,7 +24,7 @@ function BottomNav({ tab, onTab, searchOn, glass = false }: { tab: Tab; onTab: (
   return (
     <nav aria-label="Main" className={`fixed inset-x-0 bottom-0 z-30 pb-[env(safe-area-inset-bottom)] ${glass ? "" : "border-t border-neutral-200 bg-white"}`} style={{ height: `calc(${NAV_PX}px + env(safe-area-inset-bottom))` }}>
       {glass && <div aria-hidden className="absolute" style={{ ...glassPieceStyle(glass || "colorful"), left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: 2, bottom: "calc(env(safe-area-inset-bottom) + 2px)" }} />}
-      <div className="relative mx-auto flex h-[49px] max-w-md" role="tablist">
+      <div className="relative mx-auto flex h-[49px] max-w-md" role="tablist" style={glass ? { paddingInline: STRIPE_BG.glass.marginPx + STRIPE_BG.glass.capsulePadPx } : undefined}>
         {navTabs(searchOn).map((t) => (
           <m.button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => (tab !== t || t === "search") && onTab(t)}
             {...pressProps(reduced, MENU.pressScale)} initial={false} animate={{ color: tab === t ? (glass ? STRIPE_BG.glass.textOn : MENU_COLORS.nav.on) : (glass ? STRIPE_BG.glass.textOff : MENU_COLORS.nav.off) }} transition={stateTransition(reduced)}

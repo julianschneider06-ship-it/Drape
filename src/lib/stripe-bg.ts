@@ -1,7 +1,8 @@
 // Liquid-glass background, pure logic (no React): outfit -> 2..3 readable colours -> CSS strings, plus the setting.
 import { STRIPE_BG as C } from "@/config/stripe-bg";
 import type React from "react";
-import { COLOR_HEX } from "@/lib/shine";
+import { COLOR_HEX, seededRnd } from "@/lib/shine";
+import { hash32 } from "@/lib/layout/engine";
 import type { StripeMode } from "@/lib/shop-pref";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 
@@ -102,13 +103,16 @@ export function curveSlices(cfg: Cfg = C): CurveSlice[] {
   return out;
 }
 
+/** Capsule radius: larger than any bar height, so the browser clamps it to half the height (full semicircle ends) */
+export const CAPSULE_RADIUS = 9999;
+
 /** CSS of one grey glass piece (header / tab bar): fill + specular + refracted stripes (boosted, shifted) + light edge, soft shadow, small radius */
 export function glassPieceStyle(mode: StripeMode = "colorful", cfg: Cfg = C): React.CSSProperties {
   const g = cfg.glass, simple = mode === "simple";
   return {
     background: `${specularCss(cfg, g.specularAlpha)}, ${simple ? stripeCss(simpleCfg(cfg), g.stripeBoost, g.stripeShiftPx) : stripeCss(cfg, g.stripeBoost, g.stripeShiftPx)}, ${glassFill(mode, cfg)}`,
     boxShadow: `inset 0 0 0 ${g.edgeWidthPx}px ${g.edge}, ${g.shadow}`,
-    borderRadius: g.radiusPx,
+    borderRadius: g.capsule ? CAPSULE_RADIUS : g.radiusPx,
   };
 }
 
@@ -122,7 +126,15 @@ export const simpleStripeCss = (cfg: Cfg = C): string => stripeCss(simpleCfg(cfg
 export const simpleBackgroundCss = (cfg: Cfg = C): string => `linear-gradient(180deg, ${cfg.simple.bgTop} 0%, ${cfg.simple.bgBottom} 100%)`;
 /** Glass fill: colour of the mode, translucency shared (`glass.fillAlpha`) */
 export const glassFill = (mode: StripeMode = "colorful", cfg: Cfg = C): string => `rgba(${mode === "simple" ? cfg.simple.glassRgb : cfg.glass.rgb},${cfg.glass.fillAlpha})`;
-/** Contact shadow under a product cutout (Simple mode): CSS filter drop-shadow */
-export const productShadowCss = (cfg: Cfg = C): string => `drop-shadow(0 ${cfg.simple.shadow.offsetPx}px ${cfg.simple.shadow.blurPx}px rgba(0,0,0,${cfg.simple.shadow.alpha}))`;
-/** Faint grey imprint blob behind a product (Simple mode): a radial gradient that fades to nothing, no blur filter */
-export const productImprintCss = (cfg: Cfg = C): string => `radial-gradient(ellipse at 50% 55%, rgba(0,0,0,${cfg.simple.imprint.alpha}) 0%, rgba(0,0,0,${+(cfg.simple.imprint.alpha * 0.5).toFixed(4)}) 55%, rgba(0,0,0,0) 72%)`;
+/** Simple background: soft organic grey blobs (light grey mostly, some darker) over the white-to-grey base. Seeded by the outfit id: same outfit = same blobs. */
+export function greyBlobsCss(seed: string, cfg: Cfg = C): string {
+  const g = cfg.simple.grey, rnd = seededRnd(hash32(`grey:${seed}`)), r = 45 + cfg.simple.grey.softness * 55;
+  const blobs = Array.from({ length: Math.min(g.count, g.anchors.length) }, (_, i) => {
+    const an = g.anchors[i], dark = i >= g.count - g.darkCount, grey = dark ? g.dark : g.light, a = dark ? g.darkAlpha : g.lightAlpha;
+    const x = clamp(an.x + rnd() * 2 * g.jitterPct, 0, 100), y = clamp(an.y + rnd() * 2 * g.jitterPct, 0, 100);
+    const rx = r * (0.6 + rnd() * g.stretch + 0.2) * 0.7, ry = r * (0.6 + rnd() * g.stretch + 0.2) * 0.7;
+    const [R, G, B] = rgb(grey).map((v) => Math.round(v * 255));
+    return `radial-gradient(ellipse ${rx.toFixed(1)}% ${ry.toFixed(1)}% at ${x.toFixed(1)}% ${y.toFixed(1)}%, rgba(${R},${G},${B},${a}) 0%, rgba(${R},${G},${B},0) 100%)`;
+  });
+  return [...blobs, simpleBackgroundCss(cfg)].join(", ");
+}
