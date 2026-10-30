@@ -78,4 +78,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - 74. Pixel figure from ready-made templates (torso hoodie/jacket/tee, head cap/beanie/hat/none, sunglasses/glasses, lookup tables by category), 60 % snowflakes, red pixel maple leaf, 378153f
 - 75. Pixel figure: sweater/cardigan/sweatshirt torsos, shorts legs, cap brim left only (hat keeps all-around), torso pattern overlays (stripes/checks/dots/print), keyword fallbacks, 0a771d9
 - Prompt 76: Stripe (ribbed glass) background in the For You feed, colours from the outfit, Profile switch "Stripe background" (default off, ?stripe=0|1); last commit 0e80d8f
-- Prompt 77: Stripe overlay changed to seamless soft flute glass (smooth stops, faint 2nd layer x1.37, light blur/saturate on gradient only); last commit 79f8a9a
+- Prompt 77: Stripe overlay changed to seamless soft flute glass (smooth stops, faint 2nd layer x1.37, light blur/saturate on gradient only), period 10 px; last commit f0e90db
