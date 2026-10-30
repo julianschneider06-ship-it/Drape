@@ -80,3 +80,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 76: Stripe (ribbed glass) background in the For You feed, colours from the outfit, Profile switch "Stripe background" (default off, ?stripe=0|1); last commit 0e80d8f
 - Prompt 77: Stripe overlay changed to seamless soft flute glass (smooth stops, faint 2nd layer x1.37, light blur/saturate on gradient only), period 10 px; last commit f0e90db
 - Prompt 78: Stripe background: full-screen liquid glass (crisp stripes, specular), full-height stripes with a gentle left tilt at the bottom edge, grey glass header + tab bar (For You, switch on); last commit d6a0868
+- Prompt 79: Stripe background Simple mode (Off|Colorful|Simple), tab bar glass translucent like header (scroller runs under the bar); last commit b2c8305
