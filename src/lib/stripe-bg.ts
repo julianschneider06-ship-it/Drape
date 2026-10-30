@@ -70,10 +70,22 @@ export function gradientCss(colors: readonly string[], cfg: Cfg = C): string {
   return [...blobs, `linear-gradient(${cfg.angleDeg}deg, ${colors[0]} 0%, ${colors[colors.length - 1]} 100%)`, cfg.baseColor].join(", ");
 }
 
-/** CSS of the stripe overlay: highlight stripe, faint shade in the gap, repeated across the width */
+/** One seamless flute layer: transparent -> soft white highlight -> transparent -> faint dark shade -> transparent, repeated every `period` px */
+function fluteLayer(period: number, k: number, cfg: Cfg): string {
+  const at = (pct: number) => `${+(period * pct / 100).toFixed(3)}px`, w = +(cfg.lightOpacity * k).toFixed(4), d = +(cfg.shadeOpacity * k).toFixed(4);
+  return `repeating-linear-gradient(90deg, rgba(255,255,255,0) 0px, rgba(255,255,255,${w}) ${at(cfg.lightPos)}, rgba(0,0,0,0) ${at(cfg.midPos)}, rgba(0,0,0,${d}) ${at(cfg.shadePos)}, rgba(255,255,255,0) ${at(100)})`;
+}
+
+/** CSS of the stripe overlay: main flute layer plus (optional) a fainter one with another period */
 export function stripeCss(cfg: Cfg = C): string {
-  const w = cfg.stripeWidthPx, p = cfg.stripeWidthPx + cfg.stripeGapPx;
-  return `repeating-linear-gradient(90deg, rgba(255,255,255,${cfg.stripeLightOpacity}) 0px, rgba(255,255,255,${cfg.stripeLightOpacity}) ${w}px, rgba(0,0,0,${cfg.stripeShadeOpacity}) ${w}px, rgba(0,0,0,${cfg.stripeShadeOpacity}) ${p}px)`;
+  const main = fluteLayer(cfg.periodPx, 1, cfg);
+  return cfg.secondEnabled ? `${fluteLayer(cfg.periodPx * cfg.secondPeriodMult, cfg.secondOpacityMult, cfg)}, ${main}` : main;
+}
+
+/** Soft-glass filter for the gradient layers only ("none" when both settings are neutral) */
+export function glassFilter(cfg: Cfg = C): string {
+  const f = [cfg.blurPx > 0 ? `blur(${cfg.blurPx}px)` : "", Number(cfg.saturate) !== 1 ? `saturate(${cfg.saturate})` : ""].filter(Boolean).join(" ");
+  return f || "none";
 }
 
 /** Effective setting: ?stripe=0|1 link wins (testing), otherwise the Profile choice (device only, default off). */

@@ -2,11 +2,22 @@
 // CSS only: layered gradients + a repeating stripe overlay. No backdrop-filter (heavy on iPhone Safari), no canvas, no images.
 // Off by default; Profile switch "Stripe background" (device only), ?stripe=0|1 overrides.
 export const STRIPE_BG = {
-  // stripes (px). One period = width + gap; a light highlight stripe followed by a faint shaded gap = reeded glass.
-  stripeWidthPx: 2,
-  stripeGapPx: 3,
-  stripeLightOpacity: 0.34,   // 0..1 white highlight (the lightening of the gradient)
-  stripeShadeOpacity: 0.05,   // 0..1 black in the gap (the slight distortion / contrast)
+  // stripes: seamless reeded glass. One period = one flute, smooth stops only (no hard edge, no gap, no solid band).
+  // Stop positions are % of the period; the flute is transparent at both ends, so neighbouring periods flow into each other.
+  periodPx: 5,
+  lightPos: 15,               // % where the highlight (lighter side) peaks
+  lightOpacity: 0.13,         // 0..1 white at the peak
+  midPos: 55,                 // % where the flute is fully transparent between highlight and shade
+  shadePos: 85,               // % where the shade (darker side) peaks
+  shadeOpacity: 0.065,        // 0..1 black at the peak
+  // second, fainter stripe layer with another period to break the mechanical regularity
+  secondEnabled: true,
+  secondPeriodMult: 1.37,     // period of the second layer = periodPx x this
+  secondOpacityMult: 0.33,    // its alphas = main alphas x this
+  // softening of the gradient layers only (never the products); light on iPhone Safari, 0 = off
+  blurPx: 1.2,
+  saturate: 1.05,             // 1 = unchanged
+  blurInsetPx: 6,             // gradient layers extend this far past the edges so the blur has no pale rim
   // gradient
   angleDeg: 160,              // direction of the base gradient
   softness: 0.6,              // 0..1: how far the colour blobs spread (higher = softer, more mixed)
