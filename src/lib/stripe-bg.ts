@@ -86,24 +86,17 @@ export function stripeCss(cfg: Cfg = C, boost = 1, shift = 0): string {
 /** Top-left specular highlight (whole screen) */
 export const specularCss = (cfg: Cfg = C, alpha: number = cfg.specular.alpha): string => `linear-gradient(${cfg.specular.angleDeg}deg, rgba(255,255,255,${alpha}) 0%, rgba(255,255,255,0) ${cfg.specular.endPct}%)`;
 
-export type BendPath = { d: string; color: string; width: number };
+export type CurveSlice = { topPx: number; heightPx: number; deg: number; shiftPx: number };
 
-/** The floor zone as SVG paths (y = 0 is the top of the zone): every flute edge line goes straight down for a moment, turns left in a quarter circle (sweep 1) around the centre of its group and runs out to the left.
- *  One path per layer + stop, all stripes of that stop joined. Concentric inside a group: radius = minRadius + (x - group start). */
-export function bendPaths(width: number, cfg: Cfg = C): BendPath[] {
-  const b = cfg.bend, out: BendPath[] = [];
-  const layers = [{ period: cfg.periodPx, k: 1 }, ...(cfg.secondEnabled ? [{ period: cfg.periodPx * cfg.secondPeriodMult, k: cfg.secondOpacityMult }] : [])];
-  for (const { period, k } of layers) {
-    const n = Math.max(1, Math.floor(b.groupSpanPx / period)), groupW = n * period;
-    for (const s of cfg.stops) {
-      if (s.pos <= 0 || s.pos >= 100 || s.a <= 0) continue;
-      const parts: string[] = [];
-      for (let f = 0; f * period < width + groupW; f++) {
-        const x = f * period + period * s.pos / 100, r = b.minRadiusPx + (x - Math.floor(x / groupW) * groupW), cx = x - r;
-        parts.push(`M${+x.toFixed(2)} 0V0A${+r.toFixed(2)} ${+r.toFixed(2)} 0 0 1 ${+cx.toFixed(2)} ${+r.toFixed(2)}H${+(cx - b.runPx).toFixed(2)}`);
-      }
-      out.push({ d: parts.join(""), color: `${s.c === "w" ? "rgba(255,255,255" : "rgba(0,0,0"},${+Math.min(1, s.a * k).toFixed(4)})`, width: s.a >= b.edgeMinAlpha ? b.edgeWidthPx : b.bodyWidthPx });
-    }
+/** The tilted bottom zone as slices from top to bottom: slice i is rotated by maxDeg x (i+1)/n about its top centre and shifted left by the drift of the slices above, so the stripes
+ *  stay continuous (no corner, no gap) and leave the screen leaning left. Positions are measured from the top of the zone. */
+export function curveSlices(cfg: Cfg = C): CurveSlice[] {
+  const { zonePx, maxDeg, slices } = cfg.curve, h = zonePx / slices, out: CurveSlice[] = [];
+  let drift = 0;
+  for (let i = 0; i < slices; i++) {
+    const deg = maxDeg * (i + 1) / slices;
+    out.push({ topPx: i * h, heightPx: h, deg, shiftPx: drift ? -drift : 0 });
+    drift += h * Math.tan(deg * Math.PI / 180);
   }
   return out;
 }

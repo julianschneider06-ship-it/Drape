@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { STRIPE_BG as C } from "../src/config/stripe-bg";
 import { COLOR_HEX } from "../src/lib/shine";
 import { DEFAULT_PREFS, cleanPrefs } from "../src/lib/shop-pref";
-import { effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, bendPaths, glassPieceStyle, specularCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
+import { effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, curveSlices, glassPieceStyle, specularCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
 
 const card = (col: string | null) => ({ id: 1, mq: { sub: null, col, fit: null, sil: null, outer: false } }) as never;
 const outfit = (cols: (string | null)[], acc: (string | null)[] = []) => ({ top: card(cols[0]), bottom: card(cols[1]), shoes: card(cols[2]), accessories: acc.map((c) => ({ type: "bag", card: card(c) })) }) as never;
@@ -12,7 +12,7 @@ test("config values are sane", () => {
   assert.ok(C.periodPx > 0 && C.stops[0].pos === 0 && C.stops[C.stops.length - 1].pos === 100);
   assert.ok(C.stops.every((s, i) => i === 0 || s.pos > C.stops[i - 1].pos) && C.stops.every((s) => s.a >= 0 && s.a <= 0.25));
   assert.ok(C.stops[0].a === 0 && C.stops[C.stops.length - 1].a === 0);
-  assert.ok(C.bend.zoneHeightPx >= 60 && C.bend.zoneHeightPx <= 100 && C.bend.minRadiusPx + C.bend.groupSpanPx <= C.bend.zoneHeightPx && C.bend.fadeFromPx < C.bend.fadeToPx && C.bend.fadeToPx <= C.bend.zoneHeightPx);
+  assert.ok(C.curve.zonePx >= 20 && C.curve.zonePx <= 30 && C.curve.maxDeg > 0 && C.curve.maxDeg <= 5 && C.curve.slices >= 2);
   assert.ok(C.glass.radiusPx <= 16 && C.glass.marginPx > 0 && C.glass.stripeBoost >= 1);
   assert.ok(C.minColors === 2 && C.maxColors === 3 && C.blobs.length >= C.maxColors);
   assert.ok(C.lightnessMin < C.lightnessMax && C.saturationMin <= C.saturationMax && C.crossfadeMs > 0);
@@ -76,12 +76,11 @@ test("switch: default off, link wins, old saves stay valid", () => {
   assert.equal(cleanPrefs({ v: 1, season: false }).stripe, false);
 });
 
-test("floor bend: concentric inside a group, radius grows with the stripe, everything fits the zone", () => {
-  const paths = bendPaths(390);
-  assert.ok(paths.length >= C.stops.length - 2);
-  const rs = [...paths[0].d.matchAll(/A([\d.]+) /g)].map((m) => +m[1]);
-  assert.ok(rs.every((r) => r >= C.bend.minRadiusPx - 0.01 && r <= C.bend.minRadiusPx + C.bend.groupSpanPx + 0.01 && r <= C.bend.zoneHeightPx));
-  assert.ok(new Set(rs.map((r) => Math.round(r))).size > 1);
-  // first stripe: straight down from y 0, quarter circle (sweep 1) to the left, then a horizontal run
-  assert.match(paths[0].d, /^M[\d.]+ 0V0A[\d.]+ [\d.]+ 0 0 1 [-\d.]+ [\d.]+H[-\d.]+/);
+test("bottom curve: tilt grows to maxDeg, slices tile the zone, drift keeps stripes continuous", () => {
+  const sl = curveSlices();
+  assert.equal(sl.length, C.curve.slices);
+  assert.ok(Math.abs(sl[sl.length - 1].deg - C.curve.maxDeg) < 1e-9 && sl.every((s, i) => i === 0 || s.deg > sl[i - 1].deg));
+  assert.ok(Math.abs(sl.reduce((t, s) => t + s.heightPx, 0) - C.curve.zonePx) < 1e-9);
+  assert.equal(sl[0].shiftPx, 0);
+  assert.ok(sl.every((s, i) => i === 0 || (s.shiftPx < sl[i - 1].shiftPx && Math.abs(s.topPx - (sl[i - 1].topPx + sl[i - 1].heightPx)) < 1e-9)));
 });

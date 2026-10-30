@@ -20,19 +20,12 @@ export const STRIPE_BG = {
   secondOpacityMult: 0.33,    // its alphas = main alphas x this
   // top-left specular highlight over the whole screen (soft white gradient, static)
   specular: { angleDeg: 135, alpha: 0.2, endPct: 42 },
-  // stripes bend into the floor: in a short zone just above the bottom bar every stripe turns LEFT in a quarter circle and runs out
-  // horizontally, fading away. Stripes are grouped; inside a group the arcs share one centre (concentric, no overlap), radius = minRadius + distance
-  // from the group's first stripe. The CSS stripes end at the top of the zone; the zone itself is a static SVG.
-  bend: {
-    zoneHeightPx: 84,         // height of the zone above the bar
-    minRadiusPx: 14,          // radius of the innermost stripe of a group
-    groupSpanPx: 50,          // width of one concentric group (minRadius + span must fit into the zone)
-    runPx: 46,                // length of the horizontal run after the arc
-    fadeFromPx: 26,           // from this depth into the zone the stripe starts to fade ...
-    fadeToPx: 80,             // ... and is gone at this depth (vanishes into the floor)
-    edgeWidthPx: 1.2,         // stroke of a bright / dark edge stop (alpha >= edgeMinAlpha)
-    bodyWidthPx: 3,           // stroke of the faint body stops
-    edgeMinAlpha: 0.1,
+  // very bottom of the screen: the last zone tilts the stripes gently to the left (flat arc, no corner). The tilt grows slice by slice from 0 to maxDeg
+  // and each slice is shifted so the stripes stay continuous at the slice borders. Static CSS transforms.
+  curve: {
+    zonePx: 26,               // height of the tilted zone at the bottom edge
+    maxDeg: 4,                // tilt at the very bottom edge
+    slices: 6,                // more slices = smoother arc
   },
   // gradient
   angleDeg: 160,              // direction of the base gradient
