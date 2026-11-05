@@ -2,7 +2,7 @@
 import { viewHeight } from "@/lib/view-height";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { SEASON_DECOR as C, DECOR_ART, LAYER_Z } from "@/config/season-decor";
-import { artLayerStyle, decorClip, decorWindow, parseDecorMode, type DecorSeason } from "@/lib/season-decor";
+import { artClip, artLayerStyle, decorClip, decorWindow, parseDecorMode, type DecorSeason } from "@/lib/season-decor";
 import Mannequin from "./Mannequin";
 import type { MannequinSpec } from "@/lib/mannequin";
 import { DECO_BITMAP_SIZE, decoPx, leafMarkup, meadowMarkup, snap, snowMarkup, spotPieces, sunMarkup, sunPx } from "@/lib/season-decor-art";
@@ -37,18 +37,18 @@ function Spots({ kind, width, height }: { kind: "autumn" | "winter"; width: numb
 
 /** painted illustrations (default): plain img layers, absolute inside the group, so no layout shift; all sprites are preloaded once. */
 const ART_SRCS = Object.values(DECOR_ART).flat().map((l) => l.src);
-function ArtLayers({ season, safeTop }: { season: DecorSeason; safeTop: boolean }) {
-  return <>{DECOR_ART[season].map((l) => /* eslint-disable-next-line @next/next/no-img-element */ <img key={l.src} src={l.src} alt="" decoding="async" draggable={false} style={artLayerStyle(l, safeTop)} />)}</>;
+function ArtLayers({ season }: { season: DecorSeason }) {
+  return <>{DECOR_ART[season].map((l) => /* eslint-disable-next-line @next/next/no-img-element */ <img key={l.src} src={l.src} alt="" decoding="async" draggable={false} style={artLayerStyle(l)} />)}</>;
 }
 
-const Art = ({ season, width, height, sun, safeTop, mode }: { season: DecorSeason; width: number; height: number; sun: boolean; safeTop: boolean; mode: "art" | "pixel" }) =>
-  mode === "art" ? <ArtLayers season={season} safeTop={safeTop} /> : season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Spots kind={season} width={width} height={height} />;
+const Art = ({ season, width, height, sun, safeTop }: { season: DecorSeason; width: number; height: number; sun: boolean; safeTop: boolean }) =>
+  season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Spots kind={season} width={width} height={height} />;
 
 /** `scroller` = the snap scroller the outfits live in (offset and height are read from it); `seasons[i]` = decoration of outfit i (null = none).
  *  `minis` = outfit preview figures (same clipping, drawn in front of the season art and still behind the products): `specs[i]` is outfit i's figure, `searchOn` places it over the Profile tab.
- *  `className`/`style` give the layer its box (same box as the scroller). `sunFront`: the layer starts under the status/safe area (feed), so the sun is offset by it. Everything sits behind the products (no z-index). */
-function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: { scroller: RefObject<HTMLElement | null>; seasons: (DecorSeason | null)[] | null; minis?: { specs: MannequinSpec[]; searchOn: boolean } | null; className: string; style?: CSSProperties; sunFront?: boolean }) {
-  const root = useRef<HTMLDivElement>(null);
+ *  `className`/`style` give the figure/pixel layer its box (same box as the scroller). ART mode (default) is a separate layer `artClassName`/`artStyle` = the whole screen (feed: fixed inset-0, like the stripe background), clipped only by the screen edge. `sunFront`: the layer starts under the status/safe area (feed), so the sun is offset by it. Everything sits behind the products (no z-index). */
+function SeasonDecor({ scroller, seasons, minis, className, style, sunFront, artClassName, artStyle }: { scroller: RefObject<HTMLElement | null>; seasons: (DecorSeason | null)[] | null; minis?: { specs: MannequinSpec[]; searchOn: boolean } | null; className: string; style?: CSSProperties; sunFront?: boolean; artClassName?: string; artStyle?: CSSProperties }) {
+  const root = useRef<HTMLDivElement>(null), artBox = useRef<HTMLDivElement>(null), geo = useRef({ off: 0, layerH: 0 });
   const [win, setWin] = useState<number[]>([]);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const mode = useMemo(() => (typeof window === "undefined" ? "art" : parseDecorMode(new URLSearchParams(window.location.search).get("decor"))), []);
@@ -58,11 +58,20 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: {
   const apply = () => {   // clip every group to where its outfit is on screen (direct DOM writes)
     const sc = scroller.current, el = root.current; if (!sc || !el) return;
     const h = viewHeight(sc), st = sc.scrollTop;
+    el.querySelectorAll<HTMLElement>(".sd-art").forEach((g) => {
+      const c = artClip(Number(g.dataset.i), st, h, geo.current.off, geo.current.layerH);
+      g.style.clipPath = c ? `inset(${c.top}px 0px ${c.bottom}px 0px)` : "";
+      g.style.visibility = c ? "" : "hidden";
+    });
     el.querySelectorAll<HTMLElement>(".sd-group").forEach((g) => {
       const c = decorClip(Number(g.dataset.i), st, h);
       g.style.clipPath = c ? `inset(${c.top}px 0px ${c.bottom}px 0px)` : "";
       g.style.visibility = c ? "" : "hidden";
     });
+  };
+  const measure = () => {   // where the scroller sits inside the full-screen art layer (only on resize, never per scroll frame)
+    const sc = scroller.current, box = artBox.current; if (!sc || !box) return;
+    geo.current = { off: sc.getBoundingClientRect().top - box.getBoundingClientRect().top, layerH: box.clientHeight };
   };
   const sync = () => {
     const sc = scroller.current; if (!sc) return;
@@ -72,27 +81,31 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: {
     apply();
   };
   const syncRef = useRef(sync); syncRef.current = sync;
+  const measureRef = useRef(measure); measureRef.current = measure;
 
   useEffect(() => {
     const sc = scroller.current; if (!sc) return;
-    const on = () => syncRef.current();
+    const on = () => syncRef.current(), onSize = () => { measureRef.current(); on(); };
     sc.addEventListener("scroll", on, { passive: true });
-    const ro = new ResizeObserver(on); ro.observe(sc);
-    on();
+    const ro = new ResizeObserver(onSize); ro.observe(sc); if (artBox.current) ro.observe(artBox.current);
+    onSize();
     return () => { sc.removeEventListener("scroll", on); ro.disconnect(); };
   }, [scroller]);
   useEffect(() => { syncRef.current(); }, [count, seasons, minis]);   // new outfits appended / list replaced
-  useLayoutEffect(() => { apply(); });   // freshly mounted groups get their clip before the first paint
+  useLayoutEffect(() => { measure(); apply(); });   // freshly mounted groups get their clip before the first paint
 
   const shown = win.filter((i) => seasons?.[i] || minis?.specs[i]);
   const group = (i: number, sun: boolean) => (
     <div key={`${i}-${seasons?.[i]}`} data-i={i} className="sd-group absolute inset-0">
-      {seasons?.[i] && <div className="absolute inset-0" style={{ zIndex: LAYER_Z.decor }}><Art season={seasons[i]!} width={size.w} height={size.h} sun={sun} safeTop={!!sunFront} mode={mode} /></div>}
+      {mode === "pixel" && seasons?.[i] && <div className="absolute inset-0" style={{ zIndex: LAYER_Z.decor }}><Art season={seasons[i]!} width={size.w} height={size.h} sun={sun} safeTop={!!sunFront} /></div>}
       {minis?.specs[i] && <div className="absolute inset-0" style={{ zIndex: LAYER_Z.figure }}><Mannequin spec={minis.specs[i]} layerWidth={size.w} searchOn={minis.searchOn} /></div>}
     </div>
   );
   return (
     <div ref={root} aria-hidden style={{ display: "contents" }}>
+      {mode === "art" && <div ref={artBox} className={`pointer-events-none overflow-hidden ${artClassName ?? className}`} style={{ ...(artClassName ? artStyle : style), zIndex: LAYER_Z.decor }}>
+        {shown.filter((i) => seasons?.[i]).map((i) => <div key={`${i}-${seasons?.[i]}`} data-i={i} className="sd-art absolute inset-0"><ArtLayers season={seasons![i]!} /></div>)}
+      </div>}
       <div className={`pointer-events-none ${className}`} style={{ ...style, zIndex: LAYER_Z.figure }}>{shown.map((i) => group(i, true))}</div>
     </div>
   );

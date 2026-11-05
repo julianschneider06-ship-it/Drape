@@ -35,18 +35,23 @@ export const SEASON_DECOR = {
 // Named z-index constants; SeasonDecor, Feed and the layer test use them. The decoration is BACKGROUND: it sits behind the figure and behind every product.
 export const LAYER_Z = { stripe: 0, decor: 5, figure: 10, products: 20, chrome: 30 } as const;
 
-// ART MODE (default since Prompt 82: 5 illustrations): painted sprites instead of the pixel art above (kept as `?decor=pixel`). Files in public/season-decor/, made by
+// ART MODE (default since Prompt 82: illustrations): painted sprites instead of the pixel art above (kept as `?decor=pixel`). Files in public/season-decor/, made by
 // scripts/build-season-decor.py from docs/reference/season-decor-source/*.png (border flood-fill keying, tolerances live in that script).
-// Layer box = the decor area (same box as the feed scroller). Size: widthPct of the area width OR heightPct of the area height (the other side follows the
-// sprite's aspect). offsetXPct / offsetYPct move the sprite from its anchor (positive = right / down, negative = cropped by the edge), in % of the area.
+// Layer box = the WHOLE SCREEN (same full-screen anchoring as the stripe background: behind status bar, header and tab bar). It is clipped only by the real screen edge,
+// never by the content area, the outfit area or LAYOUT_SAFE_MARGIN. Size: widthPct of the SCREEN width OR heightPct of the SCREEN height (the other side follows the
+// sprite's aspect). offsetXPct / offsetYPct move the sprite from its anchor, in % of the screen: positive = right / down for left- and top-anchored sprites,
+// for right- / bottom-anchored ones positive = further out (bleeds off that edge); negative = back inside.
 export type DecorAnchor = "top-left" | "top" | "top-right" | "left" | "right" | "bottom-left" | "bottom" | "bottom-right";
 export type DecorLayer = { src: string; anchor: DecorAnchor; widthPct?: number; heightPct?: number; offsetXPct: number; offsetYPct: number; opacity: number; zIndex: number };
 export const DECOR_ART: Record<"spring" | "summer" | "autumn" | "winter", DecorLayer[]> = {
   summer: [
-    { src: "/season-decor/summer_sun.webp", anchor: "top-left", widthPct: 42, offsetXPct: -10, offsetYPct: -4, opacity: 1, zIndex: 2 },
-    { src: "/season-decor/summer_wave.webp", anchor: "bottom-right", heightPct: 16, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 },
+    { src: "/season-decor/summer_sun.webp", anchor: "top-left", widthPct: 30, offsetXPct: -4, offsetYPct: 18, opacity: 1, zIndex: 2 },   // below the icon row, left edge slightly cropped
+    { src: "/season-decor/summer_wave.webp", anchor: "bottom-right", widthPct: 70, offsetXPct: 2, offsetYPct: 2, opacity: 1, zIndex: 1 },   // bleeds off right + bottom; left side fades out in the sprite
   ],
-  spring: [{ src: "/season-decor/spring_meadow.webp", anchor: "bottom", heightPct: 14, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],
-  autumn: [{ src: "/season-decor/autumn_tree.webp", anchor: "bottom-left", heightPct: 75, offsetXPct: -6, offsetYPct: 0, opacity: 1, zIndex: 1 }],
-  winter: [{ src: "/season-decor/winter_clouds.webp", anchor: "top", heightPct: 30, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],
+  spring: [{ src: "/season-decor/spring_meadow.webp", anchor: "bottom", widthPct: 100, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],   // full width, flush bottom (about 12% of the height on a phone)
+  autumn: [{ src: "/season-decor/autumn_tree.webp", anchor: "bottom-left", heightPct: 60, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],
+  winter: [
+    { src: "/season-decor/winter_clouds.webp", anchor: "top", heightPct: 14, offsetXPct: 0, offsetYPct: -1, opacity: 1, zIndex: 1 },   // wider than the screen on a phone, so it bleeds off the sides and the top
+    { src: "/season-decor/winter_flakes.webp", anchor: "top-right", widthPct: 62, offsetXPct: 0, offsetYPct: 12, opacity: 1, zIndex: 2 },   // own, small scale: biggest flake about 6% of the screen width; right side keeps the icon row clear
+  ],
 };

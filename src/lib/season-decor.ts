@@ -36,15 +36,22 @@ export const effectiveSeason = (link: string | null, localOn: boolean): boolean 
 export type DecorMode = "art" | "pixel";
 export const parseDecorMode = (link: string | null | undefined): DecorMode => (link === "pixel" ? "pixel" : "art");
 
-/** CSS box of one art layer inside the decor area. `safeTop` / `safeBottom` add the status-bar inset / the tab-bar inset (--safe-b) to the matching edge. */
-export function artLayerStyle(l: DecorLayer, safeTop: boolean): Record<string, string | number> {
+/** CSS box of one art layer inside the full-screen decor layer (top/bottom/left/right = the real screen edges, no safe-area inset). */
+export function artLayerStyle(l: DecorLayer): Record<string, string | number> {
   const a: DecorAnchor = l.anchor, st: Record<string, string | number> = { position: "absolute", opacity: l.opacity, zIndex: l.zIndex, maxWidth: "none" };
   if (l.widthPct != null) { st.width = `${l.widthPct}%`; st.height = "auto"; } else { st.height = `${l.heightPct ?? 0}%`; st.width = "auto"; }
   const top = a.startsWith("top"), bottom = a.startsWith("bottom"), left = a.endsWith("left") || a === "left", right = a.endsWith("right") || a === "right";
   const ox = `${left ? l.offsetXPct : right ? -l.offsetXPct : l.offsetXPct}%`, oy = `${top ? l.offsetYPct : -l.offsetYPct}%`;
-  if (top) st.top = safeTop ? `calc(env(safe-area-inset-top, 0px) + ${oy})` : oy;
-  else if (bottom) st.bottom = `calc(var(--safe-b, 0px) + ${oy})`;
-  else { st.top = "50%"; st.transform = "translateY(-50%)"; }
+  if (top) st.top = oy; else if (bottom) st.bottom = oy; else { st.top = "50%"; st.transform = "translateY(-50%)"; }
   if (left) st.left = ox; else if (right) st.right = ox; else { st.left = "50%"; st.transform = `${st.transform ?? ""} translateX(-50%)`.trim(); }
   return st;
+}
+
+/** Clip of outfit `index`'s ART group inside the full-screen layer. The scroller sits `off` px below the layer's top and is `h` px tall (one outfit = h).
+ *  Only the edge that borders a neighbouring outfit is cut (that line moves with the swipe); at rest nothing is cut, so the art runs to the real screen edges. null = hidden. */
+export function artClip(index: number, scrollTop: number, h: number, off: number, layerH: number): { top: number; bottom: number } | null {
+  if (!(h > 0)) return null;
+  const y0 = index * h - scrollTop, y1 = y0 + h;
+  if (y1 <= 0 || y0 >= h) return null;
+  return { top: y0 > 0 ? Math.max(0, off + y0) : 0, bottom: y1 < h ? Math.max(0, layerH - (off + y1)) : 0 };
 }

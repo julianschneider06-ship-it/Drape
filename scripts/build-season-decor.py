@@ -4,7 +4,9 @@ Plain Python (Pillow + numpy; sharp is not installed), outside the type-checked 
 Method: (1) flood-fill from the image borders over connected near-white pixels (TOL = max channel distance to white) = background; enclosed pale
 pixels (foam, snowflake cores, daisies) are never touched because they are not connected to the border through near-white. (2) Alpha ramp on the
 pixels next to the background (BAND px): alpha = smoothstep((distance to white - RAMP_LO) / (RAMP_HI - RAMP_LO)). (3) Un-matte against white:
-c = (c - (1-a)*255) / a, clamped, so no white halo shows on coloured backgrounds. (4) trim, resize to MAX_EDGE, WebP with alpha."""
+c = (c - (1-a)*255) / a, clamped, so no white halo shows on coloured backgrounds. (4) trim, resize to MAX_EDGE, WebP with alpha.
+Post steps (Prompt 83): winter_clouds is split into winter_clouds (the big cloud shapes) and winter_flakes (everything small: snowflakes + dots) so the flakes get their
+own, smaller scale in the config; summer_wave gets a soft alpha fade over its left WAVE_FADE share so it has no vertical left edge on screen."""
 import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
@@ -12,6 +14,8 @@ from PIL import Image, ImageDraw, ImageFilter
 SRC = "docs/reference/season-decor-source"
 OUT = "public/season-decor"
 MAX_EDGE = 1400
+WAVE_FADE = 0.14      # share of the wave's width (from the left) that fades from transparent to opaque
+CLOUD_MIN_PX = 20000  # winter: connected shapes (after closing small gaps) with at least this many px are clouds, smaller ones flakes
 # tol: border flood-fill tolerance (max channel distance to white); lo/hi: alpha ramp on the edge band (distance to white); band: edge band width in px
 SPRITES = {
     "summer_sun": dict(tol=14, lo=10, hi=60, band=3),
@@ -62,6 +66,43 @@ def key(rgb, o):
     f = np.clip((rgb - (1 - a[..., None]) * 255) / af, 0, 255)
     return np.where(a[..., None] >= 0.999, rgb, f), a
 
+def components(mask):
+    """4-connected components of a boolean mask -> label array (0 = none), plain Python flood fill (no scipy)"""
+    h, w = mask.shape
+    m = mask.ravel().tolist(); lab = [0] * (h * w); n = 0
+    for s0 in range(h * w):
+        if not m[s0] or lab[s0]: continue
+        n += 1; st = [s0]
+        while st:
+            i = st.pop()
+            if lab[i] or not m[i]: continue
+            lab[i] = n; x = i % w
+            if x > 0: st.append(i - 1)
+            if x < w - 1: st.append(i + 1)
+            if i >= w: st.append(i - w)
+            if i < (h - 1) * w: st.append(i + w)
+    return np.array(lab).reshape(h, w), n
+
+def split_winter(img):
+    a = np.array(img.getchannel("A"))
+    closed = np.array(Image.fromarray(((a > 8) * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(9))) > 127
+    lab, n = components(closed)
+    big = np.zeros(n + 1, bool)
+    for k, c in enumerate(np.bincount(lab.ravel(), minlength=n + 1)):
+        big[k] = k > 0 and c >= CLOUD_MIN_PX
+    cloud = big[lab]
+    px = np.array(img); out = []
+    for keep in (cloud, ~cloud):
+        q = px.copy(); q[..., 3] = np.where(keep, q[..., 3], 0)
+        im = Image.fromarray(q, "RGBA"); out.append(im.crop(im.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()))
+    return out
+
+def fade_left(img, share):
+    q = np.array(img).astype(float); w = q.shape[1]; k = max(1, int(w * share))
+    ramp = np.clip(np.arange(w) / k, 0, 1); ramp = ramp * ramp * (3 - 2 * ramp)
+    q[..., 3] *= ramp[None, :]
+    return Image.fromarray(q.astype(np.uint8), "RGBA")
+
 def main():
     prev = sys.argv[sys.argv.index("--preview") + 1] if "--preview" in sys.argv else None
     for name, o in SPRITES.items():
@@ -72,10 +113,14 @@ def main():
         img = img.crop(bb)
         if max(img.size) > MAX_EDGE:
             s = MAX_EDGE / max(img.size); img = img.resize((round(img.width * s), round(img.height * s)), Image.LANCZOS)
-        img.save(f"{OUT}/{name}.webp", "WEBP", quality=88, alpha_quality=95, method=6)
-        print(name, img.size)
-        if prev:
-            for tag, col in (("white", (255, 255, 255)), ("grey", (128, 128, 128)), ("dark", (20, 40, 90))):
-                b = Image.new("RGBA", img.size, col + (255,)); b.alpha_composite(img); b.convert("RGB").save(f"{prev}/{name}_{tag}.png")
+        parts = {name: img}
+        if name == "winter_clouds": parts = dict(zip(("winter_clouds", "winter_flakes"), split_winter(img)))
+        if name == "summer_wave": parts = {name: fade_left(img, WAVE_FADE)}
+        for nm, im in parts.items():
+            im.save(f"{OUT}/{nm}.webp", "WEBP", quality=88, alpha_quality=95, method=6)
+            print(nm, im.size)
+            if prev:
+                for tag, col in (("white", (255, 255, 255)), ("grey", (128, 128, 128)), ("dark", (20, 40, 90))):
+                    b = Image.new("RGBA", im.size, col + (255,)); b.alpha_composite(im); b.convert("RGB").save(f"{prev}/{nm}_{tag}.png")
 
 main()
