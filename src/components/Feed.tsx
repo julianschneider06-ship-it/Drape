@@ -34,6 +34,7 @@ import type { Signal } from "@/outfits/taste-codec";
 import { likeSignal } from "@/lib/like-signal";
 import { TASTE } from "@/lib/personalization/config";
 import SeasonDecor from "./SeasonDecor";
+import { LAYER_Z } from "@/config/season-decor";
 import StripeBackground from "./StripeBackground";
 import { viewHeight } from "@/lib/view-height";
 import { useStripeMode } from "@/lib/client/stripe-bg";
@@ -449,7 +450,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
     <main className="h-dvh bg-white" style={{ "--nav-h": navOn ? `calc(${NAV_PX}px + env(safe-area-inset-bottom))` : "0px", "--safe-b": navOn ? "0px" : "env(safe-area-inset-bottom)" } as React.CSSProperties}>
       <SaleInkDefs />
       <Layer active={layers.feedActive} shiftPx={0}>
-        {stripeOn && obPhase === "off" && <StripeBackground mode={stripeMode} colors={stripeColors} seed={String(shown[railIdx]?.id ?? "")} className="fixed inset-0" />}
+        {stripeOn && obPhase === "off" && <StripeBackground mode={stripeMode} colors={stripeColors} seed={String(shown[railIdx]?.id ?? "")} className="fixed inset-0" style={{ zIndex: LAYER_Z.stripe }} />}
         {(seasonOn || miniOn) && obPhase === "off" && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="fixed inset-x-0 top-0" style={DECOR_BOX} sunFront />}
         <header className={glassUi ? "fixed z-30 flex items-center justify-between px-3 pb-2 pt-2" : "fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur"}
           style={glassUi ? { ...glassPieceStyle(glassUi || "colorful"), paddingLeft: STRIPE_BG.glass.capsulePadPx, paddingRight: STRIPE_BG.glass.capsulePadPx, left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : undefined}>
@@ -458,7 +459,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
           <span className="w-16" aria-hidden />
         </header>
 
-        <div ref={scroller} className="no-scrollbar snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ height: glassUi ? "100dvh" : H }}>   {/* glass bar: the scroller runs down to the screen edge so passing outfits show through the bar; sections keep height H, a spacer keeps the last snap position reachable */}
+        <div ref={scroller} className="no-scrollbar relative snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ height: glassUi ? "100dvh" : H, zIndex: LAYER_Z.products }}>   {/* glass bar: the scroller runs down to the screen edge so passing outfits show through the bar; sections keep height H, a spacer keeps the last snap position reachable */}
           {obPhase === "off" && shown.map((o, i) => (
             <section key={o.id} data-i={i} className="relative flex snap-start snap-always flex-col items-center justify-center pt-[3.75rem]" style={{ height: H, paddingBottom: "var(--safe-b)" }}>
               {feedCanvas && (

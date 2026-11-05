@@ -1,7 +1,7 @@
 "use client";
 import { viewHeight } from "@/lib/view-height";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { SEASON_DECOR as C, DECOR_ART } from "@/config/season-decor";
+import { SEASON_DECOR as C, DECOR_ART, LAYER_Z } from "@/config/season-decor";
 import { artLayerStyle, decorClip, decorWindow, parseDecorMode, type DecorSeason } from "@/lib/season-decor";
 import Mannequin from "./Mannequin";
 import type { MannequinSpec } from "@/lib/mannequin";
@@ -87,13 +87,13 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: {
   const shown = win.filter((i) => seasons?.[i] || minis?.specs[i]);
   const group = (i: number, sun: boolean) => (
     <div key={`${i}-${seasons?.[i]}`} data-i={i} className="sd-group absolute inset-0">
-      {seasons?.[i] && <Art season={seasons[i]!} width={size.w} height={size.h} sun={sun} safeTop={!!sunFront} mode={mode} />}
-      {minis?.specs[i] && <Mannequin spec={minis.specs[i]} layerWidth={size.w} searchOn={minis.searchOn} />}
+      {seasons?.[i] && <div className="absolute inset-0" style={{ zIndex: LAYER_Z.decor }}><Art season={seasons[i]!} width={size.w} height={size.h} sun={sun} safeTop={!!sunFront} mode={mode} /></div>}
+      {minis?.specs[i] && <div className="absolute inset-0" style={{ zIndex: LAYER_Z.figure }}><Mannequin spec={minis.specs[i]} layerWidth={size.w} searchOn={minis.searchOn} /></div>}
     </div>
   );
   return (
     <div ref={root} aria-hidden style={{ display: "contents" }}>
-      <div className={`pointer-events-none ${className}`} style={style}>{shown.map((i) => group(i, true))}</div>
+      <div className={`pointer-events-none ${className}`} style={{ ...style, zIndex: LAYER_Z.figure }}>{shown.map((i) => group(i, true))}</div>
     </div>
   );
 }
