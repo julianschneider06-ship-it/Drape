@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { DECOR_ART } from "../src/config/season-decor";
+import { DECOR_ART, LAYER_Z } from "../src/config/season-decor";
 import { artLayerStyle, parseDecorMode } from "../src/lib/season-decor";
 
 for (const [season, layers] of Object.entries(DECOR_ART)) {
@@ -16,7 +16,7 @@ for (const [season, layers] of Object.entries(DECOR_ART)) {
   });
 }
 test("style per anchor", () => {
-  assert.equal(artLayerStyle(DECOR_ART.autumn[0], true).left, "-6%");
+  assert.equal(artLayerStyle(DECOR_ART.autumn[0], true).left, `${DECOR_ART.autumn[0].offsetXPct}%`);
   assert.ok(String(artLayerStyle(DECOR_ART.winter[0], true).top).includes("safe-area-inset-top"));
 });
 test("?decor parameter: pixel only on 'pixel'", () => {
@@ -24,4 +24,10 @@ test("?decor parameter: pixel only on 'pixel'", () => {
   assert.equal(parseDecorMode("art"), "art");
   assert.equal(parseDecorMode(null), "art");
   assert.equal(parseDecorMode("x"), "art");
+});
+test("layer order: stripe < decoration < figure < products < header/tab bar", () => {
+  assert.ok(LAYER_Z.stripe < LAYER_Z.decor);
+  assert.ok(LAYER_Z.decor < LAYER_Z.figure);
+  assert.ok(LAYER_Z.figure < LAYER_Z.products);
+  assert.ok(LAYER_Z.products < LAYER_Z.chrome);
 });
