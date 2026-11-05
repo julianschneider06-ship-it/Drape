@@ -86,4 +86,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 82: Seasonal decoration = 5 new illustrations (keyed by border flood-fill), named layer z-order constants (decor behind figure and products); last commit 7b1694e
 - Prompt 83: Season art decoration is a full-screen layer (no clipping), new sizes/positions, winter flakes split into own sprite, wave left fade; last commit 2f4222a
 - Prompt 84: season decor art flush with the real screen edges (flush sides + overscan, stretch limits, sun top-right, tree top fade, wave left fade removed); last commit 9ccc1bf
-- Prompt 85: season decor anchored to the stage between header and tab bar (computeDecorRect, stage measured at runtime, ?decordebug=1 overlay, stage tests); last commit PLACEHOLDER
+- Prompt 85: season decor anchored to the stage between header and tab bar (computeDecorRect, stage measured at runtime, ?decordebug=1 overlay, stage tests); last commit 4e13377
