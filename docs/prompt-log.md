@@ -85,4 +85,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 81: Seasonal decoration replaced by painted sprites (public/season-decor), `?decor=pixel` = old pixel look; last commit 2e61eef
 - Prompt 82: Seasonal decoration = 5 new illustrations (keyed by border flood-fill), named layer z-order constants (decor behind figure and products); last commit 7b1694e
 - Prompt 83: Season art decoration is a full-screen layer (no clipping), new sizes/positions, winter flakes split into own sprite, wave left fade; last commit 2f4222a
-- Prompt 84: season decor art flush with the real screen edges (flush sides + overscan, stretch limits, sun top-right, tree top fade, wave left fade removed) — last commit on main: see git log.
+- Prompt 84: season decor art flush with the real screen edges (flush sides + overscan, stretch limits, sun top-right, tree top fade, wave left fade removed); last commit 9ccc1bf
