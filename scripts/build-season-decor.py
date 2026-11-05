@@ -15,7 +15,7 @@ SRC = "docs/reference/season-decor-source"
 OUT = "public/season-decor"
 MAX_EDGE = 1400
 WAVE_FADE = 0.0       # (Prompt 84: no left fade any more, the wave is stretched to the full screen width and must touch the left edge)
-TREE_TOP_FADE = 0.10  # share of the tree's height (from the top) that fades out: the illustration is cut at its top edge, at 60% screen height that would be a straight line
+TREE_TOP_FADE = 0.0   # (Prompt 86: no top fade any more; the tree spans the full stage height, its crown touches the stage top edge)
 CLOUD_MIN_PX = 20000  # winter: connected shapes (after closing small gaps) with at least this many px are clouds, smaller ones flakes
 # tol: border flood-fill tolerance (max channel distance to white); lo/hi: alpha ramp on the edge band (distance to white); band: edge band width in px
 SPRITES = {
@@ -123,7 +123,7 @@ def main():
         parts = {name: img}
         if name == "winter_clouds": parts = dict(zip(("winter_clouds", "winter_flakes"), split_winter(img)))
         if name == "summer_wave" and WAVE_FADE > 0: parts = {name: fade_left(img, WAVE_FADE)}
-        if name == "autumn_tree": parts = {name: fade_top(img, TREE_TOP_FADE)}
+        if name == "autumn_tree" and TREE_TOP_FADE > 0: parts = {name: fade_top(img, TREE_TOP_FADE)}
         for nm, im in parts.items():
             im.save(f"{OUT}/{nm}.webp", "WEBP", quality=88, alpha_quality=95, method=6)
             print(nm, im.size)

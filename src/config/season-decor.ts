@@ -60,7 +60,7 @@ export const DECOR_ART: Record<"spring" | "summer" | "autumn" | "winter", DecorL
     { src: "/season-decor/summer_wave.webp", aspect: 1400 / 467, anchor: "bottom-right", flush: ["bottom", "left", "right"], widthMode: "stage", heightPct: 14, stretch: true, maxStretch: 0.4, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 },
   ],
   spring: [{ src: "/season-decor/spring_meadow.webp", aspect: 1400 / 341, anchor: "bottom", flush: ["bottom", "left", "right"], widthMode: "stage", heightPct: 10, stretch: true, maxStretch: 0.4, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],
-  autumn: [{ src: "/season-decor/autumn_tree.webp", aspect: 669 / 1400, anchor: "bottom-left", flush: ["bottom", "left"], widthMode: "auto", heightPct: 60, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],   // the sprite fades out at its top edge (build script), so there is no straight cut at 60 % height
+  autumn: [{ src: "/season-decor/autumn_tree.webp", aspect: 669 / 1400, anchor: "bottom-left", flush: ["top", "bottom", "left"], widthMode: "auto", heightPct: 100, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],   // full stage height (flush top + bottom: crown at the header edge, rocks on the tab bar edge), width follows the aspect, no fade
   winter: [
     { src: "/season-decor/winter_clouds.webp", aspect: 1024 / 221, anchor: "top", flush: ["top", "left", "right"], widthMode: "stage", heightPct: 14, stretch: true, maxStretch: 0.4, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 },
     { src: "/season-decor/winter_flakes.webp", aspect: 991 / 346, anchor: "top-right", widthMode: "pct", widthPct: 62, offsetXPct: 0, offsetYPct: 12, opacity: 1, zIndex: 2 },   // small flakes, right side keeps the icon row clear

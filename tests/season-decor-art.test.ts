@@ -28,7 +28,7 @@ for (const [season, layers] of Object.entries(DECOR_ART)) {
 }
 const STAGES = [{ x: 0, y: 96, w: 390, h: 560 }, { x: 0, y: 104, w: 430, h: 700 }, { x: 0, y: 88, w: 360, h: 520 }];
 const OS = DECOR_OVERSCAN_PX, near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
-const edges: Record<string, string[]> = { spring_meadow: ["bottom", "left", "right"], summer_wave: ["bottom", "left", "right"], winter_clouds: ["top", "left", "right"], autumn_tree: ["bottom", "left"] };
+const edges: Record<string, string[]> = { spring_meadow: ["bottom", "left", "right"], summer_wave: ["bottom", "left", "right"], winter_clouds: ["top", "left", "right"], autumn_tree: ["top", "bottom", "left"] };
 const nameOf = (l: { src: string }) => l.src.split("/").pop()!.replace(".webp", "");
 test("border sprites touch the STAGE edges exactly (difference 0 within the overscan)", () => {
   for (const st of STAGES) for (const l of Object.values(DECOR_ART).flat()) {
@@ -48,7 +48,7 @@ test("no rectangle leaves the stage except by the overscan (free layers stay ful
     assert.ok(r.x + r.w <= st.x + st.w + OS + 1e-9 && r.y + r.h <= st.y + st.h + OS + 1e-9, `${nameOf(l)} bottom-right ${st.w}x${st.h}`);
   }
 });
-test("stretch stays within the limits for phone stages and wide screens; tree keeps its aspect at 60 % of the stage height", () => {
+test("stretch stays within the limits for phone stages and wide screens; tree keeps its aspect at the full stage height", () => {
   for (const st of [...STAGES, { x: 0, y: 80, w: 820, h: 1000 }, { x: 0, y: 80, w: 1280, h: 650 }]) for (const l of Object.values(DECOR_ART).flat().filter((x) => x.stretch)) {
     const r = computeDecorRect(l, st)!, k = r.w / r.h / l.aspect;
     assert.ok(k >= 1 - l.maxStretch! - 1e-9 && k <= 1 + l.maxStretch! + 1e-9, `${l.src} ${st.w}x${st.h} ratio ${k}`);
@@ -56,7 +56,9 @@ test("stretch stays within the limits for phone stages and wide screens; tree ke
   for (const st of STAGES) {
     const t = computeDecorRect(DECOR_ART.autumn[0], st)!;
     assert.ok(near(t.w / t.h, DECOR_ART.autumn[0].aspect));
-    assert.ok(near(t.h, st.h * 0.6));
+    assert.ok(near(t.h, st.h + 2 * OS));   // crown at the stage top, rocks on the tab bar edge
+    assert.ok(near(t.y, st.y - OS) && near(t.x, st.x - OS));
+    assert.ok(t.w <= st.w, "tree not wider than the stage");
   }
 });
 test("layer sizes in % of the stage: wave 14 % high (stretch may add), meadow 10 %, clouds 14 %, full stage width", () => {
@@ -100,4 +102,15 @@ test("layer order: stripe < decoration < figure < products < header/tab bar", ()
   assert.ok(LAYER_Z.decor < LAYER_Z.figure);
   assert.ok(LAYER_Z.figure < LAYER_Z.products);
   assert.ok(LAYER_Z.products < LAYER_Z.chrome);
+});
+
+test("autumn sprite: full tree, no top fade or cut (content touches the top row), aspect = file", async () => {
+  const sharp = await import("node:fs").then((f) => f.readFileSync("public/season-decor/autumn_tree.webp"));
+  assert.ok(sharp.length > 1000);
+  const { execFileSync } = await import("node:child_process");
+  const out = execFileSync("python3", ["-I", "-c", "import sys;from PIL import Image;import numpy as np;a=np.array(Image.open(sys.argv[1]).split()[3]);print(a[:2].max(),a[:,:2].max(),a[-2:].max(),a.shape[1]/a.shape[0])", "public/season-decor/autumn_tree.webp"]).toString().trim().split(" ");
+  assert.ok(Number(out[0]) >= 200, "top row opaque (no fade)");
+  assert.ok(Number(out[1]) >= 200, "trunk touches the left edge");
+  assert.ok(Number(out[2]) >= 200, "bottom row opaque");
+  assert.ok(Math.abs(Number(out[3]) / DECOR_ART.autumn[0].aspect - 1) < 0.01);
 });

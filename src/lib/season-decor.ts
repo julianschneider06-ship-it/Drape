@@ -45,9 +45,11 @@ export function computeDecorRect(l: DecorLayer, stage: DecorStage): DecorRect | 
   const { x: sx, y: sy, w: W, h: H } = stage;
   if (!(W > 0 && H > 0)) return null;
   const os = DECOR_OVERSCAN_PX, flush = l.flush ?? [], a = l.aspect;
-  let w: number, h: number;
-  if (l.widthMode === "stage") w = W + 2 * os; else if (l.widthPct != null) w = (W * l.widthPct) / 100; else w = ((H * (l.heightPct ?? 0)) / 100) * a;
-  h = l.heightPct != null ? (H * l.heightPct) / 100 : w / a;
+  let w: number, h = 0;
+  const full = flush.includes("top") && flush.includes("bottom") && l.heightPct != null;   // flush top AND bottom = exactly the stage height (+ overscan), width follows the aspect
+  if (full) { h = H + 2 * os; w = l.widthMode === "stage" ? W + 2 * os : l.widthPct != null ? (W * l.widthPct) / 100 : h * a; }
+  else if (l.widthMode === "stage") w = W + 2 * os; else if (l.widthPct != null) w = (W * l.widthPct) / 100; else w = ((H * (l.heightPct ?? 0)) / 100) * a;
+  if (!full) h = l.heightPct != null ? (H * l.heightPct) / 100 : w / a;
   if (l.stretch && l.heightPct != null) {
     const m = l.maxStretch ?? 0.2, r = Math.min(1 + m, Math.max(1 - m, w / h / a));
     h = w / (a * r);
