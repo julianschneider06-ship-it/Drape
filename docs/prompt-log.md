@@ -84,4 +84,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 80: Capsule (pill) glass header + tab bar; Simple mode: product shadows removed, organic grey blobs per outfit; last commit 7025167
 - Prompt 81: Seasonal decoration replaced by painted sprites (public/season-decor), `?decor=pixel` = old pixel look; last commit 2e61eef
 - Prompt 82: Seasonal decoration = 5 new illustrations (keyed by border flood-fill), named layer z-order constants (decor behind figure and products); last commit 7b1694e
-Prompt 83: season art decoration full-screen, no clipping; new sizes/positions; winter flakes split off; wave left fade (see commit on main).
+- Prompt 83: Season art decoration is a full-screen layer (no clipping), new sizes/positions, winter flakes split into own sprite, wave left fade; last commit 2f4222a
