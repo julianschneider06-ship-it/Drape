@@ -30,3 +30,19 @@ export const SEASON_DECOR = {
   leaves: { color: "#c1352a", scale: 1 },     // pixel maple leaf: one uniform deep red; scale = size relative to a full decoration bitmap
   snow: { color: "#9db4c8", scale: 0.6 },     // pixel snowflake; scale 0.6 = about 60 % of the former size (count and positions unchanged)
 } as const;
+
+// ART MODE (default since Prompt 81): painted sprites instead of the pixel art above (kept as `?decor=pixel`). Files in public/season-decor/, made by
+// scripts/build-season-decor.py from docs/reference/season-decor-source.png (keying thresholds live in that script).
+// Layer box = the decor area (same box as the feed scroller). Size: widthPct of the area width OR heightPct of the area height (the other side follows the
+// sprite's aspect). offsetXPct / offsetYPct move the sprite from its anchor (positive = right / down, negative = cropped by the edge), in % of the area.
+export type DecorAnchor = "top-left" | "top" | "top-right" | "left" | "right" | "bottom-left" | "bottom" | "bottom-right";
+export type DecorLayer = { src: string; anchor: DecorAnchor; widthPct?: number; heightPct?: number; offsetXPct: number; offsetYPct: number; opacity: number; zIndex: number };
+export const DECOR_ART: Record<"spring" | "summer" | "autumn" | "winter", DecorLayer[]> = {
+  summer: [
+    { src: "/season-decor/summer_sun.webp", anchor: "top-left", widthPct: 42, offsetXPct: -4, offsetYPct: -1, opacity: 1, zIndex: 2 },
+    { src: "/season-decor/summer_wave.webp", anchor: "bottom-right", widthPct: 100, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 },
+  ],
+  spring: [{ src: "/season-decor/spring_meadow.webp", anchor: "bottom", widthPct: 100, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],
+  autumn: [{ src: "/season-decor/autumn_tree.webp", anchor: "bottom-left", heightPct: 75, offsetXPct: -6, offsetYPct: 0, opacity: 1, zIndex: 1 }],
+  winter: [{ src: "/season-decor/winter_clouds.webp", anchor: "top", widthPct: 100, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],
+};

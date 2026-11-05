@@ -1,8 +1,8 @@
 "use client";
 import { viewHeight } from "@/lib/view-height";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { SEASON_DECOR as C } from "@/config/season-decor";
-import { decorClip, decorWindow, type DecorSeason } from "@/lib/season-decor";
+import { SEASON_DECOR as C, DECOR_ART } from "@/config/season-decor";
+import { artLayerStyle, decorClip, decorWindow, parseDecorMode, type DecorSeason } from "@/lib/season-decor";
 import Mannequin from "./Mannequin";
 import type { MannequinSpec } from "@/lib/mannequin";
 import { DECO_BITMAP_SIZE, decoPx, leafMarkup, meadowMarkup, snap, snowMarkup, spotPieces, sunMarkup, sunPx } from "@/lib/season-decor-art";
@@ -35,8 +35,14 @@ function Spots({ kind, width, height }: { kind: "autumn" | "winter"; width: numb
   );
 }
 
-const Art = ({ season, width, height, sun, safeTop }: { season: DecorSeason; width: number; height: number; sun: boolean; safeTop: boolean }) =>
-  season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Spots kind={season} width={width} height={height} />;
+/** painted illustrations (default): plain img layers, absolute inside the group, so no layout shift; all sprites are preloaded once. */
+const ART_SRCS = Object.values(DECOR_ART).flat().map((l) => l.src);
+function ArtLayers({ season, safeTop }: { season: DecorSeason; safeTop: boolean }) {
+  return <>{DECOR_ART[season].map((l) => /* eslint-disable-next-line @next/next/no-img-element */ <img key={l.src} src={l.src} alt="" decoding="async" draggable={false} style={artLayerStyle(l, safeTop)} />)}</>;
+}
+
+const Art = ({ season, width, height, sun, safeTop, mode }: { season: DecorSeason; width: number; height: number; sun: boolean; safeTop: boolean; mode: "art" | "pixel" }) =>
+  mode === "art" ? <ArtLayers season={season} safeTop={safeTop} /> : season === "summer" ? (sun ? <Sun safeTop={safeTop} /> : null) : season === "spring" ? <Meadow width={width} /> : <Spots kind={season} width={width} height={height} />;
 
 /** `scroller` = the snap scroller the outfits live in (offset and height are read from it); `seasons[i]` = decoration of outfit i (null = none).
  *  `minis` = outfit preview figures (same clipping, drawn in front of the season art and still behind the products): `specs[i]` is outfit i's figure, `searchOn` places it over the Profile tab.
@@ -45,6 +51,8 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: {
   const root = useRef<HTMLDivElement>(null);
   const [win, setWin] = useState<number[]>([]);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const mode = useMemo(() => (typeof window === "undefined" ? "art" : parseDecorMode(new URLSearchParams(window.location.search).get("decor"))), []);
+  useEffect(() => { if (mode === "art") ART_SRCS.forEach((src) => { const im = new Image(); im.decoding = "async"; im.src = src; }); }, [mode]);
   const winKey = useRef(""), count = Math.max(seasons?.length ?? 0, minis?.specs.length ?? 0);
 
   const apply = () => {   // clip every group to where its outfit is on screen (direct DOM writes)
@@ -79,7 +87,7 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront }: {
   const shown = win.filter((i) => seasons?.[i] || minis?.specs[i]);
   const group = (i: number, sun: boolean) => (
     <div key={`${i}-${seasons?.[i]}`} data-i={i} className="sd-group absolute inset-0">
-      {seasons?.[i] && <Art season={seasons[i]!} width={size.w} height={size.h} sun={sun} safeTop={!!sunFront} />}
+      {seasons?.[i] && <Art season={seasons[i]!} width={size.w} height={size.h} sun={sun} safeTop={!!sunFront} mode={mode} />}
       {minis?.specs[i] && <Mannequin spec={minis.specs[i]} layerWidth={size.w} searchOn={minis.searchOn} />}
     </div>
   );
