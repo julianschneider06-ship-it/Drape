@@ -2,9 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { DECOR_ART, DECOR_OVERSCAN_PX, LAYER_Z } from "../src/config/season-decor";
-import { artClip, artLayerStyle, parseDecorMode } from "../src/lib/season-decor";
+import { HIT_ICON_ZONE } from "../src/config/hit-area";
+import { artClip, artLayerStyle, computeDecorRect, parseDecorMode } from "../src/lib/season-decor";
 
-const W = 390, H = 844, num = (v: unknown) => Number(v);
 function webpSize(file: string): [number, number] {   // minimal header parse (VP8X / VP8L / VP8)
   const b = readFileSync(file), t = b.toString("ascii", 12, 16);
   if (t === "VP8X") return [1 + b.readUIntLE(24, 3), 1 + b.readUIntLE(27, 3)];
@@ -18,42 +18,70 @@ for (const [season, layers] of Object.entries(DECOR_ART)) {
       assert.ok(existsSync(`public${l.src}`), l.src);
       const [w, h] = webpSize(`public${l.src}`);
       assert.ok(Math.abs(l.aspect / (w / h) - 1) < 0.01, `${l.src} aspect ${l.aspect} vs file ${w / h}`);
-      assert.ok(l.widthMode === "screen" || l.widthPct != null || l.heightPct != null);
+      assert.ok(l.widthMode === "stage" || l.widthPct != null || l.heightPct != null);
       assert.ok((l.widthPct ?? 0) <= 100 && (l.heightPct ?? 0) <= 100);
       assert.ok(l.opacity > 0 && l.opacity <= 1);
-      if (!l.stretch) assert.ok(!(l.widthPct != null && l.heightPct != null) && l.widthMode !== "screen", "no stretching without stretch: true");
+      if (!l.stretch) assert.ok(!(l.widthPct != null && l.heightPct != null) && l.widthMode !== "stage", "no stretching without stretch: true");
       if (l.stretch) assert.ok((l.maxStretch ?? 0) > 0 && (l.maxStretch ?? 0) <= 0.4);
     }
   });
 }
-test("border sprites are flush with the real screen edges (offset 0, overscan, no env/safe area)", () => {
-  const edges: Record<string, string[]> = { spring_meadow: ["bottom", "left", "right"], summer_wave: ["bottom", "left", "right"], winter_clouds: ["top", "left", "right"], autumn_tree: ["bottom", "left"] };
-  for (const l of Object.values(DECOR_ART).flat()) {
-    const name = l.src.split("/").pop()!.replace(".webp", ""), st = artLayerStyle(l, W, H)!;
-    assert.ok(!JSON.stringify(st).includes("env("));
+const STAGES = [{ x: 0, y: 96, w: 390, h: 560 }, { x: 0, y: 104, w: 430, h: 700 }, { x: 0, y: 88, w: 360, h: 520 }];
+const OS = DECOR_OVERSCAN_PX, near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+const edges: Record<string, string[]> = { spring_meadow: ["bottom", "left", "right"], summer_wave: ["bottom", "left", "right"], winter_clouds: ["top", "left", "right"], autumn_tree: ["bottom", "left"] };
+const nameOf = (l: { src: string }) => l.src.split("/").pop()!.replace(".webp", "");
+test("border sprites touch the STAGE edges exactly (difference 0 within the overscan)", () => {
+  for (const st of STAGES) for (const l of Object.values(DECOR_ART).flat()) {
+    const r = computeDecorRect(l, st)!, name = nameOf(l);
     for (const side of edges[name] ?? []) {
       assert.ok((l.flush ?? []).includes(side as never), `${name} flush ${side}`);
-      if (side === "right" && l.anchor === "bottom") continue;   // full-width layers: left + width cover the right edge, checked below
-      if (st[side] != null) assert.equal(num(st[side]), -DECOR_OVERSCAN_PX, `${name} ${side}`);
+      const d = side === "top" ? st.y - r.y : side === "bottom" ? r.y + r.h - (st.y + st.h) : side === "left" ? st.x - r.x : r.x + r.w - (st.x + st.w);
+      assert.ok(near(d, OS), `${name} ${side} at ${st.w}x${st.h}: ${d}`);
     }
-    if (l.widthMode === "screen") { assert.equal(num(st.left), -DECOR_OVERSCAN_PX); assert.ok(num(st.left) + num(st.width) >= W + DECOR_OVERSCAN_PX); }
+    assert.ok(!JSON.stringify(artLayerStyle(l, st)).includes("env("));
   }
 });
-test("stretch stays within the limits for phones and wide screens", () => {
-  for (const [w, h] of [[390, 844], [360, 640], [430, 932], [820, 1180], [1280, 800]]) for (const l of Object.values(DECOR_ART).flat().filter((x) => x.stretch)) {
-    const st = artLayerStyle(l, w, h)!, r = num(st.width) / num(st.height) / l.aspect;
-    assert.ok(r >= 1 - l.maxStretch! - 1e-9 && r <= 1 + l.maxStretch! + 1e-9, `${l.src} ${w}x${h} ratio ${r}`);
+test("no rectangle leaves the stage except by the overscan (free layers stay fully inside)", () => {
+  for (const st of STAGES) for (const l of Object.values(DECOR_ART).flat()) {
+    const r = computeDecorRect(l, st)!;
+    assert.ok(r.x >= st.x - OS - 1e-9 && r.y >= st.y - OS - 1e-9, `${nameOf(l)} top-left`);
+    assert.ok(r.x + r.w <= st.x + st.w + OS + 1e-9 && r.y + r.h <= st.y + st.h + OS + 1e-9, `${nameOf(l)} bottom-right ${st.w}x${st.h}`);
   }
-  const tree = artLayerStyle(DECOR_ART.autumn[0], W, H)!;   // not stretched: aspect kept
-  assert.ok(Math.abs(num(tree.width) / num(tree.height) / DECOR_ART.autumn[0].aspect - 1) < 1e-9);
-  assert.equal(num(tree.height), H * 0.6);
 });
-test("sun: top-right, about 30 % wide, fully inside the screen, clear of the icon row", () => {
-  const l = DECOR_ART.summer[0], st = artLayerStyle(l, W, H)!;
-  assert.equal(l.anchor, "top-right");
-  assert.ok(num(st.width) / W >= 0.28 && num(st.width) / W <= 0.32);
-  assert.ok(num(st.top) / H >= 0.08 && num(st.top) / H <= 0.1);
-  assert.ok(num(st.right) >= 0 && W - num(st.right) - num(st.width) > W * 0.5);   // inside the screen, right half
+test("stretch stays within the limits for phone stages and wide screens; tree keeps its aspect at 60 % of the stage height", () => {
+  for (const st of [...STAGES, { x: 0, y: 80, w: 820, h: 1000 }, { x: 0, y: 80, w: 1280, h: 650 }]) for (const l of Object.values(DECOR_ART).flat().filter((x) => x.stretch)) {
+    const r = computeDecorRect(l, st)!, k = r.w / r.h / l.aspect;
+    assert.ok(k >= 1 - l.maxStretch! - 1e-9 && k <= 1 + l.maxStretch! + 1e-9, `${l.src} ${st.w}x${st.h} ratio ${k}`);
+  }
+  for (const st of STAGES) {
+    const t = computeDecorRect(DECOR_ART.autumn[0], st)!;
+    assert.ok(near(t.w / t.h, DECOR_ART.autumn[0].aspect));
+    assert.ok(near(t.h, st.h * 0.6));
+  }
+});
+test("layer sizes in % of the stage: wave 14 % high (stretch may add), meadow 10 %, clouds 14 %, full stage width", () => {
+  for (const st of STAGES) {
+    for (const [l, pct] of [[DECOR_ART.summer[1], 14], [DECOR_ART.spring[0], 10], [DECOR_ART.winter[0], 14]] as const) {
+      const r = computeDecorRect(l, st)!;
+      assert.ok(near(r.w, st.w + 2 * OS));
+      assert.ok(r.h >= (st.h * pct) / 100 - 1e-9 && r.h <= (st.h * pct * 1.5) / 100, `${nameOf(l)} ${st.w}x${st.h} h ${r.h}`);
+    }
+    assert.equal(DECOR_ART.summer[1].anchor, "bottom-right");
+  }
+});
+test("sun: top-right of the stage, about 30 % wide, 3 % below the stage top, fully inside, clear of the top-left icon row", () => {
+  for (const st of STAGES) {
+    const l = DECOR_ART.summer[0], r = computeDecorRect(l, st)!;
+    assert.equal(l.anchor, "top-right");
+    assert.ok(near(r.w / st.w, 0.3));
+    assert.ok(near((r.y - st.y) / st.h, 0.03));
+    assert.ok(r.x >= st.x && r.x + r.w <= st.x + st.w && r.y >= st.y && r.y + r.h <= st.y + st.h);
+    const icons = { x: st.x + HIT_ICON_ZONE.x, y: st.y + HIT_ICON_ZONE.y, w: HIT_ICON_ZONE.w, h: HIT_ICON_ZONE.h };
+    assert.ok(r.x >= icons.x + icons.w, "sun right of the icon row");
+  }
+});
+test("not measured yet (stage 0) = no rectangle", () => {
+  assert.equal(computeDecorRect(DECOR_ART.spring[0], { x: 0, y: 0, w: 0, h: 0 }), null);
 });
 test("art clip: nothing cut at rest, only the border to a neighbour moves", () => {
   assert.deepEqual(artClip(3, 3 * 800, 800, 50, 900), { top: 0, bottom: 0 });

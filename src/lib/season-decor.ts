@@ -1,5 +1,5 @@
 // Seasonal decoration, pure logic (no React): which season an outfit gets, which part of the screen belongs to which outfit, and the setting.
-import { SEASON_DECOR, DECOR_OVERSCAN_PX, type DecorAnchor, type DecorLayer } from "@/config/season-decor";
+import { SEASON_DECOR, DECOR_OVERSCAN_PX, type DecorLayer } from "@/config/season-decor";
 import type { OutfitTags } from "@/outfits/tags";
 
 export type DecorSeason = "spring" | "summer" | "autumn" | "winter";
@@ -36,24 +36,37 @@ export const effectiveSeason = (link: string | null, localOn: boolean): boolean 
 export type DecorMode = "art" | "pixel";
 export const parseDecorMode = (link: string | null | undefined): DecorMode => (link === "pixel" ? "pixel" : "art");
 
-/** Pixel box of one art layer inside the full-screen decor layer of W x H px (the real screen edges). Flush sides sit DECOR_OVERSCAN_PX beyond the edge, no safe area.
- *  Stretched layers keep their distortion within +/- maxStretch of the natural aspect (the height gives way). null = layer not measured yet. */
-export function artLayerStyle(l: DecorLayer, W: number, H: number): Record<string, string | number> | null {
+export type DecorStage = { x: number; y: number; w: number; h: number };
+export type DecorRect = { x: number; y: number; w: number; h: number };
+
+/** Pixel rectangle of one art layer for a STAGE rectangle (the outfit area between the header's bottom edge and the tab bar's top edge). Same coordinate system as `stage`.
+ *  Flush sides sit DECOR_OVERSCAN_PX beyond the stage edge. Stretched layers keep their distortion within +/- maxStretch of the natural aspect (the height gives way). null = stage not measured yet. */
+export function computeDecorRect(l: DecorLayer, stage: DecorStage): DecorRect | null {
+  const { x: sx, y: sy, w: W, h: H } = stage;
   if (!(W > 0 && H > 0)) return null;
   const os = DECOR_OVERSCAN_PX, flush = l.flush ?? [], a = l.aspect;
   let w: number, h: number;
-  if (l.widthMode === "screen") w = W + 2 * os; else if (l.widthPct != null) w = (W * l.widthPct) / 100; else w = ((H * (l.heightPct ?? 0)) / 100) * a;
+  if (l.widthMode === "stage") w = W + 2 * os; else if (l.widthPct != null) w = (W * l.widthPct) / 100; else w = ((H * (l.heightPct ?? 0)) / 100) * a;
   h = l.heightPct != null ? (H * l.heightPct) / 100 : w / a;
   if (l.stretch && l.heightPct != null) {
     const m = l.maxStretch ?? 0.2, r = Math.min(1 + m, Math.max(1 - m, w / h / a));
     h = w / (a * r);
   }
-  const st: Record<string, string | number> = { position: "absolute", opacity: l.opacity, zIndex: l.zIndex, maxWidth: "none", width: w, height: h };
   const an = l.anchor, top = an.startsWith("top"), bottom = an.startsWith("bottom"), left = an.endsWith("left") || an === "left", right = an.endsWith("right") || an === "right";
-  if (top) st.top = flush.includes("top") ? -os : (H * l.offsetYPct) / 100; else if (bottom) st.bottom = flush.includes("bottom") ? -os : -(H * l.offsetYPct) / 100; else { st.top = "50%"; st.transform = "translateY(-50%)"; }
-  if (left) st.left = flush.includes("left") ? -os : (W * l.offsetXPct) / 100; else if (right) st.right = flush.includes("right") ? -os : -(W * l.offsetXPct) / 100; else st.left = (W - w) / 2;
-  if (an === "bottom" || an === "top") st.left = flush.includes("left") && l.widthMode === "screen" ? -os : (W - w) / 2 + (W * l.offsetXPct) / 100;
-  return st;
+  let y: number, x: number;
+  if (top) y = flush.includes("top") ? sy - os : sy + (H * l.offsetYPct) / 100;
+  else if (bottom) y = flush.includes("bottom") ? sy + H + os - h : sy + H - h + (H * l.offsetYPct) / 100;
+  else y = sy + (H - h) / 2;
+  if (left) x = flush.includes("left") ? sx - os : sx + (W * l.offsetXPct) / 100;
+  else if (right) x = flush.includes("right") ? sx + W + os - w : sx + W - w + (W * l.offsetXPct) / 100;
+  else x = flush.includes("left") && l.widthMode === "stage" ? sx - os : sx + (W - w) / 2 + (W * l.offsetXPct) / 100;
+  return { x, y, w, h };
+}
+
+/** CSS of one art layer inside a box whose origin is (0,0) and in which the stage starts at `stage.x/y` (the box reaches DECOR_OVERSCAN_PX beyond the stage). */
+export function artLayerStyle(l: DecorLayer, stage: DecorStage): Record<string, string | number> | null {
+  const r = computeDecorRect(l, stage);
+  return r && { position: "absolute", opacity: l.opacity, zIndex: l.zIndex, maxWidth: "none", left: r.x, top: r.y, width: r.w, height: r.h };
 }
 
 /** Clip of outfit `index`'s ART group inside the full-screen layer. The scroller sits `off` px below the layer's top and is `h` px tall (one outfit = h).

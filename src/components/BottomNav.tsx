@@ -22,7 +22,7 @@ const Icon = ({ tab }: { tab: Tab }) => (
 function BottomNav({ tab, onTab, searchOn, glass = false }: { tab: Tab; onTab: (t: Tab) => void; searchOn: boolean; glass?: false | "colorful" | "simple" }) {
   const reduced = useReducedMotion();
   return (
-    <nav aria-label="Main" className={`fixed inset-x-0 bottom-0 z-30 pb-[env(safe-area-inset-bottom)] ${glass ? "" : "border-t border-neutral-200 bg-white"}`} style={{ height: `calc(${NAV_PX}px + env(safe-area-inset-bottom))` }}>
+    <nav aria-label="Main" data-stage-bottom className={`fixed inset-x-0 bottom-0 z-30 pb-[env(safe-area-inset-bottom)] ${glass ? "" : "border-t border-neutral-200 bg-white"}`} style={{ height: `calc(${NAV_PX}px + env(safe-area-inset-bottom))` }}>
       {glass && <div aria-hidden className="absolute" style={{ ...glassPieceStyle(glass || "colorful"), left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: 2, bottom: "calc(env(safe-area-inset-bottom) + 2px)" }} />}
       <div className="relative mx-auto flex h-[49px] max-w-md" role="tablist" style={glass ? { paddingInline: STRIPE_BG.glass.marginPx + STRIPE_BG.glass.capsulePadPx } : undefined}>
         {navTabs(searchOn).map((t) => (
