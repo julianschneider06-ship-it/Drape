@@ -1,5 +1,5 @@
 // Seasonal decoration, pure logic (no React): which season an outfit gets, which part of the screen belongs to which outfit, and the setting.
-import { SEASON_DECOR, type DecorAnchor, type DecorLayer } from "@/config/season-decor";
+import { SEASON_DECOR, DECOR_OVERSCAN_PX, type DecorAnchor, type DecorLayer } from "@/config/season-decor";
 import type { OutfitTags } from "@/outfits/tags";
 
 export type DecorSeason = "spring" | "summer" | "autumn" | "winter";
@@ -36,14 +36,23 @@ export const effectiveSeason = (link: string | null, localOn: boolean): boolean 
 export type DecorMode = "art" | "pixel";
 export const parseDecorMode = (link: string | null | undefined): DecorMode => (link === "pixel" ? "pixel" : "art");
 
-/** CSS box of one art layer inside the full-screen decor layer (top/bottom/left/right = the real screen edges, no safe-area inset). */
-export function artLayerStyle(l: DecorLayer): Record<string, string | number> {
-  const a: DecorAnchor = l.anchor, st: Record<string, string | number> = { position: "absolute", opacity: l.opacity, zIndex: l.zIndex, maxWidth: "none" };
-  if (l.widthPct != null) { st.width = `${l.widthPct}%`; st.height = "auto"; } else { st.height = `${l.heightPct ?? 0}%`; st.width = "auto"; }
-  const top = a.startsWith("top"), bottom = a.startsWith("bottom"), left = a.endsWith("left") || a === "left", right = a.endsWith("right") || a === "right";
-  const ox = `${left ? l.offsetXPct : right ? -l.offsetXPct : l.offsetXPct}%`, oy = `${top ? l.offsetYPct : -l.offsetYPct}%`;
-  if (top) st.top = oy; else if (bottom) st.bottom = oy; else { st.top = "50%"; st.transform = "translateY(-50%)"; }
-  if (left) st.left = ox; else if (right) st.right = ox; else { st.left = "50%"; st.transform = `${st.transform ?? ""} translateX(-50%)`.trim(); }
+/** Pixel box of one art layer inside the full-screen decor layer of W x H px (the real screen edges). Flush sides sit DECOR_OVERSCAN_PX beyond the edge, no safe area.
+ *  Stretched layers keep their distortion within +/- maxStretch of the natural aspect (the height gives way). null = layer not measured yet. */
+export function artLayerStyle(l: DecorLayer, W: number, H: number): Record<string, string | number> | null {
+  if (!(W > 0 && H > 0)) return null;
+  const os = DECOR_OVERSCAN_PX, flush = l.flush ?? [], a = l.aspect;
+  let w: number, h: number;
+  if (l.widthMode === "screen") w = W + 2 * os; else if (l.widthPct != null) w = (W * l.widthPct) / 100; else w = ((H * (l.heightPct ?? 0)) / 100) * a;
+  h = l.heightPct != null ? (H * l.heightPct) / 100 : w / a;
+  if (l.stretch && l.heightPct != null) {
+    const m = l.maxStretch ?? 0.2, r = Math.min(1 + m, Math.max(1 - m, w / h / a));
+    h = w / (a * r);
+  }
+  const st: Record<string, string | number> = { position: "absolute", opacity: l.opacity, zIndex: l.zIndex, maxWidth: "none", width: w, height: h };
+  const an = l.anchor, top = an.startsWith("top"), bottom = an.startsWith("bottom"), left = an.endsWith("left") || an === "left", right = an.endsWith("right") || an === "right";
+  if (top) st.top = flush.includes("top") ? -os : (H * l.offsetYPct) / 100; else if (bottom) st.bottom = flush.includes("bottom") ? -os : -(H * l.offsetYPct) / 100; else { st.top = "50%"; st.transform = "translateY(-50%)"; }
+  if (left) st.left = flush.includes("left") ? -os : (W * l.offsetXPct) / 100; else if (right) st.right = flush.includes("right") ? -os : -(W * l.offsetXPct) / 100; else st.left = (W - w) / 2;
+  if (an === "bottom" || an === "top") st.left = flush.includes("left") && l.widthMode === "screen" ? -os : (W - w) / 2 + (W * l.offsetXPct) / 100;
   return st;
 }
 

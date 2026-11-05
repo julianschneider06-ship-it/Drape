@@ -5,7 +5,7 @@ Method: (1) flood-fill from the image borders over connected near-white pixels (
 pixels (foam, snowflake cores, daisies) are never touched because they are not connected to the border through near-white. (2) Alpha ramp on the
 pixels next to the background (BAND px): alpha = smoothstep((distance to white - RAMP_LO) / (RAMP_HI - RAMP_LO)). (3) Un-matte against white:
 c = (c - (1-a)*255) / a, clamped, so no white halo shows on coloured backgrounds. (4) trim, resize to MAX_EDGE, WebP with alpha.
-Post steps (Prompt 83): winter_clouds is split into winter_clouds (the big cloud shapes) and winter_flakes (everything small: snowflakes + dots) so the flakes get their
+Post steps (Prompt 83/84): winter_clouds is split into winter_clouds (the big cloud shapes) and winter_flakes (everything small: snowflakes + dots) so the flakes get their
 own, smaller scale in the config; summer_wave gets a soft alpha fade over its left WAVE_FADE share so it has no vertical left edge on screen."""
 import sys
 import numpy as np
@@ -14,7 +14,8 @@ from PIL import Image, ImageDraw, ImageFilter
 SRC = "docs/reference/season-decor-source"
 OUT = "public/season-decor"
 MAX_EDGE = 1400
-WAVE_FADE = 0.14      # share of the wave's width (from the left) that fades from transparent to opaque
+WAVE_FADE = 0.0       # (Prompt 84: no left fade any more, the wave is stretched to the full screen width and must touch the left edge)
+TREE_TOP_FADE = 0.10  # share of the tree's height (from the top) that fades out: the illustration is cut at its top edge, at 60% screen height that would be a straight line
 CLOUD_MIN_PX = 20000  # winter: connected shapes (after closing small gaps) with at least this many px are clouds, smaller ones flakes
 # tol: border flood-fill tolerance (max channel distance to white); lo/hi: alpha ramp on the edge band (distance to white); band: edge band width in px
 SPRITES = {
@@ -103,6 +104,12 @@ def fade_left(img, share):
     q[..., 3] *= ramp[None, :]
     return Image.fromarray(q.astype(np.uint8), "RGBA")
 
+def fade_top(img, share):
+    q = np.array(img).astype(float); h = q.shape[0]; k = max(1, int(h * share))
+    ramp = np.clip(np.arange(h) / k, 0, 1); ramp = ramp * ramp * (3 - 2 * ramp)
+    q[..., 3] *= ramp[:, None]
+    return Image.fromarray(q.astype(np.uint8), "RGBA")
+
 def main():
     prev = sys.argv[sys.argv.index("--preview") + 1] if "--preview" in sys.argv else None
     for name, o in SPRITES.items():
@@ -115,7 +122,8 @@ def main():
             s = MAX_EDGE / max(img.size); img = img.resize((round(img.width * s), round(img.height * s)), Image.LANCZOS)
         parts = {name: img}
         if name == "winter_clouds": parts = dict(zip(("winter_clouds", "winter_flakes"), split_winter(img)))
-        if name == "summer_wave": parts = {name: fade_left(img, WAVE_FADE)}
+        if name == "summer_wave" and WAVE_FADE > 0: parts = {name: fade_left(img, WAVE_FADE)}
+        if name == "autumn_tree": parts = {name: fade_top(img, TREE_TOP_FADE)}
         for nm, im in parts.items():
             im.save(f"{OUT}/{nm}.webp", "WEBP", quality=88, alpha_quality=95, method=6)
             print(nm, im.size)

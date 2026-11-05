@@ -37,8 +37,8 @@ function Spots({ kind, width, height }: { kind: "autumn" | "winter"; width: numb
 
 /** painted illustrations (default): plain img layers, absolute inside the group, so no layout shift; all sprites are preloaded once. */
 const ART_SRCS = Object.values(DECOR_ART).flat().map((l) => l.src);
-function ArtLayers({ season }: { season: DecorSeason }) {
-  return <>{DECOR_ART[season].map((l) => /* eslint-disable-next-line @next/next/no-img-element */ <img key={l.src} src={l.src} alt="" decoding="async" draggable={false} style={artLayerStyle(l)} />)}</>;
+function ArtLayers({ season, w, h }: { season: DecorSeason; w: number; h: number }) {
+  return <>{DECOR_ART[season].map((l) => { const st = artLayerStyle(l, w, h); return st && /* eslint-disable-next-line @next/next/no-img-element */ <img key={l.src} src={l.src} alt="" decoding="async" draggable={false} style={{ ...st, objectFit: "fill" }} />; })}</>;
 }
 
 const Art = ({ season, width, height, sun, safeTop }: { season: DecorSeason; width: number; height: number; sun: boolean; safeTop: boolean }) =>
@@ -51,6 +51,7 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront, art
   const root = useRef<HTMLDivElement>(null), artBox = useRef<HTMLDivElement>(null), geo = useRef({ off: 0, layerH: 0 });
   const [win, setWin] = useState<number[]>([]);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const [artSize, setArtSize] = useState({ w: 0, h: 0 });
   const mode = useMemo(() => (typeof window === "undefined" ? "art" : parseDecorMode(new URLSearchParams(window.location.search).get("decor"))), []);
   useEffect(() => { if (mode === "art") ART_SRCS.forEach((src) => { const im = new Image(); im.decoding = "async"; im.src = src; }); }, [mode]);
   const winKey = useRef(""), count = Math.max(seasons?.length ?? 0, minis?.specs.length ?? 0);
@@ -72,6 +73,7 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront, art
   const measure = () => {   // where the scroller sits inside the full-screen art layer (only on resize, never per scroll frame)
     const sc = scroller.current, box = artBox.current; if (!sc || !box) return;
     geo.current = { off: sc.getBoundingClientRect().top - box.getBoundingClientRect().top, layerH: box.clientHeight };
+    setArtSize((p) => (p.w === box.clientWidth && p.h === box.clientHeight ? p : { w: box.clientWidth, h: box.clientHeight }));
   };
   const sync = () => {
     const sc = scroller.current; if (!sc) return;
@@ -104,7 +106,7 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront, art
   return (
     <div ref={root} aria-hidden style={{ display: "contents" }}>
       {mode === "art" && <div ref={artBox} className={`pointer-events-none overflow-hidden ${artClassName ?? className}`} style={{ ...(artClassName ? artStyle : style), zIndex: LAYER_Z.decor }}>
-        {shown.filter((i) => seasons?.[i]).map((i) => <div key={`${i}-${seasons?.[i]}`} data-i={i} className="sd-art absolute inset-0"><ArtLayers season={seasons![i]!} /></div>)}
+        {shown.filter((i) => seasons?.[i]).map((i) => <div key={`${i}-${seasons?.[i]}`} data-i={i} className="sd-art absolute inset-0"><ArtLayers season={seasons![i]!} w={artSize.w} h={artSize.h} /></div>)}
       </div>}
       <div className={`pointer-events-none ${className}`} style={{ ...style, zIndex: LAYER_Z.figure }}>{shown.map((i) => group(i, true))}</div>
     </div>

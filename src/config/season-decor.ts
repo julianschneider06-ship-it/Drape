@@ -42,16 +42,28 @@ export const LAYER_Z = { stripe: 0, decor: 5, figure: 10, products: 20, chrome: 
 // sprite's aspect). offsetXPct / offsetYPct move the sprite from its anchor, in % of the screen: positive = right / down for left- and top-anchored sprites,
 // for right- / bottom-anchored ones positive = further out (bleeds off that edge); negative = back inside.
 export type DecorAnchor = "top-left" | "top" | "top-right" | "left" | "right" | "bottom-left" | "bottom" | "bottom-right";
-export type DecorLayer = { src: string; anchor: DecorAnchor; widthPct?: number; heightPct?: number; offsetXPct: number; offsetYPct: number; opacity: number; zIndex: number };
+export type DecorSide = "top" | "bottom" | "left" | "right";
+/** One art layer. BORDER RULE (Prompt 84): sprites whose content runs up to an image border must coincide with the real screen edge on THAT side: list those sides in `flush`;
+ *  a flush side is placed `DECOR_OVERSCAN_PX` beyond the screen edge (no margin, no safe area, no rounding hairline), its offset is ignored. Free sides use offsetXPct / offsetYPct
+ *  (% of the screen; for right- / bottom-anchored sprites positive = further out). SIZE: widthMode "screen" = full screen width (+ overscan), "pct" = widthPct of the screen
+ *  width, "auto" = follows the height. Height = heightPct of the screen height, or (no heightPct) follows the width. `aspect` = natural width / height of the sprite file (a test checks it).
+ *  `stretch: true` allows non-uniform scaling when width and height are both given; the distortion is limited to +/- `maxStretch` (0.4 = 40 %) of the natural aspect, the height
+ *  is adjusted if the screen would push it beyond that. Without `stretch` the aspect is kept (one size dimension only). */
+export type DecorLayer = {
+  src: string; aspect: number; anchor: DecorAnchor; flush?: DecorSide[];
+  widthMode?: "screen" | "pct" | "auto"; widthPct?: number; heightPct?: number; stretch?: boolean; maxStretch?: number;
+  offsetXPct: number; offsetYPct: number; opacity: number; zIndex: number;
+};
+export const DECOR_OVERSCAN_PX = 1;
 export const DECOR_ART: Record<"spring" | "summer" | "autumn" | "winter", DecorLayer[]> = {
   summer: [
-    { src: "/season-decor/summer_sun.webp", anchor: "top-left", widthPct: 30, offsetXPct: -4, offsetYPct: 18, opacity: 1, zIndex: 2 },   // below the icon row, left edge slightly cropped
-    { src: "/season-decor/summer_wave.webp", anchor: "bottom-right", widthPct: 70, offsetXPct: 2, offsetYPct: 2, opacity: 1, zIndex: 1 },   // bleeds off right + bottom; left side fades out in the sprite
+    { src: "/season-decor/summer_sun.webp", aspect: 1028 / 1024, anchor: "top-right", widthMode: "pct", widthPct: 30, offsetXPct: 0, offsetYPct: 9, opacity: 1, zIndex: 2 },   // free-standing: fully visible, top edge at 9 % of the screen height, clear of the icon row (top-left)
+    { src: "/season-decor/summer_wave.webp", aspect: 1400 / 467, anchor: "bottom", flush: ["bottom", "left", "right"], widthMode: "screen", heightPct: 14, stretch: true, maxStretch: 0.4, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 },
   ],
-  spring: [{ src: "/season-decor/spring_meadow.webp", anchor: "bottom", widthPct: 100, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],   // full width, flush bottom (about 12% of the height on a phone)
-  autumn: [{ src: "/season-decor/autumn_tree.webp", anchor: "bottom-left", heightPct: 60, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],
+  spring: [{ src: "/season-decor/spring_meadow.webp", aspect: 1400 / 341, anchor: "bottom", flush: ["bottom", "left", "right"], widthMode: "screen", heightPct: 10, stretch: true, maxStretch: 0.4, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],
+  autumn: [{ src: "/season-decor/autumn_tree.webp", aspect: 669 / 1400, anchor: "bottom-left", flush: ["bottom", "left"], widthMode: "auto", heightPct: 60, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 }],   // the sprite fades out at its top edge (build script), so there is no straight cut at 60 % height
   winter: [
-    { src: "/season-decor/winter_clouds.webp", anchor: "top", heightPct: 14, offsetXPct: 0, offsetYPct: -1, opacity: 1, zIndex: 1 },   // wider than the screen on a phone, so it bleeds off the sides and the top
-    { src: "/season-decor/winter_flakes.webp", anchor: "top-right", widthPct: 62, offsetXPct: 0, offsetYPct: 12, opacity: 1, zIndex: 2 },   // own, small scale: biggest flake about 6% of the screen width; right side keeps the icon row clear
+    { src: "/season-decor/winter_clouds.webp", aspect: 1024 / 221, anchor: "top", flush: ["top", "left", "right"], widthMode: "screen", heightPct: 14, stretch: true, maxStretch: 0.4, offsetXPct: 0, offsetYPct: 0, opacity: 1, zIndex: 1 },
+    { src: "/season-decor/winter_flakes.webp", aspect: 991 / 346, anchor: "top-right", widthMode: "pct", widthPct: 62, offsetXPct: 0, offsetYPct: 12, opacity: 1, zIndex: 2 },   // small flakes, right side keeps the icon row clear
   ],
 };
