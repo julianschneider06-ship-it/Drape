@@ -7,6 +7,8 @@ const shopify = (slug: string, name: string, baseUrl: string, currency: string, 
 // Flagged shops (fewer than 30% of their products usable after the quality gates: model photos / not suited): kept in the list, but not ingested again.
 const flagged = (c: SourceConfig): SourceConfig => ({ ...c, active: false });
 
+const SKIP_HYPE = "\\b(kids?|kid's|youth|toddler|baby|boys?|girls?|gift|stickers?|bundles?|surfboards?|boards?|bodyboards?|candle|poster|mug|keyring)\\b";
+
 export const SOURCES: SourceConfig[] = [
   shopify("taylorstitch", "Taylor Stitch", "https://taylorstitch.com", "USD", { defaultGender: "men" , max: 800 }),
   shopify("fashionnova", "Fashion Nova", "https://fashionnova.com", "USD", { defaultGender: "women", maxPages: 2 }),
@@ -143,4 +145,16 @@ export const SOURCES: SourceConfig[] = [
   { slug: "tooledup", name: "Tooled Up", kind: "awin", baseUrl: "https://www.tooled-up.com", options: { merchant: "Tooled Up", currency: "GBP", country: "GB", trustRrp: false } },
   // Bennimarceau (Nike + adidas footwear, 2026-10-23, same brands feed): GBP, market GB, no daily stock refresh (kind awin).
   { slug: "bennimarceau", name: "Bennimarceau", kind: "awin", baseUrl: "https://bennimarceau.com", options: { merchant: "Bennimarceau.com", currency: "GBP", country: "GB", trustRrp: false } },
+  // --- Hype streetwear round (Prompt 88): caps from docs/shop-probe-round3.md; in-stock only, colour variants once, no kids / non-wearables.
+  shopify("prohibited", "Prohibited", "https://www.prohibited.shop", "EUR", { brand: "Prohibited", defaultGender: "men", max: 170, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE, catCap: { tops: 0.5 } }),
+  shopify("homie", "HoMie", "https://homie.com.au", "AUD", { brand: "HoMie", max: 130, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE, catCap: { tops: 0.55 } }),
+  shopify("westernaloha", "Western Aloha", "https://westernaloha.com", "USD", { brand: "Western Aloha", defaultGender: "men", max: 80, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE }),
+  shopify("bolzr", "Bolzr", "https://bolzr.store", "EUR", { brand: "Bolzr", defaultGender: "men", max: 50, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE }),
+  shopify("blackcraftcult", "Blackcraft Cult", "https://blackcraftcult.com", "USD", { brand: "Blackcraft Cult", max: 60, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE }),
+  shopify("spiraldirect", "Spiral Direct", "https://spiraldirect.com", "GBP", { brand: "Spiral Direct", max: 110, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE, maxPages: 12, catCap: { tops: 0.75 } }),
+  shopify("trendtvision", "Trendt Vision", "https://trendtvision.com", "EUR", { brand: "Trendt Vision", max: 80, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE }),
+  shopify("lonelykidsclub", "Lonely Kids Club", "https://lonelykidsclub.com", "AUD", { brand: "Lonely Kids Club", max: 110, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE, catCap: { tops: 0.4 } }),
+  shopify("stockholmsurfboardclub", "Stockholm Surfboard Club", "https://www.stockholmsurfboardclub.com", "EUR", { brand: "Stockholm Surfboard Club", max: 50, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE }),
+  shopify("kimesranch", "Kimes Ranch", "https://kimesranch.com", "USD", { brand: "Kimes Ranch", max: 120, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE, catCap: { tops: 0.5 } }),
+  shopify("fugastudios", "Fuga Studios", "https://fuga-studios.com", "EUR", { brand: "Fuga Studios", max: 40, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE }),
 ];

@@ -27,7 +27,10 @@ async function run(slug: string) {
   const keptInFeed: number[] = Array(feeds).fill(0);
   const dist: Record<string, number> = {};
   // Optional spread / stock options of a source: familyCap = max share of one accessory family, inStockOnly = skip sold-out products.
-  const so = (cfg.options ?? {}) as { familyCap?: number; inStockOnly?: boolean };
+  const so = (cfg.options ?? {}) as { familyCap?: number; inStockOnly?: boolean; skipWords?: string; catCap?: Record<string, number>; uniqueName?: boolean };
+  const skipRx = so.skipWords ? new RegExp(so.skipWords, "i") : null; // product types / titles to leave out (kids, boards, bundles, ...)
+  const catKept: Record<string, number> = {};
+  const seenNames = new Set<string>(); // uniqueName: colour variants of one item count once
   const famKept: Record<string, number> = {};
   let cursor: Cursor | null = null;
   let sourceId = 0, runId = 0;
@@ -56,6 +59,9 @@ async function run(slug: string) {
         const n = adapter.normalize(raw);
         if (!n || n.category === "other" || n.gender === "kids") { stats.skipped++; continue; }
         if (so.inStockOnly && n.availability !== "in_stock") { stats.skipped++; continue; }
+        if (skipRx && skipRx.test(`${n.name} ${n.subcategory ?? ""}`)) { stats.skipped++; continue; }
+        if (so.uniqueName) { const nk = n.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); if (seenNames.has(nk)) { stats.skipped++; continue; } seenNames.add(nk); }
+        if (so.catCap) { const c = so.catCap[n.category]; if (c != null && (catKept[n.category] ?? 0) >= Math.ceil(perFeed * c)) { stats.skipped++; continue; } catKept[n.category] = (catKept[n.category] ?? 0) + 1; }
         if (so.familyCap) { const f = accessoryFamily(n.subcategory, n.name); if ((famKept[f] ?? 0) >= Math.ceil(perFeed * so.familyCap)) { stats.skipped++; continue; } famKept[f] = (famKept[f] ?? 0) + 1; }
         const k = `${n.gender ?? "none"}/${n.category}`;
         dist[k] = (dist[k] ?? 0) + 1;
