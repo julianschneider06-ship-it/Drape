@@ -88,4 +88,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 84: season decor art flush with the real screen edges (flush sides + overscan, stretch limits, sun top-right, tree top fade, wave left fade removed); last commit 9ccc1bf
 - Prompt 85: season decor anchored to the stage between header and tab bar (computeDecorRect, stage measured at runtime, ?decordebug=1 overlay, stage tests); last commit 4e13377
 - Prompt 86: autumn tree fixed (full stage height, flush top/bottom/left, top fade removed, test guards sprite); last commit 73ed042
-- Prompt 87: probe round 3 of hype streetwear shops (no import, no spend; top 10 + caps in docs/shop-probe-round3.md); last commit PENDING
+- Prompt 87: probe round 3 of hype streetwear shops (no import, no spend; top 10 + caps in docs/shop-probe-round3.md); last commit 0f1e3c5
