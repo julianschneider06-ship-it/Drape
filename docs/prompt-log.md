@@ -89,3 +89,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 85: season decor anchored to the stage between header and tab bar (computeDecorRect, stage measured at runtime, ?decordebug=1 overlay, stage tests); last commit 4e13377
 - Prompt 86: autumn tree fixed (full stage height, flush top/bottom/left, top fade removed, test guards sprite); last commit 73ed042
 - Prompt 87: probe round 3 of hype streetwear shops (no import, no spend; top 10 + caps in docs/shop-probe-round3.md); last commit 0f1e3c5
+- Prompt 88: imported 11 hype streetwear shops (975 products, 791 feed-ready), ingest options skipWords/catCap/uniqueName; last commit on main: see git log.
