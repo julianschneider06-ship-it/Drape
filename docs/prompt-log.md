@@ -92,3 +92,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 88: imported 11 hype streetwear shops (975 products, 791 feed-ready), ingest options skipWords/catCap/uniqueName; last commit on main: see git log.
 - Prompt 89: read-only Awin advertiser join list (22 advertisers, top 12 by clothing in docs/awin-advertisers-to-join.md); last commit on main: see git log.
 - Prompt 90: imported Viaduct Clothing + T.LUXY from the Awin feed (1000 products, 645 image-check ok), `awin-select` wide groups, classify download timeout; last commit on main: see git log.
+- Prompt 91: manual feed-based stock/price refresh for the 5 Awin shops (`scripts/refresh-awin-stock.ts`, db function `awin_refresh`, docs/awin-stock-refresh.md), first apply run done; last commit on main: see git log.
