@@ -94,3 +94,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 90: imported Viaduct Clothing + T.LUXY from the Awin feed (1000 products, 645 image-check ok), `awin-select` wide groups, classify download timeout; last commit on main: see git log.
 - Prompt 91: manual feed-based stock/price refresh for the 5 Awin shops (`scripts/refresh-awin-stock.ts`, db function `awin_refresh`, docs/awin-stock-refresh.md), first apply run done; last commit on main: see git log.
 - Prompt 92: Seasonal decoration, Outfit preview and Stripe background now also work in Wishlist > Generate Outfits and My Outfits (shared WishlistBackdrop, Wishlist stage, glass header/bar while Stripe is on); last commit on main: see git log.
+- Prompt 93: read-only analysis of season x style-family combinations for full-screen backgrounds (docs/background-combos.md, scripts/sim-background-combos.ts); last commit on main: see git log.
