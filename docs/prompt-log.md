@@ -91,3 +91,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 87: probe round 3 of hype streetwear shops (no import, no spend; top 10 + caps in docs/shop-probe-round3.md); last commit 0f1e3c5
 - Prompt 88: imported 11 hype streetwear shops (975 products, 791 feed-ready), ingest options skipWords/catCap/uniqueName; last commit on main: see git log.
 - Prompt 89: read-only Awin advertiser join list (22 advertisers, top 12 by clothing in docs/awin-advertisers-to-join.md); last commit on main: see git log.
+- Prompt 90: imported Viaduct Clothing + T.LUXY from the Awin feed (1000 products, 645 image-check ok), `awin-select` wide groups, classify download timeout; last commit on main: see git log.

@@ -145,6 +145,9 @@ export const SOURCES: SourceConfig[] = [
   { slug: "tooledup", name: "Tooled Up", kind: "awin", baseUrl: "https://www.tooled-up.com", options: { merchant: "Tooled Up", currency: "GBP", country: "GB", trustRrp: false } },
   // Bennimarceau (Nike + adidas footwear, 2026-10-23, same brands feed): GBP, market GB, no daily stock refresh (kind awin).
   { slug: "bennimarceau", name: "Bennimarceau", kind: "awin", baseUrl: "https://bennimarceau.com", options: { merchant: "Bennimarceau.com", currency: "GBP", country: "GB", trustRrp: false } },
+  // Viaduct Clothing (adidas Originals, New Balance, Champion ...) and T.LUXY (luxury, EUR, Italy), 2026-11-09, first Awin feed; no daily stock refresh (kind awin).
+  { slug: "viaduct", name: "Viaduct Clothing", kind: "awin", baseUrl: "https://viaductclothing.co.uk", options: { merchant: "Viaduct Clothing", currency: "GBP", country: "GB", trustRrp: true } },
+  { slug: "tluxy", name: "T.LUXY", kind: "awin", baseUrl: "https://tluxyit.myshopify.com", options: { merchant: "T.LUXY", currency: "EUR", country: "IT", trustRrp: false } },
   // --- Hype streetwear round (Prompt 88): caps from docs/shop-probe-round3.md; in-stock only, colour variants once, no kids / non-wearables.
   shopify("prohibited", "Prohibited", "https://www.prohibited.shop", "EUR", { brand: "Prohibited", defaultGender: "men", max: 170, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE, catCap: { tops: 0.5 } }),
   shopify("homie", "HoMie", "https://homie.com.au", "AUD", { brand: "HoMie", max: 130, inStockOnly: true, uniqueName: true, skipWords: SKIP_HYPE, catCap: { tops: 0.55 } }),

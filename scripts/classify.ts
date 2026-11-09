@@ -55,8 +55,8 @@ async function gemini(path: string, body: unknown) {
 
 async function download(url: string) {
   const small = url + (url.includes("?") ? "&" : "?") + "width=1024"; // CDN resize: fewer bytes, same product
-  let res = await fetch(small).catch(() => null);
-  if (!res?.ok) res = await fetch(url);
+  let res = await fetch(small, { signal: AbortSignal.timeout(30_000) }).catch(() => null);
+  if (!res?.ok) res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   if (!res.ok) throw new Error(`image ${res.status}`);
   return { mime: res.headers.get("content-type")?.split(";")[0] ?? "image/jpeg", b64: Buffer.from(await res.arrayBuffer()).toString("base64") };
 }
