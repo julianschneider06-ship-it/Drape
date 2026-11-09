@@ -12,6 +12,10 @@ import type { SlotName } from "@/lib/layout/engine";
 import LikesView from "./LikesView";
 import GenerateOutfits from "./GenerateOutfits";
 import MyOutfits from "./MyOutfits";
+import { useStripeMode } from "@/lib/client/stripe-bg";
+import { glassPieceStyle } from "@/lib/stripe-bg";
+import { STRIPE_BG } from "@/config/stripe-bg";
+import { LAYER_Z } from "@/config/season-decor";
 
 export type WishTab = "products" | "outfits" | "mine";
 const TABS: { id: WishTab; label: string }[] = [{ id: "products", label: "Products" }, { id: "outfits", label: "Generate Outfits" }, { id: "mine", label: "My Outfits" }];
@@ -22,13 +26,16 @@ export default function WishlistView({ searchOn, icons, customize, gender, liked
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const reduced = useReducedMotion(), present = useIsPresent();
+  const stripeMode = useStripeMode(), stripeBg = stripeMode !== "off" && tab !== "products";   // Stripe background in Generate Outfits / My Outfits: transparent view, glass header (like For You); Products stays white
   const [shuffle, setShuffle] = useState(0);
   const [entryIds] = useState(() => [...liked]);   // likes as of entering the Wishlist: soft-unliked products are only dropped from new batches after the next entry
   return (
-    <m.div className={`fixed inset-x-0 top-0 z-30 flex flex-col bg-white ${present ? "" : "pointer-events-none"}`} style={{ bottom: "var(--nav-h)" }}
+    <m.div className={`fixed inset-x-0 top-0 z-30 flex flex-col ${stripeBg ? "" : "bg-white"} ${present ? "" : "pointer-events-none"}`} style={{ bottom: "var(--nav-h)" }}
       initial={{ opacity: 0, y: reduced ? 0 : MENU.tabShiftPx }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 0 }}
       transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn), ease: "easeOut" }}>
-      <div className="shrink-0 bg-white px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      <div data-stage-wishlist-top className={`relative shrink-0 ${stripeBg ? "pb-2" : "bg-white px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]"}`}
+        style={stripeBg ? { zIndex: LAYER_Z.chrome, paddingTop: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : { zIndex: LAYER_Z.chrome }}>
+        <div className={stripeBg ? "px-3 pb-1" : "contents"} style={stripeBg ? { ...glassPieceStyle(stripeMode), marginLeft: STRIPE_BG.glass.marginPx, marginRight: STRIPE_BG.glass.marginPx, paddingLeft: STRIPE_BG.glass.capsulePadPx, paddingRight: STRIPE_BG.glass.capsulePadPx } : undefined}>
         <div className="relative flex items-center justify-center py-3">
           <h1 className="text-base font-semibold">Wishlist</h1>
           <AnimatePresence>
@@ -40,6 +47,7 @@ export default function WishlistView({ searchOn, icons, customize, gender, liked
         </div>
         <div className="flex justify-center">
           <Segmented id="wishlist" label="Wishlist view" compact options={TABS} value={tab} onChange={onTab} />
+        </div>
         </div>
       </div>
       <div className="relative min-h-0 flex-1">
@@ -54,8 +62,8 @@ export default function WishlistView({ searchOn, icons, customize, gender, liked
         </AnimatePresence>
         <AnimatePresence>
           {tab === "mine" && (
-            <m.div key="mine" className="absolute inset-0 bg-white" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn) }}>
-              <MyOutfits customize={customize === true} gender={gender} liked={liked} onOpenProduct={onOpenProduct} />
+            <m.div key="mine" className={`absolute inset-0 ${stripeBg ? "" : "bg-white"}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn) }}>
+              <MyOutfits searchOn={searchOn} customize={customize === true} gender={gender} liked={liked} onOpenProduct={onOpenProduct} />
             </m.div>
           )}
         </AnimatePresence>

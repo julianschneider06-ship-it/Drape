@@ -1,15 +1,11 @@
 "use client";
 import * as m from "motion/react-m";
-import { WishlistBackground } from "@/components/WishlistBackground";
+import WishlistBackdrop from "./WishlistBackdrop";
+import { LAYER_Z } from "@/config/season-decor";
 import { MENU } from "@/config/motion";
 import { useReducedMotion } from "@/lib/motion";
 import { fadeSlide } from "@/lib/menu-motion";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import SeasonDecor from "./SeasonDecor";
-import { dominantSeason } from "@/lib/season-decor";
-import { useSeasonDecor } from "@/lib/client/season-decor";
-import { useMiniPreview } from "@/lib/client/mannequin";
-import { mannequinSpec } from "@/lib/mannequin";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { FeedCard, FeedOutfit } from "@/lib/types";
 import type { SlotName } from "@/lib/layout/engine";
 import { canvasSize } from "@/lib/layout/engine";
@@ -32,7 +28,6 @@ function GenerateOutfits({ searchOn, icons, gender, likedIds, liked, shuffleKey,
 }) {
   const root = useRef<HTMLDivElement>(null), tail = useRef<HTMLElement>(null);
   const reduced = useReducedMotion();
-  const seasonOn = useSeasonDecor(), miniOn = useMiniPreview();
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
   const [items, setItems] = useState<FeedOutfit[]>([]);
   const [status, setStatus] = useState<Status>("loading");
@@ -77,16 +72,13 @@ function GenerateOutfits({ searchOn, icons, gender, likedIds, liked, shuffleKey,
     io.observe(el); return () => io.disconnect();
   }, [status, more, items.length, load]);
 
-  const seasons = useMemo(() => items.map((o) => dominantSeason(o.tags)), [items]);
-  const minis = useMemo(() => (miniOn ? { specs: items.map((o) => mannequinSpec(o, gender)), searchOn } : null), [miniOn, items, searchOn, gender]);
   const dimCache = useRef<{ liked: ReadonlySet<number>; m: Map<FeedOutfit, (slot: SlotName) => boolean> }>({ liked, m: new Map() });   // one stable callback per outfit and liked set (the canvas re-checks sale labels when it changes)
   if (dimCache.current.liked !== liked) dimCache.current = { liked, m: new Map() };
   const dimOf = (o: FeedOutfit) => { const c = dimCache.current; let f = c.m.get(o); if (!f) { f = dimFor(o, liked); c.m.set(o, f); } return f; };
   return (
     <>
-    <WishlistBackground />
-    {(seasonOn || miniOn) && <SeasonDecor scroller={root} seasons={seasonOn ? seasons : null} minis={minis} className="absolute inset-0" />}
-    <div ref={root} className="no-scrollbar absolute inset-0 snap-y snap-mandatory overflow-y-scroll overscroll-y-contain">
+    <WishlistBackdrop scroller={root} outfits={items} gender={gender} searchOn={searchOn} />
+    <div ref={root} className="no-scrollbar absolute inset-0 snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ zIndex: LAYER_Z.products }}>
       {status === "empty" && !items.length && (
         <m.section className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center" {...fadeSlide(reduced, MENU.hintShiftPx)}>
           <p className="text-sm text-neutral-500">{likedIds.length || run.current.ids.length ? "No outfits could be built from your wishlist yet." : "Like some pieces to generate outfits"}</p>

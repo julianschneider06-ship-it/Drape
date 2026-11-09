@@ -37,6 +37,11 @@ export type DecorMode = "art" | "pixel";
 export const parseDecorMode = (link: string | null | undefined): DecorMode => (link === "pixel" ? "pixel" : "art");
 
 export type DecorStage = { x: number; y: number; w: number; h: number };
+/** The stage from the measured bars: from the header's bottom edge (0 when there is no header) to the tab bar's top edge (viewport bottom when there is no bar), full width. Same for every view. */
+export function stageFromRects(top: { bottom: number } | null, bar: { top: number } | null, vw: number, vh: number): DecorStage {
+  const y0 = top ? top.bottom : 0, y1 = bar ? bar.top : vh;
+  return { x: 0, y: y0, w: vw, h: Math.max(0, y1 - y0) };
+}
 export type DecorRect = { x: number; y: number; w: number; h: number };
 
 /** Pixel rectangle of one art layer for a STAGE rectangle (the outfit area between the header's bottom edge and the tab bar's top edge). Same coordinate system as `stage`.

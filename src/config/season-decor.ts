@@ -33,6 +33,14 @@ export const SEASON_DECOR = {
 
 // LAYER ORDER (back to front): page / stripe background < seasonal decoration < outfit preview figure < product images < header, tab bar, action rail.
 // Named z-index constants; SeasonDecor, Feed and the layer test use them. The decoration is BACKGROUND: it sits behind the figure and behind every product.
+// STAGE SOURCES: which elements bound the stage. For You = its header + the tab bar; Wishlist (Generate Outfits, My Outfits) = the whole Wishlist header block
+// (title row + Products | Generate Outfits | My Outfits switch) + the tab bar. Selectors only, the geometry is the same function (`stageFromRects`).
+export const STAGE_SOURCES = {
+  feed: { top: "[data-stage-top]", bottom: "[data-stage-bottom]" },
+  wishlist: { top: "[data-stage-wishlist-top]", bottom: "[data-stage-bottom]" },
+} as const;
+export type StageSource = keyof typeof STAGE_SOURCES;
+
 export const LAYER_Z = { stripe: 0, decor: 5, figure: 10, products: 20, chrome: 30 } as const;
 
 // ART MODE (default since Prompt 82: illustrations): painted sprites instead of the pixel art above (kept as `?decor=pixel`). Files in public/season-decor/, made by

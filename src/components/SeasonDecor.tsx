@@ -1,8 +1,8 @@
 "use client";
 import { viewHeight } from "@/lib/view-height";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { SEASON_DECOR as C, DECOR_ART, DECOR_OVERSCAN_PX, LAYER_Z } from "@/config/season-decor";
-import { artClip, artLayerStyle, decorClip, decorWindow, parseDecorMode, type DecorSeason, type DecorStage } from "@/lib/season-decor";
+import { SEASON_DECOR as C, DECOR_ART, DECOR_OVERSCAN_PX, LAYER_Z, STAGE_SOURCES, type StageSource } from "@/config/season-decor";
+import { artClip, artLayerStyle, decorClip, decorWindow, parseDecorMode, stageFromRects, type DecorSeason, type DecorStage } from "@/lib/season-decor";
 import DecorDebug from "./DecorDebug";
 import Mannequin from "./Mannequin";
 import type { MannequinSpec } from "@/lib/mannequin";
@@ -48,7 +48,7 @@ const Art = ({ season, width, height, sun, safeTop }: { season: DecorSeason; wid
 /** `scroller` = the snap scroller the outfits live in (offset and height are read from it); `seasons[i]` = decoration of outfit i (null = none).
  *  `minis` = outfit preview figures (same clipping, drawn in front of the season art and still behind the products): `specs[i]` is outfit i's figure, `searchOn` places it over the Profile tab.
  *  `className`/`style` give the figure/pixel layer its box (same box as the scroller). ART mode (default) is a separate layer `artClassName`/`artStyle` = the whole screen (feed: fixed inset-0, like the stripe background), clipped only by the screen edge. `sunFront`: the layer starts under the status/safe area (feed), so the sun is offset by it. Everything sits behind the products (no z-index). */
-function SeasonDecor({ scroller, seasons, minis, className, style, sunFront, artClassName, artStyle, stageBars }: { scroller: RefObject<HTMLElement | null>; seasons: (DecorSeason | null)[] | null; minis?: { specs: MannequinSpec[]; searchOn: boolean } | null; className: string; style?: CSSProperties; sunFront?: boolean; artClassName?: string; artStyle?: CSSProperties; stageBars?: boolean }) {
+function SeasonDecor({ scroller, seasons, minis, className, style, sunFront, artClassName, artStyle, stageBars, stageSource = "feed" }: { scroller: RefObject<HTMLElement | null>; seasons: (DecorSeason | null)[] | null; minis?: { specs: MannequinSpec[]; searchOn: boolean } | null; className: string; style?: CSSProperties; sunFront?: boolean; artClassName?: string; artStyle?: CSSProperties; stageBars?: boolean; stageSource?: StageSource }) {
   const root = useRef<HTMLDivElement>(null), artBox = useRef<HTMLDivElement>(null), geo = useRef({ off: 0, layerH: 0 });
   const [win, setWin] = useState<number[]>([]);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -77,9 +77,9 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront, art
   const measure = () => {   // where the scroller sits inside the full-screen art layer (only on resize, never per scroll frame)
     const sc = scroller.current, box = artBox.current; if (!sc || !box) return;
     if (stageBars) {   // stage = from the header's bottom edge to the tab bar's top edge, full screen width
-      const t = document.querySelector("[data-stage-top]"), b = document.querySelector("[data-stage-bottom]");
-      const y0 = t ? t.getBoundingClientRect().bottom : 0, y1 = b ? b.getBoundingClientRect().top : window.innerHeight, w = document.documentElement.clientWidth;
-      setStage((p) => (p && p.y === y0 && p.h === y1 - y0 && p.w === w ? p : { x: 0, y: y0, w, h: y1 - y0 }));
+      const src = STAGE_SOURCES[stageSource], t = document.querySelector(src.top), b = document.querySelector(src.bottom);
+      const n = stageFromRects(t?.getBoundingClientRect() ?? null, b?.getBoundingClientRect() ?? null, document.documentElement.clientWidth, window.innerHeight);
+      setStage((p) => (p && p.y === n.y && p.h === n.h && p.w === n.w ? p : n));
     }
     geo.current = { off: sc.getBoundingClientRect().top - box.getBoundingClientRect().top, layerH: box.clientHeight };
     setArtSize((p) => (p.w === box.clientWidth && p.h === box.clientHeight ? p : { w: box.clientWidth, h: box.clientHeight }));
@@ -100,11 +100,11 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront, art
     const on = () => syncRef.current(), onSize = () => { measureRef.current(); on(); };
     sc.addEventListener("scroll", on, { passive: true });
     const ro = new ResizeObserver(onSize); ro.observe(sc); if (artBox.current) ro.observe(artBox.current);
-    if (stageBars) document.querySelectorAll("[data-stage-top],[data-stage-bottom]").forEach((e) => ro.observe(e));   // bars changing height move the stage
+    if (stageBars) document.querySelectorAll(`${STAGE_SOURCES[stageSource].top},${STAGE_SOURCES[stageSource].bottom}`).forEach((e) => ro.observe(e));   // bars changing height move the stage
     window.addEventListener("resize", onSize); window.addEventListener("orientationchange", onSize); window.visualViewport?.addEventListener("resize", onSize);
     onSize();
     return () => { sc.removeEventListener("scroll", on); ro.disconnect(); window.removeEventListener("resize", onSize); window.removeEventListener("orientationchange", onSize); window.visualViewport?.removeEventListener("resize", onSize); };
-  }, [scroller, stageBars]);
+  }, [scroller, stageBars, stageSource]);
   useEffect(() => { syncRef.current(); }, [count, seasons, minis]);   // new outfits appended / list replaced
   useLayoutEffect(() => { measure(); apply(); });   // freshly mounted groups get their clip before the first paint
 
@@ -123,7 +123,7 @@ function SeasonDecor({ scroller, seasons, minis, className, style, sunFront, art
       {mode === "art" && <div ref={artBox} className={`pointer-events-none overflow-hidden ${stageBars ? "" : (artClassName ?? className)}`} style={{ ...boxStyle, zIndex: LAYER_Z.decor }}>
         {shown.filter((i) => seasons?.[i]).map((i) => <div key={`${i}-${seasons?.[i]}`} data-i={i} className="sd-art absolute inset-0"><ArtLayers season={seasons![i]!} stage={inBox} /></div>)}
       </div>}
-      {debug && <DecorDebug stage={stageBars ? stage : null} box={artBox} inBox={inBox} season={seasons?.[cur] ?? null} mode={mode} />}
+      {debug && <DecorDebug stage={stageBars ? stage : null} box={artBox} inBox={inBox} season={seasons?.[cur] ?? null} mode={mode} source={stageSource} />}
       <div className={`pointer-events-none ${className}`} style={{ ...style, zIndex: LAYER_Z.figure }}>{shown.map((i) => group(i, true))}</div>
     </div>
   );

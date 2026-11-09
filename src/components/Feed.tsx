@@ -436,7 +436,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const likeFromCard = useCallback((card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => { toggleLike(card, outfit, index, slot); return likeResult.current; }, [toggleLike]);
   const backToForYou = useCallback(() => goTab("foryou"), [goTab]);
   const layers = tabLayers(tab, searchSeen);   // panels crossfade (Layer); visibility keeps the scroll position, nothing re-renders
-  const glassUi = stripeOn && obPhase === "off" && tab === "foryou" ? stripeMode : false;   // grey glass header + tab bar over the stripe background (For You only)
+  const glassUi = stripeOn && obPhase === "off" && (tab === "foryou" || (layers.wishlistOpen && wishTab !== "products")) ? stripeMode : false;   // grey glass header + tab bar over the stripe background (For You, Wishlist > Generate Outfits / My Outfits)
   const obHeader = obPhase !== "off";   // header controls rest during the tutorial
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);

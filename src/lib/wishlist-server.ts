@@ -8,6 +8,7 @@ import { WISHLIST_PAGE } from "@/config/wishlist";
 import { anchorSequence, avoidIds, usableLiked } from "@/lib/wishlist-outfits";
 import { composeAround, newAround } from "@/outfits/compose-around";
 import { outfitHash } from "@/outfits/compose";
+import { outfitTags } from "@/outfits/tags";
 import { placementFor } from "@/outfits/accessories";
 import { blankCard, isOnePiece } from "@/lib/my-outfits";
 import type { FeedAccessory, FeedOutfit } from "@/lib/types";
@@ -64,7 +65,10 @@ export async function renderMyOutfits(g: Gender, list: MySavedIds[]): Promise<(F
     });
     if (!top && !bottom && !shoes && !accessories.length) return null;
     const ids = [top, bottom, shoes].flatMap((c) => (c ? [c.id] : []));
+    const pcs = ids.map((id) => cat.byId.get(id)), complete = !!top && !!shoes && (full || !!bottom) && pcs.every(Boolean);   // tags (season for the decoration) only for a complete outfit, computed on demand, never stored
+    const tags = complete ? outfitTags(cat, { pieces: pcs as NonNullable<(typeof pcs)[number]>[], accs: accessories.map((a) => cat.accById.get(a.card.id)).filter((a): a is NonNullable<typeof a> => !!a) }) : undefined;
     return {
+      ...(tags ? { tags } : {}),
       id: outfitHash([...ids.map((id) => ({ slot: "m", id })), ...accessories.map((a) => ({ slot: "a", id: a.card.id }))]), kind: full ? "full" : "three", score: 0, order: n,
       top: top ?? blankCard("top", n), bottom: full ? null : bottom ?? blankCard("bottom", n), shoes: shoes ?? blankCard("shoes", n), accessories,
     };

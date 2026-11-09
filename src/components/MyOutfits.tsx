@@ -1,6 +1,9 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import WishlistBackdrop from "./WishlistBackdrop";
 import { WishlistBackground } from "@/components/WishlistBackground";
+import { LAYER_Z } from "@/config/season-decor";
+import { useStripeMode } from "@/lib/client/stripe-bg";
 import * as m from "motion/react-m";
 import { AnimatePresence } from "motion/react";
 import { MENU } from "@/config/motion";
@@ -34,8 +37,8 @@ function Thumb({ card, grey, fill = 0.9 }: { card: FeedCard; grey: boolean; fill
 }
 
 /** Wishlist > My Outfits: outfits built by hand from liked products, saved on this device only (ids + slot order). Nothing is recorded. */
-export default function MyOutfits({ gender, liked, onOpenProduct, customize }: { gender: "women" | "men"; liked: ReadonlySet<number>; onOpenProduct: (card: FeedCard) => void; customize: boolean }) {
-  const reduced = useReducedMotion();
+export default function MyOutfits({ gender, liked, onOpenProduct, customize, searchOn = true }: { gender: "women" | "men"; liked: ReadonlySet<number>; onOpenProduct: (card: FeedCard) => void; customize: boolean; searchOn?: boolean }) {
+  const reduced = useReducedMotion(), stripeOn = useStripeMode() !== "off";
   const root = useRef<HTMLDivElement>(null);
   const [store, setStore] = useState<Store>(() => loadStore());
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);
@@ -79,46 +82,54 @@ export default function MyOutfits({ gender, liked, onOpenProduct, customize }: {
 
   const openEditor = (o?: SavedOutfit) => { fetchLiked(); setEditing(o ? { id: o.id, draft: fromSaved(o) } : { id: newOutfitId(), draft: emptyDraft() }); };
   const full = storeFull(store);
+  const list = useMemo(() => store.outfits.map((s) => rendered[sig(s)] ?? null), [store, rendered]);   // the drawn outfit per saved outfit, in list order (backdrop: season, colours, figure)
 
   return (
     <>
     {editing && <Editor key={editing.id} initial={editing.draft} cardById={cardById} liked={liked} likedCards={likedNow} reduced={reduced} customize={customize}
       onCancel={() => setEditing(null)}
       onSave={(d) => { const next = saveOutfit(store, toSaved(d, editing.id)); if (next) commit(next); setEditing(null); }} />}
-    <WishlistBackground />
-    <div ref={root} className="absolute inset-0 overflow-y-auto overscroll-y-contain px-3 pb-6">
-      <div className="mx-auto flex max-w-5xl flex-col items-center">
-        <div className="sticky top-0 z-10 flex w-full flex-col items-center gap-1 bg-white py-2">
-          <m.button type="button" onClick={() => openEditor()} disabled={full || liked.size === 0} {...pressProps(reduced, MENU.pressScale)}
-            className={`${btn} ${full || liked.size === 0 ? "opacity-40" : ""}`}>{T.newOutfit}</m.button>
-          {full && <p className="text-xs text-neutral-500">{T.full(MY_OUTFITS_MAX_SAVED)}</p>}
-        </div>
-        {liked.size === 0 && <m.p {...fadeSlide(reduced, MENU.hintShiftPx)} className="px-8 py-16 text-center text-sm text-neutral-500">{T.noLikes}</m.p>}
-        {liked.size > 0 && store.outfits.length === 0 && <m.p {...fadeSlide(reduced, MENU.hintShiftPx)} className="px-8 py-12 text-center text-sm text-neutral-500">{T.empty}</m.p>}
-        {canvas && store.outfits.map((s) => {
-          const o = rendered[sig(s)];
-          return (
-            <section key={s.id} className="flex w-full flex-col items-center py-2" data-outfit={s.id}>
-              {o ? (
-                <div className="relative" style={{ width: canvas.w, height: canvas.h }}>
-                  <OutfitCanvas outfit={o} canvas={canvas} priority={false} dim={(slot: SlotName) => isGrey(o, slot, liked)} likeDim accLayout={activeAccLayouts(customize, s.accL)} onOpen={(c) => onOpenProduct(c)} />
+    <div className="absolute inset-0 flex flex-col">
+      <div className={`relative flex w-full shrink-0 flex-col items-center gap-1 px-3 py-2 ${stripeOn ? "" : "bg-white"}`} style={{ zIndex: LAYER_Z.chrome }}>
+        <m.button type="button" onClick={() => openEditor()} disabled={full || liked.size === 0} {...pressProps(reduced, MENU.pressScale)}
+          className={`${btn} ${full || liked.size === 0 ? "opacity-40" : ""}`}>{T.newOutfit}</m.button>
+        {full && <p className="text-xs text-neutral-500">{T.full(MY_OUTFITS_MAX_SAVED)}</p>}
+        {liked.size === 0 && store.outfits.length > 0 && <p className="text-xs text-neutral-500">{T.noLikes}</p>}
+      </div>
+      <div className="relative min-h-0 flex-1">
+        <WishlistBackdrop scroller={root} outfits={list} gender={gender} searchOn={searchOn} />
+        {/* one saved outfit per page, like the other outfit feeds: the stripe background, season decoration and figure follow the outfit in view */}
+        <div ref={root} className="no-scrollbar absolute inset-0 snap-y snap-mandatory overflow-y-scroll overscroll-y-contain" style={{ zIndex: LAYER_Z.products }}>
+          {store.outfits.length === 0 && (
+            <m.section {...fadeSlide(reduced, MENU.hintShiftPx)} className="flex h-full items-center justify-center px-8 text-center">
+              <p className="text-sm text-neutral-500">{liked.size === 0 ? T.noLikes : T.empty}</p>
+            </m.section>
+          )}
+          {canvas && store.outfits.map((s) => {
+            const o = rendered[sig(s)];
+            return (
+              <section key={s.id} className="flex h-full w-full snap-start snap-always flex-col items-center justify-center" data-outfit={s.id}>
+                {o ? (
+                  <div className="relative" style={{ width: canvas.w, height: canvas.h }}>
+                    <OutfitCanvas outfit={o} canvas={canvas} priority={false} dim={(slot: SlotName) => isGrey(o, slot, liked)} likeDim accLayout={activeAccLayouts(customize, s.accL)} onOpen={(c) => onOpenProduct(c)} />
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center text-sm text-neutral-400" style={{ width: canvas.w, height: canvas.h }}>{sig(s) in rendered ? "These products are no longer available." : "Loading…"}</div>
+                )}
+                <div className="mt-1 flex items-center gap-2" style={{ height: ACTIONS_PX - 4 }}>
+                  {confirm === s.id ? (<>
+                    <span className="text-sm text-neutral-600">{T.confirmDelete}</span>
+                    <button type="button" className={btn} onClick={() => setConfirm(null)}>Cancel</button>
+                    <button type="button" className="rounded-full bg-black px-4 py-2 text-sm text-white" onClick={() => { commit(deleteOutfit(store, s.id)); setConfirm(null); }}>Delete</button>
+                  </>) : (<>
+                    <button type="button" className={btn} onClick={() => openEditor(s)}>Edit</button>
+                    <button type="button" className={btn} onClick={() => setConfirm(s.id)}>Delete</button>
+                  </>)}
                 </div>
-              ) : (
-                <div className="flex items-center justify-center text-sm text-neutral-400" style={{ width: canvas.w, height: canvas.h }}>{sig(s) in rendered ? "These products are no longer available." : "Loading…"}</div>
-              )}
-              <div className="mt-1 flex items-center gap-2" style={{ height: ACTIONS_PX - 4 }}>
-                {confirm === s.id ? (<>
-                  <span className="text-sm text-neutral-600">{T.confirmDelete}</span>
-                  <button type="button" className={btn} onClick={() => setConfirm(null)}>Cancel</button>
-                  <button type="button" className="rounded-full bg-black px-4 py-2 text-sm text-white" onClick={() => { commit(deleteOutfit(store, s.id)); setConfirm(null); }}>Delete</button>
-                </>) : (<>
-                  <button type="button" className={btn} onClick={() => openEditor(s)}>Edit</button>
-                  <button type="button" className={btn} onClick={() => setConfirm(s.id)}>Delete</button>
-                </>)}
-              </div>
-            </section>
-          );
-        })}
+              </section>
+            );
+          })}
+        </div>
       </div>
     </div>
     </>
@@ -168,7 +179,7 @@ function Editor({ initial, cardById, liked, likedCards, reduced, customize, onCa
   const placedSlots = shown;
   const extra = layout ? unplacedAcc(layout, draft.acc.length).filter((i) => draft.acc[i] !== null) : [];
   return (
-    <div className="absolute inset-0 z-20 flex flex-col">
+    <div className="absolute inset-0 flex flex-col bg-white" style={{ zIndex: LAYER_Z.chrome + 10 }}>
       <WishlistBackground className="-z-10" />
       <div className="flex shrink-0 items-center justify-between px-3 py-2">
         <button type="button" onClick={onCancel} aria-label="Back without saving" className="flex h-10 w-10 items-center justify-center text-neutral-700">
