@@ -102,3 +102,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 98: header/tab bar glass is plain frosted glass (tint + blur + soft edge, no stripes); summer pictures smart/street/active/soft (5 each); last commit on main: see git log.
 - Prompt 99: autumn background pictures, delivered per group (message first line = group): autumn-smart 5 imported (smart done; street/active follow); last commit on main: see git log.
 - Prompt 99: autumn-street 5 imported (group label came at the end of the message).
+- Prompt 99: autumn-active 5 imported; all three autumn groups done (autumn soft/rugged empty); last commit on main: see git log.
