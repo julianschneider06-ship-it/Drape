@@ -55,14 +55,13 @@ export const STRIPE_BG = {
     fillAlpha: 0.5,                     // translucency, SHARED by header and tab bar in both modes (the stripes and the products show through)
     edge: "rgba(255,255,255,0.4)",      // 1 px light edge
     edgeWidthPx: 1,
-    specularAlpha: 0.22,                // faint top-left highlight
+    blurPx: 14,                         // frosted glass: backdrop blur behind header + tab bar (plain glass: tint + blur + soft edge, NO stripes / texture inside)
+    saturate: 1.15,                     // backdrop saturation, keeps colours behind the glass lively
     shadow: "0 4px 16px rgba(20,24,40,0.16)",
     capsule: true,                      // header + tab bar are pills: both ends full semicircles (radius = half the bar height)
     radiusPx: 12,                       // corner radius when capsule is off
     capsulePadPx: 18,                   // extra inner side padding so logo / toggle / tab icons clear the rounded ends
     marginPx: 8,                        // distance to the screen edges
-    stripeBoost: 1.7,                   // refracted stripes inside the glass: alphas x this (max 1)
-    stripeShiftPx: 3,                   // ... and shifted sideways by this
     textOn: "#000000",                  // active tab on the glass
     textOff: "#3a3a42",                 // inactive tab on the glass (contrast >= 4.5 on the fill)
   },

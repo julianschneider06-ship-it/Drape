@@ -13,7 +13,7 @@ test("config values are sane", () => {
   assert.ok(C.stops.every((s, i) => i === 0 || s.pos > C.stops[i - 1].pos) && C.stops.every((s) => s.a >= 0 && s.a <= 0.25));
   assert.ok(C.stops[0].a === 0 && C.stops[C.stops.length - 1].a === 0);
   assert.ok(C.curve.zonePx >= 20 && C.curve.zonePx <= 30 && C.curve.maxDeg > 0 && C.curve.maxDeg <= 5 && C.curve.slices >= 2);
-  assert.ok(C.glass.radiusPx <= 16 && C.glass.marginPx > 0 && C.glass.stripeBoost >= 1);
+  assert.ok(C.glass.radiusPx <= 16 && C.glass.marginPx > 0 && C.glass.blurPx > 0);
   assert.ok(C.minColors === 2 && C.maxColors === 3 && C.blobs.length >= C.maxColors);
   assert.ok(C.lightnessMin < C.lightnessMax && C.saturationMin <= C.saturationMax && C.crossfadeMs > 0);
   assert.match(C.fallbackColor, /^#[0-9a-f]{6}$/);
@@ -59,7 +59,8 @@ test("css strings use the config", () => {
   assert.ok(!stripeCss().includes("blur") && specularCss().includes(`${C.specular.angleDeg}deg`));
   const gs = glassPieceStyle();
   assert.ok(String(gs.background).includes(glassFill("colorful")) && String(gs.boxShadow).includes(C.glass.edge) && gs.borderRadius === CAPSULE_RADIUS);
-  assert.notEqual(stripeCss(C, C.glass.stripeBoost, C.glass.stripeShiftPx), stripeCss());
+  assert.ok(!/gradient/.test(String(gs.background)), "glass has no stripes or gradients inside");
+  assert.ok(String(gs.backdropFilter).includes(`blur(${C.glass.blurPx}px)`));
   const g = gradientCss(["#aabbcc", "#ddeeff"]);
   assert.ok(g.includes("#aabbcc") && g.includes(`${C.angleDeg}deg`) && g.endsWith(C.baseColor));
 });

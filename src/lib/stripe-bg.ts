@@ -106,11 +106,13 @@ export function curveSlices(cfg: Cfg = C): CurveSlice[] {
 /** Capsule radius: larger than any bar height, so the browser clamps it to half the height (full semicircle ends) */
 export const CAPSULE_RADIUS = 9999;
 
-/** CSS of one grey glass piece (header / tab bar): fill + specular + refracted stripes (boosted, shifted) + light edge, soft shadow, small radius */
+/** CSS of one frosted glass piece (header / tab bar): translucent tint + backdrop blur + soft edge and shadow. No stripes or texture inside. */
 export function glassPieceStyle(mode: StripeMode = "colorful", cfg: Cfg = C): React.CSSProperties {
-  const g = cfg.glass, simple = mode === "simple";
+  const g = cfg.glass, blur = `blur(${g.blurPx}px) saturate(${g.saturate})`;
   return {
-    background: `${specularCss(cfg, g.specularAlpha)}, ${simple ? stripeCss(simpleCfg(cfg), g.stripeBoost, g.stripeShiftPx) : stripeCss(cfg, g.stripeBoost, g.stripeShiftPx)}, ${glassFill(mode, cfg)}`,
+    background: glassFill(mode, cfg),
+    backdropFilter: blur,
+    WebkitBackdropFilter: blur,
     boxShadow: `inset 0 0 0 ${g.edgeWidthPx}px ${g.edge}, ${g.shadow}`,
     borderRadius: g.capsule ? CAPSULE_RADIUS : g.radiusPx,
   };
