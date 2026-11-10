@@ -99,6 +99,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 95: background pictures: up to 5 images per combination, open-ended neutral pool with a 25% stable neutral mix, 1080x1920 output, 5 neutral photos added, optional readability veil (?bgveil, ?bgveilcolor) and debug info; last commit on main: see git log.
 - Prompt 96: Profile "Picture veil" (Off | Light | Dynamic | Dark, default Dynamic, stored locally, `?veil=` link) over the background pictures; Dynamic picks white/black by dark vs light parts; `?bgveil`/`?bgveilcolor` stay as debug overrides; last commit on main: see git log.
 - Prompt 97: spring background pictures (smart 5, street 5, active 5, re-exported 1170x2532); Pictures now full-screen under the bars with grey glass header/tab bar, neutral pool removed, no match = plain white; last commit on main: see git log.
-- Prompt 98: header/tab bar glass is plain frosted glass (tint + blur + soft edge, no stripes); summer-smart pictures (5); last commit on main: see git log.
-- Prompt 98 (cont.): summer-street pictures (5) added; last commit on main: see git log.
-- Prompt 98 (cont.): summer-active pictures (5) added, summer complete; last commit on main: see git log.
+- Prompt 98: header/tab bar glass is plain frosted glass (tint + blur + soft edge, no stripes); summer pictures smart/street/active/soft (5 each); last commit on main: see git log.
