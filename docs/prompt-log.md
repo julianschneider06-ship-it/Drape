@@ -101,3 +101,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 97: spring background pictures (smart 5, street 5, active 5, re-exported 1170x2532); Pictures now full-screen under the bars with grey glass header/tab bar, neutral pool removed, no match = plain white; last commit on main: see git log.
 - Prompt 98: header/tab bar glass is plain frosted glass (tint + blur + soft edge, no stripes); summer pictures smart/street/active/soft (5 each); last commit on main: see git log.
 - Prompt 99: autumn background pictures, delivered per group (message first line = group): autumn-smart 5 imported (smart done; street/active follow); last commit on main: see git log.
+- Prompt 99: autumn-street 5 imported (group label came at the end of the message).
