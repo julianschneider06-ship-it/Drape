@@ -1,6 +1,6 @@
 // Converts source pictures into the app's background WebPs and regenerates the manifest.
-// Input:  docs/reference/backgrounds-source/<season>-<family>-<1..5>.<png|jpg|jpeg>  or  neutral-<n>.<ext> (any n >= 1)  (originals stay untouched)
-// Output: public/backgrounds/<name>.webp (1080x1920 = 9:16; only a source more than 3% off 9:16 is centre-cropped, otherwise scaled; quality ~80, target < 250 KB)
+// Input:  docs/reference/backgrounds-source/<season>-<family>-<1..5>.<png|jpg|jpeg>  (originals stay untouched)
+// Output: public/backgrounds/<name>.webp (1170x2532, always cover + centre crop, never stretched; quality ~80 down to 40, target < 400 KB)
 // Usage:  npx tsx scripts/add-backgrounds.ts [--src <folder>] [--out <folder>]   (no AI, no network, no cost)
 import { readdirSync, mkdirSync, existsSync, statSync } from "node:fs";
 import { join, extname, basename } from "node:path";
@@ -19,15 +19,12 @@ async function main() {
   for (const f of readdirSync(src).sort()) {
     const ext = extname(f).toLowerCase(), name = basename(f, extname(f));
     if (![".png", ".jpg", ".jpeg"].includes(ext)) continue;
-    if (!isAllowedName(name)) { console.log(`SKIP ${f}: name is not allowed (<season>-<family>-<1..${MAX_PER_COMBO}> for the 15 combinations, neutral-<n>)`); bad++; continue; }
+    if (!isAllowedName(name)) { console.log(`SKIP ${f}: name is not allowed (<season>-<family>-<1..${MAX_PER_COMBO}> for the 15 combinations)`); bad++; continue; }
     const rotated = await sharp(join(src, f)).rotate().toBuffer();
     const meta = await sharp(rotated).metadata();
-    const target = BG_IMAGE.width / BG_IMAGE.height, ratio = (meta.width ?? 1) / (meta.height ?? 1);
-    const cropped = Math.abs(ratio / target - 1) > BG_IMAGE.ratioTolerance;
-    if (cropped) console.log(`NOTE ${f}: ${meta.width}x${meta.height} is not within ${BG_IMAGE.ratioTolerance * 100}% of 9:16, centre-cropped`);
     let q = BG_IMAGE.quality, size = 0;
     for (; q >= BG_IMAGE.minQuality; q -= BG_IMAGE.qualityStep) {   // lower the quality until the file is small enough (floor = minQuality)
-      await sharp(rotated).resize(BG_IMAGE.width, BG_IMAGE.height, { fit: cropped ? "cover" : "fill", position: "centre" }).webp({ quality: q }).toFile(join(out, `${name}.webp`));
+      await sharp(rotated).resize(BG_IMAGE.width, BG_IMAGE.height, { fit: "cover", position: "centre" }).webp({ quality: q }).toFile(join(out, `${name}.webp`));
       size = statSync(join(out, `${name}.webp`)).size;
       if (size <= BG_IMAGE.maxKb * 1024) break;
     }

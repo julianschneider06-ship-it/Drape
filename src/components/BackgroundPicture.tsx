@@ -1,34 +1,17 @@
 "use client";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { animate } from "motion/react";
 import { BG_FADE_MS, BG_PRELOAD_NEXT } from "@/config/background-images";
 import { DURATION_MS, sec } from "@/config/motion";
-import { LAYER_Z, STAGE_SOURCES, type StageSource } from "@/config/season-decor";
+import { LAYER_Z } from "@/config/season-decor";
 import { comboKey, pickBackground, pieceIds } from "@/lib/background-images";
 import { useModeNote, useSeasonMode, useVeilMode } from "@/lib/client/season-decor";
 import { useReducedMotion } from "@/lib/motion";
 import { outfitPartColors, parseVeilDebug, resolveVeil } from "@/lib/veil";
-import { stageBox, stageFromRects, type DecorStage } from "@/lib/season-decor";
 import type { FeedOutfit } from "@/lib/types";
 
-/** The stage (visible outfit area between the header's bottom edge and the tab bar's top edge), measured at runtime. Same rule as the season art. */
-function useStage(source: StageSource): DecorStage | null {
-  const [stage, setStage] = useState<DecorStage | null>(null);
-  useEffect(() => {
-    const src = STAGE_SOURCES[source];
-    const measure = () => {
-      const t = document.querySelector(src.top), b = document.querySelector(src.bottom);
-      const n = stageFromRects(t?.getBoundingClientRect() ?? null, b?.getBoundingClientRect() ?? null, document.documentElement.clientWidth, window.innerHeight);
-      setStage((p) => (p && p.y === n.y && p.h === n.h && p.w === n.w ? p : n));
-    };
-    const ro = new ResizeObserver(measure);
-    document.querySelectorAll(`${src.top},${src.bottom}`).forEach((e) => ro.observe(e));
-    window.addEventListener("resize", measure); window.addEventListener("orientationchange", measure); window.visualViewport?.addEventListener("resize", measure);
-    measure();
-    return () => { ro.disconnect(); window.removeEventListener("resize", measure); window.removeEventListener("orientationchange", measure); window.visualViewport?.removeEventListener("resize", measure); };
-  }, [source]);
-  return stage;
-}
+/** The whole viewport, under the iOS safe areas, behind header and tab bar (position fixed, inset 0, 100dvh; the image scales to cover and is centre-cropped). */
+const FULL: CSSProperties = { position: "fixed", left: 0, top: 0, right: 0, width: "100%", height: "100dvh", minHeight: "100%" };
 
 /** One picture: invisible until it is loaded and decoded, then fades in (opacity only). */
 function Pic({ src, onShown, onFail }: { src: string; onShown: () => void; onFail: () => void }) {
@@ -56,10 +39,10 @@ function VeilLayers({ color, opacity }: { color: "white" | "black"; opacity: num
   return <><div ref={w} style={{ ...base, background: "white" }} /><div ref={k} style={{ ...base, background: "black" }} /></>;
 }
 
-/** Full-stage background picture of the outfit in view (mode Pictures only). `outfits[index]` = the outfit as shown; the picture is chosen by the pure `pickBackground`
+/** Full-SCREEN background picture of the outfit in view (mode Pictures only). `outfits[index]` = the outfit as shown; the picture is chosen by the pure `pickBackground`
  *  (combination of dominant season x style family, hash of the shown piece ids). Two pictures crossfade when the outfit changes. A picture that fails to load is simply not drawn. */
-function BackgroundPicture({ outfits, index, stageSource, onActive }: { outfits: (FeedOutfit | null)[]; index: number; stageSource: StageSource; onActive?: (on: boolean) => void }) {
-  const mode = useSeasonMode(), note = useModeNote(), stage = useStage(stageSource);
+function BackgroundPicture({ outfits, index, onActive }: { outfits: (FeedOutfit | null)[]; index: number; onActive?: (on: boolean) => void }) {
+  const mode = useSeasonMode(), note = useModeNote();
   const debug = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("decordebug") === "1", []);
   const veilMode = useVeilMode(), dbgVeil = useMemo(() => parseVeilDebug(typeof window !== "undefined" ? window.location.search : ""), []);
   const pick = useMemo(() => {
@@ -79,11 +62,10 @@ function BackgroundPicture({ outfits, index, stageSource, onActive }: { outfits:
   useEffect(() => { if (next && next.src !== pick?.src) { const im = new Image(); im.decoding = "async"; im.src = next.src; } }, [next, pick]);
   useEffect(() => { onActive?.(!!src); }, [src, onActive]);
   const veil = useMemo(() => resolveVeil({ mode: veilMode, names: outfitPartColors(outfits[index]), pictureOn: mode === "pictures" && layers.length > 0, debug: dbgVeil }), [veilMode, outfits, index, mode, layers.length, dbgVeil]);
-  if (mode !== "pictures" || !stage || !(stage.h > 0)) return null;
-  const b = stageBox(stage);
+  if (mode !== "pictures") return null;
   return (
     <>
-      <div aria-hidden className="pointer-events-none overflow-hidden" style={{ position: "fixed", left: b.x, top: b.y, width: b.w, height: b.h, zIndex: LAYER_Z.image }}>
+      <div aria-hidden className="pointer-events-none overflow-hidden" style={{ ...FULL, zIndex: LAYER_Z.image }}>
         {layers.map((l) => (
           <Pic key={l.id} src={l.src}
             onShown={() => setLayers((p) => p.filter((x) => x.id >= l.id))}
@@ -91,12 +73,12 @@ function BackgroundPicture({ outfits, index, stageSource, onActive }: { outfits:
         ))}
       </div>
       {layers.length > 0 && (
-        <div aria-hidden className="pointer-events-none overflow-hidden" style={{ position: "fixed", left: b.x, top: b.y, width: b.w, height: b.h, zIndex: LAYER_Z.veil }}>
+        <div aria-hidden className="pointer-events-none overflow-hidden" style={{ ...FULL, zIndex: LAYER_Z.veil }}>
           <VeilLayers color={veil.color} opacity={veil.opacity} />
         </div>
       )}
-      {debug && <div aria-hidden style={{ position: "fixed", left: 4, top: stage.y + stage.h - 90, zIndex: 9999, pointerEvents: "none", font: "10px/1.25 ui-monospace, monospace", color: "#fff", background: "rgba(0,0,0,0.65)", padding: "1px 3px", whiteSpace: "pre" }}>
-        {`season mode ${mode}${note ? `  (${note})` : ""}\ncombo ${outfits[index] ? comboKey(outfits[index]!.tags) : "-"}  index ${pick?.index ?? "-"}\nbucket ${pick?.bucket ?? "-"}  step ${pick?.step ?? "-"}\nfile ${pick ? `${pick.name}.webp` : "none"}\nveil mode ${veil.mode}${veil.override ? "  DEBUG OVERRIDE active" : ""}\nparts dark ${veil.counts?.dark ?? "-"} light ${veil.counts?.light ?? "-"} mid ${veil.counts?.mid ?? "-"}\nveil ${veil.color} ${veil.opacity.toFixed(3)}`}
+      {debug && <div aria-hidden style={{ position: "fixed", left: 4, bottom: 120, zIndex: 9999, pointerEvents: "none", font: "10px/1.25 ui-monospace, monospace", color: "#fff", background: "rgba(0,0,0,0.65)", padding: "1px 3px", whiteSpace: "pre" }}>
+        {`season mode ${mode}${note ? `  (${note})` : ""}\ncombo ${outfits[index] ? comboKey(outfits[index]!.tags) : "-"}  index ${pick?.index ?? "-"}\nstep ${pick?.step ?? "none"}\nfile ${pick ? `${pick.name}.webp` : "none"}\nveil mode ${veil.mode}${veil.override ? "  DEBUG OVERRIDE active" : ""}\nparts dark ${veil.counts?.dark ?? "-"} light ${veil.counts?.light ?? "-"} mid ${veil.counts?.mid ?? "-"}\nveil ${veil.color} ${veil.opacity.toFixed(3)}`}
       </div>}
     </>
   );

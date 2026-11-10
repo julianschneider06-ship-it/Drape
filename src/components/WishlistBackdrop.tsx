@@ -42,7 +42,7 @@ export default function WishlistBackdrop({ scroller, outfits, gender, searchOn }
   return (
     <>
       {stripeMode === "off" ? (pictures && picOn ? null : <WishlistBackground />) : <StripeBackground mode={stripeMode} colors={colors} seed={String(cur?.id ?? "")} className="fixed inset-0" style={{ zIndex: LAYER_Z.stripe }} />}
-      <BackgroundPicture outfits={outfits} index={idx} stageSource="wishlist" onActive={setPicOn} />
+      <BackgroundPicture outfits={outfits} index={idx} onActive={setPicOn} />
       {(seasonOn || miniOn) && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="absolute inset-0" stageBars stageSource="wishlist" />}
     </>
   );

@@ -38,7 +38,7 @@ import SeasonDecor from "./SeasonDecor";
 import { LAYER_Z } from "@/config/season-decor";
 import StripeBackground from "./StripeBackground";
 import { viewHeight } from "@/lib/view-height";
-import { useStripeMode } from "@/lib/client/stripe-bg";
+import { useStripeMode, useGlassMode } from "@/lib/client/stripe-bg";
 import { outfitStripePalette, glassPieceStyle } from "@/lib/stripe-bg";
 import { STRIPE_BG } from "@/config/stripe-bg";
 import { dominantSeason } from "@/lib/season-decor";
@@ -121,7 +121,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const seasonOn = useSeasonDecor();
   const seasons = useMemo(() => items.map((o) => dominantSeason(o.tags)), [items]);   // decoration per outfit (swaps do not change the outfit's tags)
   const shown = useMemo(() => items.map((o) => applySwaps(o, swaps[o.id])), [items, swaps]);   // the outfits as the user sees them after swaps
-  const stripeMode = useStripeMode(), stripeOn = stripeMode !== "off";
+  const stripeMode = useStripeMode(), stripeOn = stripeMode !== "off", glassMode = useGlassMode();
   const miniOn = useMiniPreview();
   const stripeColors = useMemo(() => (stripeMode === "colorful" && shown[railIdx] ? outfitStripePalette(shown[railIdx]) : []), [stripeMode, shown, railIdx]);   // palette of the outfit in view (follows swaps)
   const minis = useMemo(() => (miniOn ? { specs: shown.map((o) => mannequinSpec(o, gender ?? "women")), searchOn } : null), [miniOn, shown, searchOn, gender]);   // outfit preview figures follow swaps
@@ -437,7 +437,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const likeFromCard = useCallback((card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => { toggleLike(card, outfit, index, slot); return likeResult.current; }, [toggleLike]);
   const backToForYou = useCallback(() => goTab("foryou"), [goTab]);
   const layers = tabLayers(tab, searchSeen);   // panels crossfade (Layer); visibility keeps the scroll position, nothing re-renders
-  const glassUi = stripeOn && obPhase === "off" && (tab === "foryou" || (layers.wishlistOpen && wishTab !== "products")) ? stripeMode : false;   // grey glass header + tab bar over the stripe background (For You, Wishlist > Generate Outfits / My Outfits)
+  const glassUi = glassMode !== "off" && obPhase === "off" && (tab === "foryou" || (layers.wishlistOpen && wishTab !== "products")) ? glassMode : false;   // grey glass header + tab bar over the stripe background (For You, Wishlist > Generate Outfits / My Outfits)
   const obHeader = obPhase !== "off";   // header controls rest during the tutorial
   const open = (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => {
     interacted.current.add(index);
@@ -452,7 +452,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
       <SaleInkDefs />
       <Layer active={layers.feedActive} shiftPx={0}>
         {stripeOn && obPhase === "off" && <StripeBackground mode={stripeMode} colors={stripeColors} seed={String(shown[railIdx]?.id ?? "")} className="fixed inset-0" style={{ zIndex: LAYER_Z.stripe }} />}
-        {obPhase === "off" && <BackgroundPicture outfits={shown} index={railIdx} stageSource="feed" />}
+        {obPhase === "off" && <BackgroundPicture outfits={shown} index={railIdx} />}
         {(seasonOn || miniOn) && obPhase === "off" && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="fixed inset-x-0 top-0" style={DECOR_BOX} sunFront stageBars />}
         <header data-stage-top className={glassUi ? "fixed z-30 flex items-center justify-between px-3 pb-2 pt-2" : "fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur"}
           style={glassUi ? { ...glassPieceStyle(glassUi || "colorful"), paddingLeft: STRIPE_BG.glass.capsulePadPx, paddingRight: STRIPE_BG.glass.capsulePadPx, left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : undefined}>

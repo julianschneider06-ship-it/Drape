@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WishlistBackdrop from "./WishlistBackdrop";
 import { WishlistBackground } from "@/components/WishlistBackground";
 import { LAYER_Z } from "@/config/season-decor";
-import { useStripeMode } from "@/lib/client/stripe-bg";
+import { useGlassMode } from "@/lib/client/stripe-bg";
 import * as m from "motion/react-m";
 import { AnimatePresence } from "motion/react";
 import { MENU } from "@/config/motion";
@@ -38,7 +38,7 @@ function Thumb({ card, grey, fill = 0.9 }: { card: FeedCard; grey: boolean; fill
 
 /** Wishlist > My Outfits: outfits built by hand from liked products, saved on this device only (ids + slot order). Nothing is recorded. */
 export default function MyOutfits({ gender, liked, onOpenProduct, customize, searchOn = true }: { gender: "women" | "men"; liked: ReadonlySet<number>; onOpenProduct: (card: FeedCard) => void; customize: boolean; searchOn?: boolean }) {
-  const reduced = useReducedMotion(), stripeOn = useStripeMode() !== "off";
+  const reduced = useReducedMotion(), stripeOn = useGlassMode() !== "off";
   const root = useRef<HTMLDivElement>(null);
   const [store, setStore] = useState<Store>(() => loadStore());
   const [canvas, setCanvas] = useState<{ w: number; h: number } | null>(null);

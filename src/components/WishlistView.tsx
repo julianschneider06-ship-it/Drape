@@ -12,7 +12,7 @@ import type { SlotName } from "@/lib/layout/engine";
 import LikesView from "./LikesView";
 import GenerateOutfits from "./GenerateOutfits";
 import MyOutfits from "./MyOutfits";
-import { useStripeMode } from "@/lib/client/stripe-bg";
+import { useGlassMode } from "@/lib/client/stripe-bg";
 import { glassPieceStyle } from "@/lib/stripe-bg";
 import { STRIPE_BG } from "@/config/stripe-bg";
 import { LAYER_Z } from "@/config/season-decor";
@@ -26,7 +26,7 @@ export default function WishlistView({ searchOn, icons, customize, gender, liked
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const reduced = useReducedMotion(), present = useIsPresent();
-  const stripeMode = useStripeMode(), stripeBg = stripeMode !== "off" && tab !== "products";   // Stripe background in Generate Outfits / My Outfits: transparent view, glass header (like For You); Products stays white
+  const stripeMode = useGlassMode(), stripeBg = stripeMode !== "off" && tab !== "products";   // Stripe background in Generate Outfits / My Outfits: transparent view, glass header (like For You); Products stays white
   const [shuffle, setShuffle] = useState(0);
   const [entryIds] = useState(() => [...liked]);   // likes as of entering the Wishlist: soft-unliked products are only dropped from new batches after the next entry
   return (
