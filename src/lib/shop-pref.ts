@@ -45,8 +45,14 @@ export const effectiveSale = (link: string | null, globalOn: boolean, localOn: b
 
 /** Stripe background: off | colorful (outfit-colour gradient) | simple (white/grey). Older saves stored a boolean (true = colorful). */
 export type StripeMode = "off" | "colorful" | "simple";
-export interface ProfilePrefs { v: 1; sale: boolean; bg: boolean; season: boolean; mini: boolean; stripe: StripeMode; shops: ShopPrefs }
-export const DEFAULT_PREFS: ProfilePrefs = { v: 1, sale: true, bg: true, season: true, mini: true, stripe: "off", shops: {} };
+/** Seasonal decoration: off | sprites (the season sprites) | pictures (full-screen background pictures). Older saves stored a boolean (true = sprites). */
+export type SeasonMode = "off" | "sprites" | "pictures";
+/** stored value -> mode; the old boolean (true = on) becomes Sprites / Off; anything else = Sprites (default) */
+export const migrateSeason = (v: unknown): SeasonMode => (v === "off" || v === "sprites" || v === "pictures" ? v : v === false ? "off" : "sprites");
+/** ?season= link: 0 = off, 1 or sprites = sprites, pictures = pictures; unknown = no override */
+export const parseSeasonLink = (l: string | null | undefined): SeasonMode | null => (l === "0" ? "off" : l === "1" || l === "sprites" ? "sprites" : l === "pictures" ? "pictures" : null);
+export interface ProfilePrefs { v: 1; sale: boolean; bg: boolean; season: SeasonMode; mini: boolean; stripe: StripeMode; shops: ShopPrefs }
+export const DEFAULT_PREFS: ProfilePrefs = { v: 1, sale: true, bg: true, season: "sprites", mini: true, stripe: "off", shops: {} };
 
 /** Effective Drape background (Wishlist Generate Outfits + My Outfits): ?bg=0|1 wins (testing), otherwise the user's choice. */
 export const effectiveBg = (link: string | null, localOn: boolean): boolean => (link === "1" ? true : link === "0" ? false : localOn);
@@ -63,7 +69,9 @@ export function cleanPrefs(raw: unknown): ProfilePrefs {
       if ((l === "less" || l === "more") && SHOP_PREF_LIMITS.idPattern.test(id)) { shops[id] = l; if (++n >= SHOP_PREF_LIMITS.maxEntries) break; }
     }
   }
-  return { v: 1, sale: typeof r.sale === "boolean" ? r.sale : true, bg: typeof r.bg === "boolean" ? r.bg : true, season: typeof r.season === "boolean" ? r.season : true, mini: typeof r.mini === "boolean" ? r.mini : true, stripe: r.stripe === true || r.stripe === "colorful" ? "colorful" : r.stripe === "simple" ? "simple" : "off", shops };
+  const stripe: StripeMode = r.stripe === true || r.stripe === "colorful" ? "colorful" : r.stripe === "simple" ? "simple" : "off", season = migrateSeason(r.season);
+  const both = season === "pictures" && stripe !== "off";   // never both: Pictures wins
+  return { v: 1, sale: typeof r.sale === "boolean" ? r.sale : true, bg: typeof r.bg === "boolean" ? r.bg : true, season, mini: typeof r.mini === "boolean" ? r.mini : true, stripe: both ? "off" : stripe, shops };
 }
 
 /** read / write with the storage passed in, every access guarded (blocked storage = defaults, nothing thrown) */

@@ -1,8 +1,15 @@
 "use client";
 import { useSyncExternalStore } from "react";
-import { effectiveSeason } from "@/lib/season-decor";
+import { BG_MANIFEST } from "@/config/background-images";
+import { resolveModes } from "@/lib/background-images";
+import { parseStripeLink } from "@/lib/stripe-bg";
+import type { SeasonMode, StripeMode } from "@/lib/shop-pref";
 import { getPrefs, subscribePrefs } from "@/lib/client/profile-store";
 
-/** Seasonal decoration on/off: ?season=0|1 link wins, else the Profile choice (device only, default on). Re-renders when the switch flips. */
-const seasonOn = (): boolean => effectiveSeason(new URLSearchParams(window.location.search).get("season"), getPrefs().season);
-export const useSeasonDecor = (): boolean => useSyncExternalStore(subscribePrefs, seasonOn, () => true);
+/** The modes that really apply (links win over the Profile choice; Pictures + empty manifest = Sprites; Pictures + Stripe = Pictures wins). Re-renders when a choice changes. */
+const modes = () => { const q = new URLSearchParams(window.location.search), p = getPrefs(); return resolveModes({ seasonLink: q.get("season"), stripeLink: parseStripeLink(q.get("stripe")), local: { season: p.season, stripe: p.stripe }, imageCount: BG_MANIFEST.length }); };
+export const useSeasonMode = (): SeasonMode => useSyncExternalStore(subscribePrefs, () => modes().season, () => "sprites");
+export const useEffectiveStripe = (): StripeMode => useSyncExternalStore(subscribePrefs, () => modes().stripe, () => "off");
+export const useModeNote = (): string => useSyncExternalStore(subscribePrefs, () => modes().note ?? "", () => "");
+/** sprites are drawn only in mode "sprites" */
+export const useSeasonDecor = (): boolean => useSeasonMode() === "sprites";

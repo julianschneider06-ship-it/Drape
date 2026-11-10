@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, type RefObject } from "react";
+import BackgroundPicture from "./BackgroundPicture";
 import SeasonDecor from "./SeasonDecor";
 import StripeBackground from "./StripeBackground";
 import { WishlistBackground } from "./WishlistBackground";
@@ -9,7 +10,7 @@ import { outfitStripePalette } from "@/lib/stripe-bg";
 import { mannequinSpec, type MannequinSpec } from "@/lib/mannequin";
 import { railIndex } from "@/lib/rail-state";
 import { viewHeight } from "@/lib/view-height";
-import { useSeasonDecor } from "@/lib/client/season-decor";
+import { useSeasonDecor, useSeasonMode } from "@/lib/client/season-decor";
 import { useMiniPreview } from "@/lib/client/mannequin";
 import { useStripeMode } from "@/lib/client/stripe-bg";
 import type { FeedOutfit } from "@/lib/types";
@@ -32,7 +33,7 @@ function useNearestIndex(scroller: RefObject<HTMLElement | null>, count: number)
  *  `outfits[i]` = the outfit as shown in section i (null = nothing to show, e.g. a saved outfit that is not drawn yet). Everything follows the parts as shown (greyed ones count).
  *  PRECEDENCE: Stripe Colorful / Simple replaces the "Drape Background" image (not drawn then); Stripe Off keeps it as before. The stage = Wishlist header block .. tab bar. */
 export default function WishlistBackdrop({ scroller, outfits, gender, searchOn }: { scroller: RefObject<HTMLElement | null>; outfits: (FeedOutfit | null)[]; gender: "women" | "men"; searchOn: boolean }) {
-  const seasonOn = useSeasonDecor(), miniOn = useMiniPreview(), stripeMode = useStripeMode();
+  const seasonOn = useSeasonDecor(), pictures = useSeasonMode() === "pictures", [picOn, setPicOn] = useState(false), miniOn = useMiniPreview(), stripeMode = useStripeMode();
   const idx = useNearestIndex(scroller, outfits.length);
   const seasons = useMemo(() => outfits.map((o) => (o ? dominantSeason(o.tags) : null)), [outfits]);
   const minis = useMemo(() => (miniOn ? { specs: outfits.map((o) => (o && o.top.id > 0 ? mannequinSpec(o, gender) : undefined) as MannequinSpec), searchOn } : null), [miniOn, outfits, searchOn, gender]);
@@ -40,7 +41,8 @@ export default function WishlistBackdrop({ scroller, outfits, gender, searchOn }
   const colors = useMemo(() => (stripeMode === "colorful" && cur ? outfitStripePalette(cur) : []), [stripeMode, cur]);
   return (
     <>
-      {stripeMode === "off" ? <WishlistBackground /> : <StripeBackground mode={stripeMode} colors={colors} seed={String(cur?.id ?? "")} className="fixed inset-0" style={{ zIndex: LAYER_Z.stripe }} />}
+      {stripeMode === "off" ? (pictures && picOn ? null : <WishlistBackground />) : <StripeBackground mode={stripeMode} colors={colors} seed={String(cur?.id ?? "")} className="fixed inset-0" style={{ zIndex: LAYER_Z.stripe }} />}
+      <BackgroundPicture outfits={outfits} index={idx} stageSource="wishlist" onActive={setPicOn} />
       {(seasonOn || miniOn) && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="absolute inset-0" stageBars stageSource="wishlist" />}
     </>
   );

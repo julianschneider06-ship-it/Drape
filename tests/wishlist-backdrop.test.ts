@@ -39,6 +39,6 @@ test("layer order holds in the Wishlist views: stripe < decor < figure < product
 });
 test("precedence: Stripe Colorful / Simple replaces the Drape Background image, Stripe Off keeps it", () => {
   const back = src("src/components/WishlistBackdrop.tsx");
-  assert.match(back, /stripeMode === "off" \? <WishlistBackground \/> : <StripeBackground/);
+  assert.match(back, /stripeMode === "off" \? \(pictures && picOn \? null : <WishlistBackground \/>\) : <StripeBackground/);
   assert.doesNotMatch(src("src/components/GenerateOutfits.tsx"), /<WishlistBackground/);
 });

@@ -44,15 +44,13 @@ test("window: nearest outfit and both neighbours, inside the list", () => {
 });
 
 test("setting: link wins, otherwise the device choice; default on and saved with the profile", () => {
-  assert.equal(effectiveSeason(null, true), true);
-  assert.equal(effectiveSeason(null, false), false);
-  assert.equal(effectiveSeason("0", true), false);
-  assert.equal(effectiveSeason("1", false), true);
-  assert.equal(effectiveSeason("x", false), false);
-  assert.equal(DEFAULT_PREFS.season, true);
-  assert.equal(cleanPrefs({ v: 1, season: false }).season, false);
-  assert.equal(cleanPrefs({ v: 1, season: "no" }).season, true);
-  assert.equal(cleanPrefs({ v: 1, sale: false }).season, true);   // old saves keep working
+  assert.equal(effectiveSeason(null, "sprites"), "sprites");
+  assert.equal(effectiveSeason(null, "off"), "off");
+  assert.equal(effectiveSeason("0", "sprites"), "off");
+  assert.equal(effectiveSeason("1", "off"), "sprites");
+  assert.equal(effectiveSeason("sprites", "off"), "sprites");
+  assert.equal(effectiveSeason("pictures", "off"), "pictures");
+  assert.equal(effectiveSeason("x", "pictures"), "pictures");
 });
 
 test("deco bitmaps are exactly 16x16 and use only known characters", () => {

@@ -117,7 +117,8 @@ export function glassPieceStyle(mode: StripeMode = "colorful", cfg: Cfg = C): Re
 }
 
 /** Effective mode: ?stripe=0|1|simple link wins (1 = colorful, unknown values ignored), otherwise the Profile choice (device only, default off). */
-export const effectiveStripe = (link: string | null, local: StripeMode): StripeMode => (link === "1" ? "colorful" : link === "0" ? "off" : link === "simple" ? "simple" : local);
+export const parseStripeLink = (link: string | null): StripeMode | null => (link === "1" ? "colorful" : link === "0" ? "off" : link === "simple" ? "simple" : null);
+export const effectiveStripe = (link: string | null, local: StripeMode): StripeMode => parseStripeLink(link) ?? local;
 
 /** Config view of the Simple mode: its own stripe stops (grey only, very faint), same period / second layer. */
 const simpleCfg = (cfg: Cfg = C): Cfg => ({ ...cfg, stops: cfg.simple.stops as unknown as Cfg["stops"], secondOpacityMult: cfg.simple.secondOpacityMult });

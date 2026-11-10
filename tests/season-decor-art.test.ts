@@ -97,8 +97,9 @@ test("?decor parameter: pixel only on 'pixel'", () => {
   assert.equal(parseDecorMode(null), "art");
   assert.equal(parseDecorMode("x"), "art");
 });
-test("layer order: stripe < decoration < figure < products < header/tab bar", () => {
-  assert.ok(LAYER_Z.stripe < LAYER_Z.decor);
+test("layer order: stripe < background picture < decoration < figure < products < header/tab bar", () => {
+  assert.ok(LAYER_Z.stripe < LAYER_Z.image);
+  assert.ok(LAYER_Z.image < LAYER_Z.decor);
   assert.ok(LAYER_Z.decor < LAYER_Z.figure);
   assert.ok(LAYER_Z.figure < LAYER_Z.products);
   assert.ok(LAYER_Z.products < LAYER_Z.chrome);

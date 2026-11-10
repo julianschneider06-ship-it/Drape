@@ -1,6 +1,7 @@
 // Seasonal decoration, pure logic (no React): which season an outfit gets, which part of the screen belongs to which outfit, and the setting.
 import { SEASON_DECOR, DECOR_OVERSCAN_PX, type DecorLayer } from "@/config/season-decor";
 import type { OutfitTags } from "@/outfits/tags";
+import { parseSeasonLink, type SeasonMode } from "@/lib/shop-pref";
 
 export type DecorSeason = "spring" | "summer" | "autumn" | "winter";
 
@@ -29,8 +30,8 @@ export function decorWindow(scrollTop: number, h: number, count: number): number
   return [c - 1, c, c + 1].filter((i) => i >= 0 && i < count);
 }
 
-/** Effective setting: ?season=0|1 link wins (testing), otherwise the Profile choice (device only, default on). */
-export const effectiveSeason = (link: string | null, localOn: boolean): boolean => (link === "1" ? true : link === "0" ? false : localOn);
+/** Effective sprite setting: ?season=0|1|sprites|pictures link wins (testing), otherwise the Profile choice (device only, default sprites). Sprites are drawn only in mode "sprites". */
+export const effectiveSeason = (link: string | null, local: SeasonMode): SeasonMode => parseSeasonLink(link) ?? local;
 
 /** Decoration look: ?decor=pixel = the old pixel art, anything else (or missing) = the painted illustrations. Link parameter only. */
 export type DecorMode = "art" | "pixel";
@@ -42,6 +43,8 @@ export function stageFromRects(top: { bottom: number } | null, bar: { top: numbe
   const y0 = top ? top.bottom : 0, y1 = bar ? bar.top : vh;
   return { x: 0, y: y0, w: vw, h: Math.max(0, y1 - y0) };
 }
+/** Box of a stage-anchored layer (background picture, season art): the stage plus DECOR_OVERSCAN_PX into the bars on every side (the one geometry for both). */
+export const stageBox = (stage: DecorStage, overscan: number = DECOR_OVERSCAN_PX): DecorRect => ({ x: stage.x - overscan, y: stage.y - overscan, w: stage.w + 2 * overscan, h: stage.h + 2 * overscan });
 export type DecorRect = { x: number; y: number; w: number; h: number };
 
 /** Pixel rectangle of one art layer for a STAGE rectangle (the outfit area between the header's bottom edge and the tab bar's top edge). Same coordinate system as `stage`.

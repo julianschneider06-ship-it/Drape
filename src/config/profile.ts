@@ -7,6 +7,8 @@ export const PROFILE_TEXT = {
   saleLabel: "Sale marker",
   bgLabel: "Drape Background",
   seasonLabel: "Seasonal decoration",
+  seasonOptions: [{ id: "off", label: "Off" }, { id: "sprites", label: "Sprites" }, { id: "pictures", label: "Pictures" }] as const,
+  picturesEmpty: "No images yet",
   miniLabel: "Outfit preview",
   stripeLabel: "Stripe background",
   stripeOptions: [{ id: "off", label: "Off" }, { id: "colorful", label: "Colorful" }, { id: "simple", label: "Simple" }] as const,
