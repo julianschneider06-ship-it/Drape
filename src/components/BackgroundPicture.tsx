@@ -4,7 +4,7 @@ import { animate } from "motion/react";
 import { BG_FADE_MS, BG_PRELOAD_NEXT } from "@/config/background-images";
 import { DURATION_MS, sec } from "@/config/motion";
 import { LAYER_Z, STAGE_SOURCES, type StageSource } from "@/config/season-decor";
-import { comboKey, pickBackground, pieceIds } from "@/lib/background-images";
+import { comboKey, parseVeil, pickBackground, pieceIds } from "@/lib/background-images";
 import { useModeNote, useSeasonMode } from "@/lib/client/season-decor";
 import { useReducedMotion } from "@/lib/motion";
 import { stageBox, stageFromRects, type DecorStage } from "@/lib/season-decor";
@@ -46,6 +46,7 @@ function Pic({ src, onShown, onFail }: { src: string; onShown: () => void; onFai
 function BackgroundPicture({ outfits, index, stageSource, onActive }: { outfits: (FeedOutfit | null)[]; index: number; stageSource: StageSource; onActive?: (on: boolean) => void }) {
   const mode = useSeasonMode(), note = useModeNote(), stage = useStage(stageSource);
   const debug = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("decordebug") === "1", []);
+  const veil = useMemo(() => (typeof window !== "undefined" ? parseVeil(window.location.search) : parseVeil("")), []);
   const pick = useMemo(() => {
     const o = outfits[index]; return mode === "pictures" && o ? pickBackground(o.tags, pieceIds(o)) : null;
   }, [mode, outfits, index]);
@@ -72,9 +73,10 @@ function BackgroundPicture({ outfits, index, stageSource, onActive }: { outfits:
             onShown={() => setLayers((p) => p.filter((x) => x.id >= l.id))}
             onFail={() => { failed.current.add(l.src); last.current = null; setLayers((p) => p.filter((x) => x.id !== l.id)); }} />
         ))}
+        {veil.opacity > 0 && layers.length > 0 && <div style={{ position: "absolute", inset: 0, background: veil.color, opacity: veil.opacity }} />}
       </div>
-      {debug && <div aria-hidden style={{ position: "fixed", left: 4, top: stage.y + stage.h - 56, zIndex: 9999, pointerEvents: "none", font: "10px/1.25 ui-monospace, monospace", color: "#fff", background: "rgba(0,0,0,0.65)", padding: "1px 3px", whiteSpace: "pre" }}>
-        {`season mode ${mode}${note ? `  (${note})` : ""}\ncombo ${outfits[index] ? comboKey(outfits[index]!.tags) : "-"}  index ${pick?.index ?? "-"}\n${pick ? pick.label : "no image"}`}
+      {debug && <div aria-hidden style={{ position: "fixed", left: 4, top: stage.y + stage.h - 90, zIndex: 9999, pointerEvents: "none", font: "10px/1.25 ui-monospace, monospace", color: "#fff", background: "rgba(0,0,0,0.65)", padding: "1px 3px", whiteSpace: "pre" }}>
+        {`season mode ${mode}${note ? `  (${note})` : ""}\ncombo ${outfits[index] ? comboKey(outfits[index]!.tags) : "-"}  index ${pick?.index ?? "-"}\nbucket ${pick?.bucket ?? "-"}  step ${pick?.step ?? "-"}\nfile ${pick ? `${pick.name}.webp` : "none"}\nveil ${veil.opacity} ${veil.color}`}
       </div>}
     </>
   );
