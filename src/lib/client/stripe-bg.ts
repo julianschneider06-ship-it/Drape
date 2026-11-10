@@ -1,7 +1,8 @@
 "use client";
 import type { StripeMode } from "@/lib/shop-pref";
 import { useSyncExternalStore } from "react";
-import { effectiveGlassLook, type GlassLook } from "@/lib/stripe-bg";
+import { useMemo } from "react";
+import { effectiveGlassLook, parseGlassOverrides, type GlassLook, type GlassOverrides } from "@/lib/stripe-bg";
 import { useEffectiveStripe, useSeasonMode } from "@/lib/client/season-decor";
 
 /** Stripe background mode: ?stripe=0|1|simple link wins (1 = colorful), else the Profile choice (device only, default off); Pictures mode forces Off (Pictures wins). */
@@ -12,3 +13,7 @@ export const useGlassMode = (): StripeMode => { const s = useEffectiveStripe(), 
 
 /** Glass look: ?glass=frosted|liquid (link only, default liquid). */
 export const useGlassLook = (): GlassLook => useSyncExternalStore(() => () => {}, () => effectiveGlassLook(new URLSearchParams(window.location.search).get("glass")), () => effectiveGlassLook(null));
+
+const search = () => (typeof window === "undefined" ? "" : window.location.search);
+/** ?glassfill / ?glassblur / ?glasszoom debug overrides (link only). */
+export const useGlassOverrides = (): GlassOverrides => { const q = useSyncExternalStore(() => () => {}, search, () => ""); return useMemo(() => parseGlassOverrides(q), [q]); };

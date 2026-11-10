@@ -5,6 +5,7 @@ import { BG_FADE_MS, BG_PRELOAD_NEXT } from "@/config/background-images";
 import { DURATION_MS, sec } from "@/config/motion";
 import { LAYER_Z } from "@/config/season-decor";
 import { comboKey, pickBackground, pieceIds } from "@/lib/background-images";
+import { publishLens, type LensOwner } from "@/lib/client/lens-source";
 import { useModeNote, useSeasonMode, useVeilMode } from "@/lib/client/season-decor";
 import { useReducedMotion } from "@/lib/motion";
 import { outfitPartColors, parseVeilDebug, resolveVeil } from "@/lib/veil";
@@ -41,7 +42,7 @@ function VeilLayers({ color, opacity }: { color: "white" | "black"; opacity: num
 
 /** Full-SCREEN background picture of the outfit in view (mode Pictures only). `outfits[index]` = the outfit as shown; the picture is chosen by the pure `pickBackground`
  *  (combination of dominant season x style family, hash of the shown piece ids). Two pictures crossfade when the outfit changes. A picture that fails to load is simply not drawn. */
-function BackgroundPicture({ outfits, index, onActive }: { outfits: (FeedOutfit | null)[]; index: number; onActive?: (on: boolean) => void }) {
+function BackgroundPicture({ outfits, index, onActive, lensOwner = "feed" }: { outfits: (FeedOutfit | null)[]; index: number; onActive?: (on: boolean) => void; lensOwner?: LensOwner }) {
   const mode = useSeasonMode(), note = useModeNote();
   const debug = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("decordebug") === "1", []);
   const veilMode = useVeilMode(), dbgVeil = useMemo(() => parseVeilDebug(typeof window !== "undefined" ? window.location.search : ""), []);
@@ -62,6 +63,12 @@ function BackgroundPicture({ outfits, index, onActive }: { outfits: (FeedOutfit 
   useEffect(() => { if (next && next.src !== pick?.src) { const im = new Image(); im.decoding = "async"; im.src = next.src; } }, [next, pick]);
   useEffect(() => { onActive?.(!!src); }, [src, onActive]);
   const veil = useMemo(() => resolveVeil({ mode: veilMode, names: outfitPartColors(outfits[index]), pictureOn: mode === "pictures" && layers.length > 0, debug: dbgVeil }), [veilMode, outfits, index, mode, layers.length, dbgVeil]);
+  const lensSrc = layers.length > 0 ? layers[layers.length - 1].src : null;
+  useEffect(() => {   // the glass bars draw a zoomed copy of this picture (+ veil)
+    if (mode !== "pictures" || !lensSrc) return;
+    publishLens(lensOwner, { kind: "picture", src: lensSrc, veil: { color: veil.color, opacity: veil.opacity } });
+    return () => publishLens(lensOwner, null);
+  }, [mode, lensSrc, veil.color, veil.opacity, lensOwner]);
   if (mode !== "pictures") return null;
   return (
     <>

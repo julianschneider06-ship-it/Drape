@@ -64,21 +64,23 @@ export const STRIPE_BG = {
     marginPx: 8,                        // distance to the screen edges
     textOn: "#000000",                  // active tab on the glass
     textOff: "#3a3a42",                 // inactive tab on the glass (contrast >= 4.5 on the fill)
-    // LIQUID look (default, ?glass=liquid; ?glass=frosted = the values above): nearly clear, CSS-only approximation (no displacement filter, iOS Safari cannot refract)
+    // LIQUID look (default, ?glass=liquid; ?glass=frosted = the values above): almost clear, light-based. CSS-only lens approximation (no SVG displacement, iOS Safari cannot refract).
     liquid: {
-      rgb: "255,255,255",               // tint colour (white, so the picture / stripes behind stay true)
-      fillAlpha: 0.08,                  // almost clear
-      blurPx: 4,                        // light blur only
-      saturate: 1.35,                   // moderate boost of what is behind
-      edge: "rgba(255,255,255,0.55)",   // 1 px bright edge (edgeWidthPx is shared)
-      highlightAlpha: 0.32,             // soft specular highlight along the top edge (white gradient fading down)
-      highlightHeightPct: 55,           // how far the highlight reaches down (% of the bar height)
-      topLineAlpha: 0.7,                // thin bright line right under the top edge
-      glowAlpha: 0.16,                  // very soft inner glow (inset, white)
-      glowBlurPx: 14,
-      shadow: "0 3px 12px rgba(20,24,40,0.10)",   // faint soft shadow outside
-      textShadow: "0 0 6px rgba(255,255,255,0.65), 0 0 2px rgba(255,255,255,0.5)",   // keeps text readable on dark pictures without darkening the bar
-      iconShadow: "drop-shadow(0 0 3px rgba(255,255,255,0.7))",                        // same for the tab icons (SVG)
+      rgb: "255,255,255",               // neutral tint (no grey)
+      fillAlpha: 0.02,                  // almost clear (?glassfill=0..0.3)
+      blurPx: 1,                        // backdrop blur (?glassblur=0..12)
+      saturate: 1.3,
+      brightness: 1.06,                 // slight lift of what is behind
+      edgeAlpha: 0.9,                   // 1 px gradient edge: this bright at the top-left ...
+      edgeAlphaEnd: 0.12,               // ... fading to this at the bottom-right
+      highlight: { alpha: 0.3, heightPct: 42 },   // inner highlight along the top edge (white gradient fading down)
+      innerShadow: "inset 0 -7px 10px -5px rgba(20,24,40,0.16)",   // soft inner shadow / glow at the lower edge
+      outerShadow: "0 4px 16px rgba(20,24,40,0.10)",                // very soft shadow outside
+      lensZoom: 1.08,                   // copy of the page background inside the bar, scaled about the bar centre (?glasszoom=1..1.3)
+      lensRimBoost: 0.2,                // white inset glow at the rim (brighter / "thicker" edge of the lens), alpha
+      lensRimPx: 9,                     // width of that rim glow
+      textShadow: "0 1px 2px rgba(0,0,0,0.22)",                     // very subtle, keeps labels readable on bright pictures (fill is NOT raised)
+      iconShadow: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.28))",
     },
   },
   // Simple mode: mostly white with a little grey; no outfit colour anywhere. Stored locally, ?stripe=simple.

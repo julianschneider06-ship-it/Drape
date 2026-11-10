@@ -5,7 +5,8 @@ import { navTabs, TAB_LABELS, type Tab } from "@/lib/nav-tabs";
 import { MENU, MENU_COLORS, SPRING, DURATION_MS, sec } from "@/config/motion";
 import { useReducedMotion } from "@/lib/motion";
 import { STRIPE_BG } from "@/config/stripe-bg";
-import { useGlassLook } from "@/lib/client/stripe-bg";
+import GlassLayers from "./GlassLayers";
+import { useGlassLook, useGlassOverrides } from "@/lib/client/stripe-bg";
 import { glassPieceStyle, glassTextStyle, glassIconStyle } from "@/lib/stripe-bg";
 import { pressProps, stateTransition } from "@/lib/menu-motion";
 
@@ -21,10 +22,10 @@ const Icon = ({ tab }: { tab: Tab }) => (
 
 /** Slim bottom bar (white, thin grey line on top). Active tab black, inactive grey (colour fades); a short black indicator glides over the line to the active tab; a pressed tab springs to 0.94. Switching only toggles visibility; nothing is recorded. Tapping Search while in Search is passed on too (the configurator reopens). */
 function BottomNav({ tab, onTab, searchOn, glass = false }: { tab: Tab; onTab: (t: Tab) => void; searchOn: boolean; glass?: false | "colorful" | "simple" }) {
-  const reduced = useReducedMotion(), look = useGlassLook();
+  const reduced = useReducedMotion(), look = useGlassLook(), ov = useGlassOverrides();
   return (
     <nav aria-label="Main" data-stage-bottom className={`fixed inset-x-0 bottom-0 z-30 pb-[env(safe-area-inset-bottom)] ${glass ? "" : "border-t border-neutral-200 bg-white"}`} style={{ height: `calc(${NAV_PX}px + env(safe-area-inset-bottom))` }}>
-      {glass && <div aria-hidden className="absolute" style={{ ...glassPieceStyle(glass || "colorful", look), left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: 2, bottom: "calc(env(safe-area-inset-bottom) + 2px)" }} />}
+      {glass && <div aria-hidden className="absolute" style={{ ...glassPieceStyle(glass || "colorful", look, undefined, ov), left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: 2, bottom: "calc(env(safe-area-inset-bottom) + 2px)" }}>{look === "liquid" && <GlassLayers />}</div>}
       <div className="relative mx-auto flex h-[49px] max-w-md" role="tablist" style={glass ? { paddingInline: STRIPE_BG.glass.marginPx + STRIPE_BG.glass.capsulePadPx, ...glassTextStyle(look), ...glassIconStyle(look) } : undefined}>
         {navTabs(searchOn).map((t) => (
           <m.button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => (tab !== t || t === "search") && onTab(t)}

@@ -37,8 +37,9 @@ import BackgroundPicture from "./BackgroundPicture";
 import SeasonDecor from "./SeasonDecor";
 import { LAYER_Z } from "@/config/season-decor";
 import StripeBackground from "./StripeBackground";
+import GlassLayers from "./GlassLayers";
 import { viewHeight } from "@/lib/view-height";
-import { useStripeMode, useGlassMode, useGlassLook } from "@/lib/client/stripe-bg";
+import { useStripeMode, useGlassMode, useGlassLook, useGlassOverrides } from "@/lib/client/stripe-bg";
 import { outfitStripePalette, glassPieceStyle, glassTextStyle } from "@/lib/stripe-bg";
 import { STRIPE_BG } from "@/config/stripe-bg";
 import { dominantSeason } from "@/lib/season-decor";
@@ -121,7 +122,7 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
   const seasonOn = useSeasonDecor();
   const seasons = useMemo(() => items.map((o) => dominantSeason(o.tags)), [items]);   // decoration per outfit (swaps do not change the outfit's tags)
   const shown = useMemo(() => items.map((o) => applySwaps(o, swaps[o.id])), [items, swaps]);   // the outfits as the user sees them after swaps
-  const stripeMode = useStripeMode(), stripeOn = stripeMode !== "off", glassMode = useGlassMode(), glassLook = useGlassLook();
+  const stripeMode = useStripeMode(), stripeOn = stripeMode !== "off", glassMode = useGlassMode(), glassLook = useGlassLook(), glassOv = useGlassOverrides();
   const miniOn = useMiniPreview();
   const stripeColors = useMemo(() => (stripeMode === "colorful" && shown[railIdx] ? outfitStripePalette(shown[railIdx]) : []), [stripeMode, shown, railIdx]);   // palette of the outfit in view (follows swaps)
   const minis = useMemo(() => (miniOn ? { specs: shown.map((o) => mannequinSpec(o, gender ?? "women")), searchOn } : null), [miniOn, shown, searchOn, gender]);   // outfit preview figures follow swaps
@@ -455,7 +456,8 @@ export default function Feed({ defaults }: { defaults?: { feed: "base" | "dynami
         {obPhase === "off" && <BackgroundPicture outfits={shown} index={railIdx} />}
         {(seasonOn || miniOn) && obPhase === "off" && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="fixed inset-x-0 top-0" style={DECOR_BOX} sunFront stageBars />}
         <header data-stage-top className={glassUi ? "fixed z-30 flex items-center justify-between px-3 pb-2 pt-2" : "fixed inset-x-0 top-0 z-30 flex items-center justify-between bg-white/90 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur"}
-          style={glassUi ? { ...glassPieceStyle(glassUi || "colorful", glassLook), ...glassTextStyle(glassLook), paddingLeft: STRIPE_BG.glass.capsulePadPx, paddingRight: STRIPE_BG.glass.capsulePadPx, left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : undefined}>
+          style={glassUi ? { ...glassPieceStyle(glassUi || "colorful", glassLook, undefined, glassOv), ...glassTextStyle(glassLook), paddingLeft: STRIPE_BG.glass.capsulePadPx, paddingRight: STRIPE_BG.glass.capsulePadPx, left: STRIPE_BG.glass.marginPx, right: STRIPE_BG.glass.marginPx, top: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : undefined}>
+          {glassUi && glassLook === "liquid" && <GlassLayers />}
           <span className="w-16 text-lg font-semibold tracking-tight">Drape</span>
           <Segmented id="gender" label="Section" disabled={obHeader} value={gender as Gender} onChange={setGender} options={[{ id: "women", label: "Women" }, { id: "men", label: "Men" }]} />
           <span className="w-16" aria-hidden />

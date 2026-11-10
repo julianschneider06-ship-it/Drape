@@ -1,4 +1,5 @@
 "use client";
+import { publishLens, type LensOwner } from "@/lib/client/lens-source";
 import { memo, useEffect, useMemo, useRef } from "react";
 import { animate } from "motion/react";
 import { STRIPE_BG as C } from "@/config/stripe-bg";
@@ -7,7 +8,7 @@ import type { StripeMode } from "@/lib/shop-pref";
 
 /** Liquid-glass background of the For You feed: full screen (behind status bar, header and tab bar, down to the physical bottom edge), fixed, behind everything, pointer-events none.
  *  Two gradient layers crossfade (opacity only) when the colours change; stripes and highlight are static on top. The last `curve.zonePx` px tilt the stripes gently to the left. */
-function StripeBackground({ colors, className, style, mode = "colorful", seed = "" }: { colors: readonly string[]; seed?: string; className: string; style?: React.CSSProperties; mode?: StripeMode }) {
+function StripeBackground({ colors, className, style, mode = "colorful", seed = "", lensOwner = "feed" }: { colors: readonly string[]; seed?: string; className: string; style?: React.CSSProperties; mode?: StripeMode; lensOwner?: LensOwner | null }) {
   const simple = mode === "simple";
   const key = simple ? `s:${seed}` : colors.join("|");
   const a = useRef<HTMLDivElement>(null), b = useRef<HTMLDivElement>(null), front = useRef<"a" | "b" | null>(null), last = useRef("");
@@ -23,6 +24,13 @@ function StripeBackground({ colors, className, style, mode = "colorful", seed = 
     if (prev) animate(prev, { opacity: 0 }, { duration: dur, ease: "easeInOut" });
     front.current = front.current === "a" ? "b" : "a";
   }, [key, colors, simple, seed]);
+  const lensKey = `${mode}~${simple ? "" : colors.join("|")}~${seed}`;
+  useEffect(() => {
+    if (!lensOwner) return;
+    publishLens(lensOwner, { kind: "stripe", mode, colors, seed });
+    return () => publishLens(lensOwner, null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lensOwner, lensKey]);
   return (
     <div aria-hidden className={`pointer-events-none ${className}`} style={{ ...style, background: simple ? simpleBackgroundCss() : C.fallbackColor, overflow: "hidden" }}>
       <div ref={a} className="absolute inset-0" style={{ opacity: 0 }} /><div ref={b} className="absolute inset-0" style={{ opacity: 0 }} />

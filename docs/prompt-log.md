@@ -103,4 +103,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 99: autumn background pictures, delivered per group (message first line = group): autumn-smart 5 imported (smart done; street/active follow); last commit on main: see git log.
 - Prompt 99: autumn-street 5 imported (group label came at the end of the message).
 - Prompt 99: autumn-active 5 imported; all three autumn groups done (autumn soft/rugged empty); last commit on main: see git log.
-- Prompt 100: liquid glass bars (nearly clear, light blur, bright edge, specular, glow; `?glass=frosted|liquid`, default liquid); last commit on main: see git log.
+- Prompt 100: liquid glass bars (almost clear, light-based edge/highlight, lens copy of the background; `?glass=frosted|liquid`, `?glassfill/glassblur/glasszoom`, default liquid); last commit on main: see git log.

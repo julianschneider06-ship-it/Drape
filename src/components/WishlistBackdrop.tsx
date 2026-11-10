@@ -41,8 +41,8 @@ export default function WishlistBackdrop({ scroller, outfits, gender, searchOn }
   const colors = useMemo(() => (stripeMode === "colorful" && cur ? outfitStripePalette(cur) : []), [stripeMode, cur]);
   return (
     <>
-      {stripeMode === "off" ? (pictures && picOn ? null : <WishlistBackground />) : <StripeBackground mode={stripeMode} colors={colors} seed={String(cur?.id ?? "")} className="fixed inset-0" style={{ zIndex: LAYER_Z.stripe }} />}
-      <BackgroundPicture outfits={outfits} index={idx} onActive={setPicOn} />
+      {stripeMode === "off" ? (pictures && picOn ? null : <WishlistBackground />) : <StripeBackground mode={stripeMode} colors={colors} seed={String(cur?.id ?? "")} className="fixed inset-0" lensOwner="wishlist" style={{ zIndex: LAYER_Z.stripe }} />}
+      <BackgroundPicture outfits={outfits} index={idx} onActive={setPicOn} lensOwner="wishlist" />
       {(seasonOn || miniOn) && <SeasonDecor scroller={scroller} seasons={seasonOn ? seasons : null} minis={minis} className="absolute inset-0" stageBars stageSource="wishlist" />}
     </>
   );

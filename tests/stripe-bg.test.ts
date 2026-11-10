@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { STRIPE_BG as C } from "../src/config/stripe-bg";
 import { COLOR_HEX } from "../src/lib/shine";
 import { DEFAULT_PREFS, cleanPrefs } from "../src/lib/shop-pref";
-import { DEFAULT_GLASS_LOOK, effectiveGlassLook, glassTextStyle, effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, curveSlices, glassPieceStyle, glassFill, simpleBackgroundCss, simpleStripeCss, greyBlobsCss, CAPSULE_RADIUS, specularCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
+import { parseGlassOverrides, liquidValues, glassSheenStyle, DEFAULT_GLASS_LOOK, effectiveGlassLook, glassTextStyle, effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, curveSlices, glassPieceStyle, glassFill, simpleBackgroundCss, simpleStripeCss, greyBlobsCss, CAPSULE_RADIUS, specularCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
 
 const card = (col: string | null) => ({ id: 1, mq: { sub: null, col, fit: null, sil: null, outer: false } }) as never;
 const outfit = (cols: (string | null)[], acc: (string | null)[] = []) => ({ top: card(cols[0]), bottom: card(cols[1]), shoes: card(cols[2]), accessories: acc.map((c) => ({ type: "bag", card: card(c) })) }) as never;
@@ -132,17 +132,30 @@ test("glass look: ?glass link selects liquid (default) or frosted, unknown ignor
   assert.equal(effectiveGlassLook("nope"), "liquid");
 });
 
-test("liquid glass: nearly clear, light blur, prefixed backdrop filter, no stripes; frosted values stay", () => {
+test("liquid glass: almost clear, tiny blur, prefixed backdrop filter, no stripes; frosted values stay", () => {
   const L = C.glass.liquid;
-  assert.ok(L.fillAlpha <= 0.12 && L.blurPx <= 6 && L.blurPx < C.glass.blurPx && L.fillAlpha < C.glass.fillAlpha);
+  assert.ok(L.fillAlpha <= 0.04 && L.blurPx <= 2 && L.saturate > 1 && L.brightness >= 1 && L.lensZoom > 1 && L.lensZoom <= 1.3);
   for (const m of ["colorful", "simple"] as const) {
-    const s = glassPieceStyle(m, "liquid"), bd = `blur(${L.blurPx}px) saturate(${L.saturate})`;
+    const s = glassPieceStyle(m, "liquid"), bd = `blur(${L.blurPx}px) saturate(${L.saturate}) brightness(${L.brightness})`;
     assert.equal(s.backdropFilter, bd); assert.equal(s.WebkitBackdropFilter, bd);
-    assert.ok(String(s.background).includes(glassFill(m, "liquid")) && String(s.boxShadow).includes(L.edge) && String(s.boxShadow).includes(L.shadow));
+    assert.ok(String(s.background).includes(glassFill(m, "liquid")) && s.boxShadow === L.outerShadow);
     assert.ok(!/stripe|repeating/.test(String(s.background)), "no stripes inside");
     assert.equal(s.borderRadius, CAPSULE_RADIUS);
   }
+  const sh = glassSheenStyle();
+  assert.ok(String(sh.edge.WebkitMaskComposite) === "xor" && String(sh.edge.background).includes("135deg"));
+  assert.ok(String(sh.sheen.boxShadow).includes(L.innerShadow));
   assert.equal(glassPieceStyle("colorful", "frosted").backdropFilter, `blur(${C.glass.blurPx}px) saturate(${C.glass.saturate})`);
   assert.equal(glassTextStyle("frosted").textShadow, undefined);
   assert.equal(glassTextStyle("liquid").textShadow, L.textShadow);
+});
+
+test("glass debug overrides: ?glassfill 0..0.3, ?glassblur 0..12, ?glasszoom 1..1.3; bad values ignored", () => {
+  assert.deepEqual(parseGlassOverrides("?glassfill=0.1&glassblur=6&glasszoom=1.2"), { fill: 0.1, blur: 6, zoom: 1.2 });
+  assert.deepEqual(parseGlassOverrides("?glassfill=0.5&glassblur=20&glasszoom=2"), {});
+  assert.deepEqual(parseGlassOverrides("?glassfill=abc&glassblur=&glasszoom=0.9"), {});
+  assert.deepEqual(parseGlassOverrides(""), {});
+  const v = liquidValues(parseGlassOverrides("?glassblur=5"));
+  assert.equal(v.blur, 5); assert.equal(v.fill, C.glass.liquid.fillAlpha); assert.equal(v.zoom, C.glass.liquid.lensZoom);
+  assert.ok(String(glassPieceStyle("colorful", "liquid", C, { fill: 0.2, blur: 7 }).backdropFilter).includes("blur(7px)"));
 });

@@ -112,20 +112,34 @@ export const DEFAULT_GLASS_LOOK: GlassLook = "liquid";
 export const parseGlassLink = (link: string | null): GlassLook | null => (link === "liquid" || link === "frosted" ? link : null);
 export const effectiveGlassLook = (link: string | null): GlassLook => parseGlassLink(link) ?? DEFAULT_GLASS_LOOK;
 
-/** CSS of one glass piece (header / tab bar / Wishlist header). Frosted: tint + blur + soft edge. Liquid: almost clear, light blur, bright edge, top specular, inner glow. No stripes or texture inside either way. */
-export function glassPieceStyle(mode: StripeMode = "colorful", look: GlassLook = DEFAULT_GLASS_LOOK, cfg: Cfg = C): React.CSSProperties {
+/** Debug link overrides (link only, not stored): ?glassfill=0..0.3, ?glassblur=0..12, ?glasszoom=1..1.3; out of range / not a number = ignored. */
+export interface GlassOverrides { fill?: number; blur?: number; zoom?: number }
+const inRange = (v: string | null, lo: number, hi: number): number | undefined => { if (v === null || v.trim() === "") return undefined; const n = Number(v); return Number.isFinite(n) && n >= lo && n <= hi ? n : undefined; };
+export function parseGlassOverrides(search: string): GlassOverrides {
+  const q = new URLSearchParams(search), o: GlassOverrides = {}, f = inRange(q.get("glassfill"), 0, 0.3), b = inRange(q.get("glassblur"), 0, 12), z = inRange(q.get("glasszoom"), 1, 1.3);
+  if (f !== undefined) o.fill = f; if (b !== undefined) o.blur = b; if (z !== undefined) o.zoom = z;
+  return o;
+}
+/** Effective liquid numbers (config, then link overrides) */
+export const liquidValues = (ov: GlassOverrides = {}, cfg: Cfg = C) => ({ fill: ov.fill ?? cfg.glass.liquid.fillAlpha, blur: ov.blur ?? cfg.glass.liquid.blurPx, zoom: ov.zoom ?? cfg.glass.liquid.lensZoom });
+
+/** CSS of one glass piece (header / tab bar / Wishlist header). Frosted: tint + blur + soft edge. Liquid: almost clear, tiny blur, outer shadow only; the light (edge, highlight, inner shadow, rim) and the lens copy are drawn by `GlassLayers` inside the bar. No stripes or texture. */
+export function glassPieceStyle(mode: StripeMode = "colorful", look: GlassLook = DEFAULT_GLASS_LOOK, cfg: Cfg = C, ov: GlassOverrides = {}): React.CSSProperties {
   const g = cfg.glass, radius = g.capsule ? CAPSULE_RADIUS : g.radiusPx;
   if (look === "frosted") {
     const blur = `blur(${g.blurPx}px) saturate(${g.saturate})`;
     return { background: glassFill(mode, "frosted", cfg), backdropFilter: blur, WebkitBackdropFilter: blur, boxShadow: `inset 0 0 0 ${g.edgeWidthPx}px ${g.edge}, ${g.shadow}`, borderRadius: radius };
   }
-  const l = g.liquid, blur = `blur(${l.blurPx}px) saturate(${l.saturate})`;
+  const l = g.liquid, v = liquidValues(ov, cfg), f = `blur(${v.blur}px) saturate(${l.saturate}) brightness(${l.brightness})`;
+  return { background: `rgba(${l.rgb},${v.fill})`, backdropFilter: f, WebkitBackdropFilter: f, boxShadow: l.outerShadow, borderRadius: radius };
+}
+
+/** Light layers of a liquid bar (drawn above the lens copy, below icons / text): top highlight, lower inner shadow + rim glow, gradient edge (used with a mask). */
+export function glassSheenStyle(cfg: Cfg = C): { sheen: React.CSSProperties; edge: React.CSSProperties } {
+  const l = cfg.glass.liquid, w = cfg.glass.edgeWidthPx, w255 = (a: number) => `rgba(255,255,255,${a})`;
   return {
-    background: `linear-gradient(180deg, rgba(255,255,255,${l.highlightAlpha}) 0%, rgba(255,255,255,0) ${l.highlightHeightPct}%), ${glassFill(mode, "liquid", cfg)}`,
-    backdropFilter: blur,
-    WebkitBackdropFilter: blur,
-    boxShadow: `inset 0 0 0 ${g.edgeWidthPx}px ${l.edge}, inset 0 1px 0 rgba(255,255,255,${l.topLineAlpha}), inset 0 0 ${l.glowBlurPx}px rgba(255,255,255,${l.glowAlpha}), ${l.shadow}`,
-    borderRadius: radius,
+    sheen: { background: `linear-gradient(180deg, ${w255(l.highlight.alpha)} 0%, ${w255(0)} ${l.highlight.heightPct}%)`, boxShadow: `${l.innerShadow}, inset 0 0 ${l.lensRimPx}px ${w255(l.lensRimBoost)}` },
+    edge: { padding: w, background: `linear-gradient(135deg, ${w255(l.edgeAlpha)} 0%, ${w255((l.edgeAlpha + l.edgeAlphaEnd) / 2)} 40%, ${w255(l.edgeAlphaEnd)} 100%)`, WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)", WebkitMaskComposite: "xor", mask: "linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)" },
   };
 }
 
@@ -143,8 +157,8 @@ export const simpleStripeCss = (cfg: Cfg = C): string => stripeCss(simpleCfg(cfg
 /** Simple background: soft vertical white -> very light grey gradient */
 export const simpleBackgroundCss = (cfg: Cfg = C): string => `linear-gradient(180deg, ${cfg.simple.bgTop} 0%, ${cfg.simple.bgBottom} 100%)`;
 /** Glass fill. Frosted: colour of the mode, translucency shared (`glass.fillAlpha`). Liquid: white tint at `glass.liquid.fillAlpha`. */
-export const glassFill = (mode: StripeMode = "colorful", look: GlassLook = "frosted", cfg: Cfg = C): string =>
-  look === "liquid" ? `rgba(${cfg.glass.liquid.rgb},${cfg.glass.liquid.fillAlpha})` : `rgba(${mode === "simple" ? cfg.simple.glassRgb : cfg.glass.rgb},${cfg.glass.fillAlpha})`;
+export const glassFill = (mode: StripeMode = "colorful", look: GlassLook = "frosted", cfg: Cfg = C, ov: GlassOverrides = {}): string =>
+  look === "liquid" ? `rgba(${cfg.glass.liquid.rgb},${liquidValues(ov, cfg).fill})` : `rgba(${mode === "simple" ? cfg.simple.glassRgb : cfg.glass.rgb},${cfg.glass.fillAlpha})`;
 /** Simple background: soft organic grey blobs (light grey mostly, some darker) over the white-to-grey base. Seeded by the outfit id: same outfit = same blobs. */
 export function greyBlobsCss(seed: string, cfg: Cfg = C): string {
   const g = cfg.simple.grey, rnd = seededRnd(hash32(`grey:${seed}`)), r = 45 + cfg.simple.grey.softness * 55;
