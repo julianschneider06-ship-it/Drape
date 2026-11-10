@@ -64,6 +64,22 @@ export const STRIPE_BG = {
     marginPx: 8,                        // distance to the screen edges
     textOn: "#000000",                  // active tab on the glass
     textOff: "#3a3a42",                 // inactive tab on the glass (contrast >= 4.5 on the fill)
+    // LIQUID look (default, ?glass=liquid; ?glass=frosted = the values above): nearly clear, CSS-only approximation (no displacement filter, iOS Safari cannot refract)
+    liquid: {
+      rgb: "255,255,255",               // tint colour (white, so the picture / stripes behind stay true)
+      fillAlpha: 0.08,                  // almost clear
+      blurPx: 4,                        // light blur only
+      saturate: 1.35,                   // moderate boost of what is behind
+      edge: "rgba(255,255,255,0.55)",   // 1 px bright edge (edgeWidthPx is shared)
+      highlightAlpha: 0.32,             // soft specular highlight along the top edge (white gradient fading down)
+      highlightHeightPct: 55,           // how far the highlight reaches down (% of the bar height)
+      topLineAlpha: 0.7,                // thin bright line right under the top edge
+      glowAlpha: 0.16,                  // very soft inner glow (inset, white)
+      glowBlurPx: 14,
+      shadow: "0 3px 12px rgba(20,24,40,0.10)",   // faint soft shadow outside
+      textShadow: "0 0 6px rgba(255,255,255,0.65), 0 0 2px rgba(255,255,255,0.5)",   // keeps text readable on dark pictures without darkening the bar
+      iconShadow: "drop-shadow(0 0 3px rgba(255,255,255,0.7))",                        // same for the tab icons (SVG)
+    },
   },
   // Simple mode: mostly white with a little grey; no outfit colour anywhere. Stored locally, ?stripe=simple.
   simple: {

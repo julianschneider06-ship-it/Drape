@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 
 import { DECOR_ART, STAGE_SOURCES, type StageSource } from "@/config/season-decor";
 import { useModeNote, useSeasonMode } from "@/lib/client/season-decor";
 import { useEffectiveStripe } from "@/lib/client/season-decor";
+import { useGlassLook } from "@/lib/client/stripe-bg";
 import { computeDecorRect, type DecorSeason, type DecorStage } from "@/lib/season-decor";
 
 // Debug overlay for the seasonal decoration, only mounted with the link parameter ?decordebug=1 (no switch, no persistence).
@@ -11,7 +12,7 @@ const box = (c: string, r: { x: number; y: number; w: number; h: number }): CSSP
 const f = (n: number) => Math.round(n * 10) / 10;
 
 export default function DecorDebug({ stage, box: artBox, inBox, season, mode, source = "feed" }: { source?: StageSource; stage: DecorStage | null; box: RefObject<HTMLElement | null>; inBox: DecorStage; season: DecorSeason | null; mode: string }) {
-  const sMode = useSeasonMode(), stripe = useEffectiveStripe(), note = useModeNote();
+  const sMode = useSeasonMode(), stripe = useEffectiveStripe(), glassLook = useGlassLook(), note = useModeNote();
   const probe = useRef<HTMLDivElement>(null);
   const [, bump] = useState(0), [safe, setSafe] = useState("0/0/0/0");
   useEffect(() => {
@@ -36,7 +37,7 @@ export default function DecorDebug({ stage, box: artBox, inBox, season, mode, so
           <div style={{ ...t, left: Math.max(0, l.r.x), top: Math.min(vh - 14, l.r.y + l.r.h / 2), background: "rgba(37,99,235,0.85)" }}>{`${l.name} ${f(l.r.x)},${f(l.r.y)} ${f(l.r.w)}x${f(l.r.h)}`}</div>
         </div>
       ))}
-      <div style={{ ...t, left: 4, top: st.y + 4 }}>{`viewport ${vw}x${vh}  safe(t/r/b/l) ${safe}\nheader h ${f(hdr?.height ?? 0)}  tab bar h ${f(bar?.height ?? 0)}\nstage x${f(st.x)} y${f(st.y)} ${f(st.w)}x${f(st.h)}\nseason ${season ?? "none"}  decor ${mode}  stage ${source}\nseason mode ${sMode}  stripe ${stripe}${note ? `  (${note})` : ""}`}</div>
+      <div style={{ ...t, left: 4, top: st.y + 4 }}>{`viewport ${vw}x${vh}  safe(t/r/b/l) ${safe}\nheader h ${f(hdr?.height ?? 0)}  tab bar h ${f(bar?.height ?? 0)}\nstage x${f(st.x)} y${f(st.y)} ${f(st.w)}x${f(st.h)}\nseason ${season ?? "none"}  decor ${mode}  stage ${source}\nseason mode ${sMode}  stripe ${stripe}  glass ${glassLook}${note ? `  (${note})` : ""}`}</div>
     </div>
   );
 }

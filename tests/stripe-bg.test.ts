@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { STRIPE_BG as C } from "../src/config/stripe-bg";
 import { COLOR_HEX } from "../src/lib/shine";
 import { DEFAULT_PREFS, cleanPrefs } from "../src/lib/shop-pref";
-import { effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, curveSlices, glassPieceStyle, glassFill, simpleBackgroundCss, simpleStripeCss, greyBlobsCss, CAPSULE_RADIUS, specularCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
+import { DEFAULT_GLASS_LOOK, effectiveGlassLook, glassTextStyle, effectiveStripe, gradientCss, isNeutral, normalizeColor, outfitColorNames, curveSlices, glassPieceStyle, glassFill, simpleBackgroundCss, simpleStripeCss, greyBlobsCss, CAPSULE_RADIUS, specularCss, stripeCss, stripePalette, toHsl } from "../src/lib/stripe-bg";
 
 const card = (col: string | null) => ({ id: 1, mq: { sub: null, col, fit: null, sil: null, outer: false } }) as never;
 const outfit = (cols: (string | null)[], acc: (string | null)[] = []) => ({ top: card(cols[0]), bottom: card(cols[1]), shoes: card(cols[2]), accessories: acc.map((c) => ({ type: "bag", card: card(c) })) }) as never;
@@ -57,8 +57,8 @@ test("css strings use the config", () => {
   assert.ok(s.startsWith("repeating-linear-gradient(90deg") && s.includes(`${C.periodPx}px`) && !s.includes("blur"));
   assert.ok(!stripeCss({ ...C, secondEnabled: false } as unknown as typeof C).includes(`${+(C.periodPx * C.secondPeriodMult).toFixed(3)}px`));
   assert.ok(!stripeCss().includes("blur") && specularCss().includes(`${C.specular.angleDeg}deg`));
-  const gs = glassPieceStyle();
-  assert.ok(String(gs.background).includes(glassFill("colorful")) && String(gs.boxShadow).includes(C.glass.edge) && gs.borderRadius === CAPSULE_RADIUS);
+  const gs = glassPieceStyle("colorful", "frosted");
+  assert.ok(String(gs.background).includes(glassFill("colorful", "frosted")) && String(gs.boxShadow).includes(C.glass.edge) && gs.borderRadius === CAPSULE_RADIUS);
   assert.ok(!/gradient/.test(String(gs.background)), "glass has no stripes or gradients inside");
   assert.ok(String(gs.backdropFilter).includes(`blur(${C.glass.blurPx}px)`));
   const g = gradientCss(["#aabbcc", "#ddeeff"]);
@@ -84,8 +84,8 @@ test("three-state switch: default off, link wins (0 | 1 | simple), old saves sta
 
 test("shared glass translucency: header and tab bar use one style function, same alpha in both modes", () => {
   assert.ok(C.glass.fillAlpha > 0.2 && C.glass.fillAlpha < 0.8);
-  for (const m of ["colorful", "simple"] as const) assert.ok(glassFill(m).endsWith(`,${C.glass.fillAlpha})`) && String(glassPieceStyle(m).background).includes(glassFill(m)));
-  assert.notEqual(glassFill("colorful"), glassFill("simple"));
+  for (const m of ["colorful", "simple"] as const) assert.ok(glassFill(m, "frosted").endsWith(`,${C.glass.fillAlpha})`) && String(glassPieceStyle(m, "frosted").background).includes(glassFill(m, "frosted")));
+  assert.notEqual(glassFill("colorful", "frosted"), glassFill("simple", "frosted"));
   const lum = (rgb: string) => rgb.split(",").reduce((t, v) => t + Number(v), 0);
   assert.ok(lum(C.simple.glassRgb) > lum(C.glass.rgb));   // Simple glass is the lighter grey
 });
@@ -101,7 +101,7 @@ test("simple mode: grey only, faint, no colour", () => {
 test("capsule glass: full semicircle ends, padding keeps content clear; flag off falls back to the small radius", () => {
   assert.ok(C.glass.capsule && C.glass.capsulePadPx >= 12);
   assert.equal(glassPieceStyle("simple").borderRadius, CAPSULE_RADIUS);
-  assert.equal(glassPieceStyle("colorful", { ...C, glass: { ...C.glass, capsule: false } } as unknown as typeof C).borderRadius, C.glass.radiusPx);
+  assert.equal(glassPieceStyle("colorful", "liquid", { ...C, glass: { ...C.glass, capsule: false } } as unknown as typeof C).borderRadius, C.glass.radiusPx);
 });
 
 test("simple grey blobs: greys only, deterministic per seed, varies between seeds, no blur", () => {
@@ -122,4 +122,27 @@ test("bottom curve: tilt grows to maxDeg, slices tile the zone, drift keeps stri
   assert.ok(Math.abs(sl.reduce((t, s) => t + s.heightPx, 0) - C.curve.zonePx) < 1e-9);
   assert.equal(sl[0].shiftPx, 0);
   assert.ok(sl.every((s, i) => i === 0 || (s.shiftPx < sl[i - 1].shiftPx && Math.abs(s.topPx - (sl[i - 1].topPx + sl[i - 1].heightPx)) < 1e-9)));
+});
+
+test("glass look: ?glass link selects liquid (default) or frosted, unknown ignored", () => {
+  assert.equal(DEFAULT_GLASS_LOOK, "liquid");
+  assert.equal(effectiveGlassLook(null), "liquid");
+  assert.equal(effectiveGlassLook("frosted"), "frosted");
+  assert.equal(effectiveGlassLook("liquid"), "liquid");
+  assert.equal(effectiveGlassLook("nope"), "liquid");
+});
+
+test("liquid glass: nearly clear, light blur, prefixed backdrop filter, no stripes; frosted values stay", () => {
+  const L = C.glass.liquid;
+  assert.ok(L.fillAlpha <= 0.12 && L.blurPx <= 6 && L.blurPx < C.glass.blurPx && L.fillAlpha < C.glass.fillAlpha);
+  for (const m of ["colorful", "simple"] as const) {
+    const s = glassPieceStyle(m, "liquid"), bd = `blur(${L.blurPx}px) saturate(${L.saturate})`;
+    assert.equal(s.backdropFilter, bd); assert.equal(s.WebkitBackdropFilter, bd);
+    assert.ok(String(s.background).includes(glassFill(m, "liquid")) && String(s.boxShadow).includes(L.edge) && String(s.boxShadow).includes(L.shadow));
+    assert.ok(!/stripe|repeating/.test(String(s.background)), "no stripes inside");
+    assert.equal(s.borderRadius, CAPSULE_RADIUS);
+  }
+  assert.equal(glassPieceStyle("colorful", "frosted").backdropFilter, `blur(${C.glass.blurPx}px) saturate(${C.glass.saturate})`);
+  assert.equal(glassTextStyle("frosted").textShadow, undefined);
+  assert.equal(glassTextStyle("liquid").textShadow, L.textShadow);
 });

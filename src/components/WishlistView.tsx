@@ -12,8 +12,8 @@ import type { SlotName } from "@/lib/layout/engine";
 import LikesView from "./LikesView";
 import GenerateOutfits from "./GenerateOutfits";
 import MyOutfits from "./MyOutfits";
-import { useGlassMode } from "@/lib/client/stripe-bg";
-import { glassPieceStyle } from "@/lib/stripe-bg";
+import { useGlassMode, useGlassLook } from "@/lib/client/stripe-bg";
+import { glassPieceStyle, glassTextStyle } from "@/lib/stripe-bg";
 import { STRIPE_BG } from "@/config/stripe-bg";
 import { LAYER_Z } from "@/config/season-decor";
 
@@ -26,7 +26,7 @@ export default function WishlistView({ searchOn, icons, customize, gender, liked
   onOpen: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => void; onLike: (card: FeedCard, outfit: FeedOutfit, index: number, slot: SlotName) => boolean;
 }) {
   const reduced = useReducedMotion(), present = useIsPresent();
-  const stripeMode = useGlassMode(), stripeBg = stripeMode !== "off" && tab !== "products";   // Stripe background in Generate Outfits / My Outfits: transparent view, glass header (like For You); Products stays white
+  const stripeMode = useGlassMode(), glassLook = useGlassLook(), stripeBg = stripeMode !== "off" && tab !== "products";   // Stripe background in Generate Outfits / My Outfits: transparent view, glass header (like For You); Products stays white
   const [shuffle, setShuffle] = useState(0);
   const [entryIds] = useState(() => [...liked]);   // likes as of entering the Wishlist: soft-unliked products are only dropped from new batches after the next entry
   return (
@@ -35,7 +35,7 @@ export default function WishlistView({ searchOn, icons, customize, gender, liked
       transition={{ duration: sec(reduced ? DURATION_MS.reducedFade : DURATION_MS.tabIn), ease: "easeOut" }}>
       <div data-stage-wishlist-top className={`relative shrink-0 ${stripeBg ? "pb-2" : "bg-white px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]"}`}
         style={stripeBg ? { zIndex: LAYER_Z.chrome, paddingTop: "max(0.25rem, calc(env(safe-area-inset-top) - 0.25rem))" } : { zIndex: LAYER_Z.chrome }}>
-        <div className={stripeBg ? "px-3 pb-1" : "contents"} style={stripeBg ? { ...glassPieceStyle(stripeMode), marginLeft: STRIPE_BG.glass.marginPx, marginRight: STRIPE_BG.glass.marginPx, paddingLeft: STRIPE_BG.glass.capsulePadPx, paddingRight: STRIPE_BG.glass.capsulePadPx } : undefined}>
+        <div className={stripeBg ? "px-3 pb-1" : "contents"} style={stripeBg ? { ...glassPieceStyle(stripeMode, glassLook), ...glassTextStyle(glassLook), marginLeft: STRIPE_BG.glass.marginPx, marginRight: STRIPE_BG.glass.marginPx, paddingLeft: STRIPE_BG.glass.capsulePadPx, paddingRight: STRIPE_BG.glass.capsulePadPx } : undefined}>
         <div className="relative flex items-center justify-center py-3">
           <h1 className="text-base font-semibold">Wishlist</h1>
           <AnimatePresence>

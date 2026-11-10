@@ -106,17 +106,32 @@ export function curveSlices(cfg: Cfg = C): CurveSlice[] {
 /** Capsule radius: larger than any bar height, so the browser clamps it to half the height (full semicircle ends) */
 export const CAPSULE_RADIUS = 9999;
 
-/** CSS of one frosted glass piece (header / tab bar): translucent tint + backdrop blur + soft edge and shadow. No stripes or texture inside. */
-export function glassPieceStyle(mode: StripeMode = "colorful", cfg: Cfg = C): React.CSSProperties {
-  const g = cfg.glass, blur = `blur(${g.blurPx}px) saturate(${g.saturate})`;
+/** Glass look: "liquid" (default, nearly clear) or "frosted" (Prompt 98). ?glass=frosted|liquid link wins, unknown values ignored. */
+export type GlassLook = "liquid" | "frosted";
+export const DEFAULT_GLASS_LOOK: GlassLook = "liquid";
+export const parseGlassLink = (link: string | null): GlassLook | null => (link === "liquid" || link === "frosted" ? link : null);
+export const effectiveGlassLook = (link: string | null): GlassLook => parseGlassLink(link) ?? DEFAULT_GLASS_LOOK;
+
+/** CSS of one glass piece (header / tab bar / Wishlist header). Frosted: tint + blur + soft edge. Liquid: almost clear, light blur, bright edge, top specular, inner glow. No stripes or texture inside either way. */
+export function glassPieceStyle(mode: StripeMode = "colorful", look: GlassLook = DEFAULT_GLASS_LOOK, cfg: Cfg = C): React.CSSProperties {
+  const g = cfg.glass, radius = g.capsule ? CAPSULE_RADIUS : g.radiusPx;
+  if (look === "frosted") {
+    const blur = `blur(${g.blurPx}px) saturate(${g.saturate})`;
+    return { background: glassFill(mode, "frosted", cfg), backdropFilter: blur, WebkitBackdropFilter: blur, boxShadow: `inset 0 0 0 ${g.edgeWidthPx}px ${g.edge}, ${g.shadow}`, borderRadius: radius };
+  }
+  const l = g.liquid, blur = `blur(${l.blurPx}px) saturate(${l.saturate})`;
   return {
-    background: glassFill(mode, cfg),
+    background: `linear-gradient(180deg, rgba(255,255,255,${l.highlightAlpha}) 0%, rgba(255,255,255,0) ${l.highlightHeightPct}%), ${glassFill(mode, "liquid", cfg)}`,
     backdropFilter: blur,
     WebkitBackdropFilter: blur,
-    boxShadow: `inset 0 0 0 ${g.edgeWidthPx}px ${g.edge}, ${g.shadow}`,
-    borderRadius: g.capsule ? CAPSULE_RADIUS : g.radiusPx,
+    boxShadow: `inset 0 0 0 ${g.edgeWidthPx}px ${l.edge}, inset 0 1px 0 rgba(255,255,255,${l.topLineAlpha}), inset 0 0 ${l.glowBlurPx}px rgba(255,255,255,${l.glowAlpha}), ${l.shadow}`,
+    borderRadius: radius,
   };
 }
+
+/** Text / icon legibility on the glass: liquid adds a soft light halo (bars stay clear), frosted needs none. */
+export const glassTextStyle = (look: GlassLook = DEFAULT_GLASS_LOOK, cfg: Cfg = C): React.CSSProperties => (look === "liquid" ? { textShadow: cfg.glass.liquid.textShadow } : {});
+export const glassIconStyle = (look: GlassLook = DEFAULT_GLASS_LOOK, cfg: Cfg = C): React.CSSProperties => (look === "liquid" ? { filter: cfg.glass.liquid.iconShadow } : {});
 
 /** Effective mode: ?stripe=0|1|simple link wins (1 = colorful, unknown values ignored), otherwise the Profile choice (device only, default off). */
 export const parseStripeLink = (link: string | null): StripeMode | null => (link === "1" ? "colorful" : link === "0" ? "off" : link === "simple" ? "simple" : null);
@@ -127,8 +142,9 @@ const simpleCfg = (cfg: Cfg = C): Cfg => ({ ...cfg, stops: cfg.simple.stops as u
 export const simpleStripeCss = (cfg: Cfg = C): string => stripeCss(simpleCfg(cfg));
 /** Simple background: soft vertical white -> very light grey gradient */
 export const simpleBackgroundCss = (cfg: Cfg = C): string => `linear-gradient(180deg, ${cfg.simple.bgTop} 0%, ${cfg.simple.bgBottom} 100%)`;
-/** Glass fill: colour of the mode, translucency shared (`glass.fillAlpha`) */
-export const glassFill = (mode: StripeMode = "colorful", cfg: Cfg = C): string => `rgba(${mode === "simple" ? cfg.simple.glassRgb : cfg.glass.rgb},${cfg.glass.fillAlpha})`;
+/** Glass fill. Frosted: colour of the mode, translucency shared (`glass.fillAlpha`). Liquid: white tint at `glass.liquid.fillAlpha`. */
+export const glassFill = (mode: StripeMode = "colorful", look: GlassLook = "frosted", cfg: Cfg = C): string =>
+  look === "liquid" ? `rgba(${cfg.glass.liquid.rgb},${cfg.glass.liquid.fillAlpha})` : `rgba(${mode === "simple" ? cfg.simple.glassRgb : cfg.glass.rgb},${cfg.glass.fillAlpha})`;
 /** Simple background: soft organic grey blobs (light grey mostly, some darker) over the white-to-grey base. Seeded by the outfit id: same outfit = same blobs. */
 export function greyBlobsCss(seed: string, cfg: Cfg = C): string {
   const g = cfg.simple.grey, rnd = seededRnd(hash32(`grey:${seed}`)), r = 45 + cfg.simple.grey.softness * 55;
