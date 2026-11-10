@@ -9,6 +9,13 @@ export const MAX_PER_COMBO = 5;                    // images per combination (1.
 export const NEUTRAL_SHARE = 0.25;                 // share of outfits that get a neutral picture although their combination has pictures (rest: combination chain)
 export const VEIL: { color: "white" | "black"; opacity: number } = { color: "white", opacity: 0 };   // readability veil over the picture, below the products; 0 = none. Link tuning: ?bgveil=0..0.8, ?bgveilcolor=white|black (debug, not stored)
 export const VEIL_MAX = 0.8;
+// PICTURE VEIL setting (Profile "Picture veil", Prompt 96): Off | Light | Dynamic | Dark. Only active in Pictures mode with a picture drawn. ?veil=off|light|dynamic|dark overrides the stored value.
+export const DEFAULT_VEIL_MODE = "dynamic" as const;   // default when nothing is stored
+export const VEIL_STRENGTH = 0.3;                  // Light (white) / Dark (black): fixed opacity
+export const DYN_DARK_BELOW = 0.25;                // Dynamic: part luminance below this = dark
+export const DYN_LIGHT_ABOVE = 0.6;                // Dynamic: part luminance above this = light (in between / unknown colour = mid)
+export const DYN_MIN_STRENGTH = 0.12;              // Dynamic: opacity at |dark - light| -> 0 (but not tied)
+export const DYN_MAX_STRENGTH = 0.35;              // Dynamic: opacity when all parts are dark (or all light)
 export const BG_DIR = "/backgrounds";              // public/backgrounds/<name>.webp
 /** The 15 combinations that may have their own images (season-family): 12 = four seasons x smart/street/active, plus three extended ones. */
 export const BG_COMBOS: readonly string[] = [

@@ -1,6 +1,7 @@
 // Shop preferences, pure (shared by browser and server): wire format, validation, weights.
 // Wire format: "slug:L,slug:M" (L = less, M = more). Normal is the default and never sent. Unknown ids are dropped on the server, size is capped.
 import { SHOP_PREF, SHOP_PREF_LIMITS, type ShopLevel } from "../config/shop-pref";
+import { DEFAULT_VEIL_MODE } from "../config/background-images";
 
 export type { ShopLevel };
 export type ShopPrefs = Record<string, "less" | "more">;
@@ -51,8 +52,14 @@ export type SeasonMode = "off" | "sprites" | "pictures";
 export const migrateSeason = (v: unknown): SeasonMode => (v === "off" || v === "sprites" || v === "pictures" ? v : v === false ? "off" : "sprites");
 /** ?season= link: 0 = off, 1 or sprites = sprites, pictures = pictures; unknown = no override */
 export const parseSeasonLink = (l: string | null | undefined): SeasonMode | null => (l === "0" ? "off" : l === "1" || l === "sprites" ? "sprites" : l === "pictures" ? "pictures" : null);
-export interface ProfilePrefs { v: 1; sale: boolean; bg: boolean; season: SeasonMode; mini: boolean; stripe: StripeMode; shops: ShopPrefs }
-export const DEFAULT_PREFS: ProfilePrefs = { v: 1, sale: true, bg: true, season: "sprites", mini: true, stripe: "off", shops: {} };
+export type VeilMode = "off" | "light" | "dynamic" | "dark";
+export const VEIL_MODES: readonly VeilMode[] = ["off", "light", "dynamic", "dark"];
+/** stored value -> mode; nothing / garbage = the configured default */
+export const migrateVeil = (v: unknown): VeilMode => (VEIL_MODES.includes(v as VeilMode) ? (v as VeilMode) : DEFAULT_VEIL_MODE);
+/** ?veil= link: off|light|dynamic|dark; unknown = no override */
+export const parseVeilLink = (l: string | null | undefined): VeilMode | null => (VEIL_MODES.includes(l as VeilMode) ? (l as VeilMode) : null);
+export interface ProfilePrefs { v: 1; sale: boolean; bg: boolean; season: SeasonMode; mini: boolean; stripe: StripeMode; veil: VeilMode; shops: ShopPrefs }
+export const DEFAULT_PREFS: ProfilePrefs = { v: 1, sale: true, bg: true, season: "sprites", mini: true, stripe: "off", veil: DEFAULT_VEIL_MODE, shops: {} };
 
 /** Effective Drape background (Wishlist Generate Outfits + My Outfits): ?bg=0|1 wins (testing), otherwise the user's choice. */
 export const effectiveBg = (link: string | null, localOn: boolean): boolean => (link === "1" ? true : link === "0" ? false : localOn);
@@ -71,7 +78,7 @@ export function cleanPrefs(raw: unknown): ProfilePrefs {
   }
   const stripe: StripeMode = r.stripe === true || r.stripe === "colorful" ? "colorful" : r.stripe === "simple" ? "simple" : "off", season = migrateSeason(r.season);
   const both = season === "pictures" && stripe !== "off";   // never both: Pictures wins
-  return { v: 1, sale: typeof r.sale === "boolean" ? r.sale : true, bg: typeof r.bg === "boolean" ? r.bg : true, season, mini: typeof r.mini === "boolean" ? r.mini : true, stripe: both ? "off" : stripe, shops };
+  return { v: 1, sale: typeof r.sale === "boolean" ? r.sale : true, bg: typeof r.bg === "boolean" ? r.bg : true, season, mini: typeof r.mini === "boolean" ? r.mini : true, stripe: both ? "off" : stripe, veil: migrateVeil(r.veil), shops };
 }
 
 /** read / write with the storage passed in, every access guarded (blocked storage = defaults, nothing thrown) */

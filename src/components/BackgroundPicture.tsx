@@ -4,9 +4,10 @@ import { animate } from "motion/react";
 import { BG_FADE_MS, BG_PRELOAD_NEXT } from "@/config/background-images";
 import { DURATION_MS, sec } from "@/config/motion";
 import { LAYER_Z, STAGE_SOURCES, type StageSource } from "@/config/season-decor";
-import { comboKey, parseVeil, pickBackground, pieceIds } from "@/lib/background-images";
-import { useModeNote, useSeasonMode } from "@/lib/client/season-decor";
+import { comboKey, pickBackground, pieceIds } from "@/lib/background-images";
+import { useModeNote, useSeasonMode, useVeilMode } from "@/lib/client/season-decor";
 import { useReducedMotion } from "@/lib/motion";
+import { outfitPartColors, parseVeilDebug, resolveVeil } from "@/lib/veil";
 import { stageBox, stageFromRects, type DecorStage } from "@/lib/season-decor";
 import type { FeedOutfit } from "@/lib/types";
 
@@ -41,12 +42,26 @@ function Pic({ src, onShown, onFail }: { src: string; onShown: () => void; onFai
   return <img ref={ref} src={src} alt="" decoding="async" draggable={false} onLoad={show} onError={onFail} className="absolute inset-0 h-full w-full" style={{ opacity: 0, objectFit: "cover", objectPosition: "center" }} />;
 }
 
+/** The veil over the picture: a white and a black layer whose opacities crossfade (same timing as the pictures). Starts at 0, so the veil fades in with the picture (no dark flash before it is decoded). */
+function VeilLayers({ color, opacity }: { color: "white" | "black"; opacity: number }) {
+  const w = useRef<HTMLDivElement>(null), k = useRef<HTMLDivElement>(null), reduced = useReducedMotion();
+  useEffect(() => {
+    const t = { white: color === "white" ? opacity : 0, black: color === "black" ? opacity : 0 };
+    for (const [el, v] of [[w.current, t.white], [k.current, t.black]] as const) {
+      if (!el) continue;
+      animate(el, { opacity: v }, { duration: sec(reduced ? DURATION_MS.reducedFade : BG_FADE_MS), ease: "easeInOut" });
+    }
+  }, [color, opacity, reduced]);
+  const base = { position: "absolute", inset: 0, opacity: 0, pointerEvents: "none" } as const;
+  return <><div ref={w} style={{ ...base, background: "white" }} /><div ref={k} style={{ ...base, background: "black" }} /></>;
+}
+
 /** Full-stage background picture of the outfit in view (mode Pictures only). `outfits[index]` = the outfit as shown; the picture is chosen by the pure `pickBackground`
  *  (combination of dominant season x style family, hash of the shown piece ids). Two pictures crossfade when the outfit changes. A picture that fails to load is simply not drawn. */
 function BackgroundPicture({ outfits, index, stageSource, onActive }: { outfits: (FeedOutfit | null)[]; index: number; stageSource: StageSource; onActive?: (on: boolean) => void }) {
   const mode = useSeasonMode(), note = useModeNote(), stage = useStage(stageSource);
   const debug = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("decordebug") === "1", []);
-  const veil = useMemo(() => (typeof window !== "undefined" ? parseVeil(window.location.search) : parseVeil("")), []);
+  const veilMode = useVeilMode(), dbgVeil = useMemo(() => parseVeilDebug(typeof window !== "undefined" ? window.location.search : ""), []);
   const pick = useMemo(() => {
     const o = outfits[index]; return mode === "pictures" && o ? pickBackground(o.tags, pieceIds(o)) : null;
   }, [mode, outfits, index]);
@@ -63,6 +78,7 @@ function BackgroundPicture({ outfits, index, stageSource, onActive }: { outfits:
   }, [src]);
   useEffect(() => { if (next && next.src !== pick?.src) { const im = new Image(); im.decoding = "async"; im.src = next.src; } }, [next, pick]);
   useEffect(() => { onActive?.(!!src); }, [src, onActive]);
+  const veil = useMemo(() => resolveVeil({ mode: veilMode, names: outfitPartColors(outfits[index]), pictureOn: mode === "pictures" && layers.length > 0, debug: dbgVeil }), [veilMode, outfits, index, mode, layers.length, dbgVeil]);
   if (mode !== "pictures" || !stage || !(stage.h > 0)) return null;
   const b = stageBox(stage);
   return (
@@ -73,10 +89,14 @@ function BackgroundPicture({ outfits, index, stageSource, onActive }: { outfits:
             onShown={() => setLayers((p) => p.filter((x) => x.id >= l.id))}
             onFail={() => { failed.current.add(l.src); last.current = null; setLayers((p) => p.filter((x) => x.id !== l.id)); }} />
         ))}
-        {veil.opacity > 0 && layers.length > 0 && <div style={{ position: "absolute", inset: 0, background: veil.color, opacity: veil.opacity }} />}
       </div>
+      {layers.length > 0 && (
+        <div aria-hidden className="pointer-events-none overflow-hidden" style={{ position: "fixed", left: b.x, top: b.y, width: b.w, height: b.h, zIndex: LAYER_Z.veil }}>
+          <VeilLayers color={veil.color} opacity={veil.opacity} />
+        </div>
+      )}
       {debug && <div aria-hidden style={{ position: "fixed", left: 4, top: stage.y + stage.h - 90, zIndex: 9999, pointerEvents: "none", font: "10px/1.25 ui-monospace, monospace", color: "#fff", background: "rgba(0,0,0,0.65)", padding: "1px 3px", whiteSpace: "pre" }}>
-        {`season mode ${mode}${note ? `  (${note})` : ""}\ncombo ${outfits[index] ? comboKey(outfits[index]!.tags) : "-"}  index ${pick?.index ?? "-"}\nbucket ${pick?.bucket ?? "-"}  step ${pick?.step ?? "-"}\nfile ${pick ? `${pick.name}.webp` : "none"}\nveil ${veil.opacity} ${veil.color}`}
+        {`season mode ${mode}${note ? `  (${note})` : ""}\ncombo ${outfits[index] ? comboKey(outfits[index]!.tags) : "-"}  index ${pick?.index ?? "-"}\nbucket ${pick?.bucket ?? "-"}  step ${pick?.step ?? "-"}\nfile ${pick ? `${pick.name}.webp` : "none"}\nveil mode ${veil.mode}${veil.override ? "  DEBUG OVERRIDE active" : ""}\nparts dark ${veil.counts?.dark ?? "-"} light ${veil.counts?.light ?? "-"} mid ${veil.counts?.mid ?? "-"}\nveil ${veil.color} ${veil.opacity.toFixed(3)}`}
       </div>}
     </>
   );

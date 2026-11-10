@@ -41,7 +41,7 @@ export const STAGE_SOURCES = {
 } as const;
 export type StageSource = keyof typeof STAGE_SOURCES;
 
-export const LAYER_Z = { stripe: 0, image: 2, decor: 5, figure: 10, products: 20, chrome: 30 } as const;
+export const LAYER_Z = { stripe: 0, image: 2, veil: 3, decor: 5, figure: 10, products: 20, chrome: 30 } as const;
 
 // ART MODE (default since Prompt 82: illustrations): painted sprites instead of the pixel art above (kept as `?decor=pixel`). Files in public/season-decor/, made by
 // scripts/build-season-decor.py from docs/reference/season-decor-source/*.png (border flood-fill keying, tolerances live in that script).

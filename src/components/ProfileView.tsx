@@ -8,9 +8,10 @@ import { PROFILE_TEXT as T, SHOP_LEVELS } from "@/config/profile";
 import { BG_MANIFEST } from "@/config/background-images";
 import { SHOP_LIST_MAX } from "@/config/shop-pref";
 import { filterShops, yourShops, type ShopRowInfo } from "@/lib/profile-shops";
-import { setBgLocal, setMiniLocal, setSaleLocal, setSeasonLocal, setShopLevel, setStripeLocal, usePrefs } from "@/lib/client/profile-store";
+import { setBgLocal, setMiniLocal, setSaleLocal, setSeasonLocal, setShopLevel, setStripeLocal, setVeilLocal, usePrefs } from "@/lib/client/profile-store";
 import { saleGlobalOn } from "@/lib/client/sale";
 import type { ShopLevel } from "@/lib/shop-pref";
+import { veilControlEnabled } from "@/lib/veil";
 import Segmented from "./Segmented";
 import Switch from "./Switch";
 import DeviceDebug from "./DeviceDebug";
@@ -59,7 +60,7 @@ function ShopRow({ shop, level, group }: { shop: ShopRowInfo; level: ShopLevel; 
 /** Profile tab (device only): greyed account header, feed settings, per-shop preferences. Everything is stored on this device; without storage it still works for the visit. */
 export default function ProfileView() {
   const reduced = useReducedMotion(), present = useIsPresent();
-  const prefs = usePrefs(), noImages = BG_MANIFEST.length === 0;
+  const prefs = usePrefs(), noImages = BG_MANIFEST.length === 0, veilOn = veilControlEnabled(prefs.season, noImages);
   const { shops, failed, retry } = useShops();
   const [query, setQuery] = useState("");
   const globalOn = saleGlobalOn();
@@ -92,6 +93,11 @@ export default function ProfileView() {
             </SettingRow>
             <SettingRow label={T.seasonLabel} note={noImages ? T.picturesEmpty : undefined}>
               <Segmented compact id="season-mode" label={T.seasonLabel} options={T.seasonOptions.map((o) => ({ ...o, disabled: o.id === "pictures" && noImages }))} value={noImages && prefs.season === "pictures" ? "sprites" : prefs.season} onChange={setSeasonLocal} />
+            </SettingRow>
+            <SettingRow label={T.veilLabel} note={veilOn ? undefined : T.veilNeedsPictures}>
+              <div className={veilOn ? undefined : "pointer-events-none opacity-40"} aria-disabled={!veilOn}>
+                <Segmented compact id="veil-mode" label={T.veilLabel} options={T.veilOptions.map((o) => ({ ...o, disabled: !veilOn }))} value={prefs.veil} onChange={setVeilLocal} />
+              </div>
             </SettingRow>
             <SettingRow label={T.miniLabel}>
               <Switch label={T.miniLabel} on={prefs.mini} onChange={setMiniLocal} />

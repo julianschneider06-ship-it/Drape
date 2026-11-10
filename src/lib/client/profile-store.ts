@@ -4,7 +4,7 @@
 import { useSyncExternalStore } from "react";
 import { PROFILE_KEY } from "@/config/shop-pref";
 import { chooseSeason, chooseStripe } from "@/lib/background-images";
-import { DEFAULT_PREFS, encodeShopPrefs, readPrefs, writePrefs, type ProfilePrefs, type SeasonMode, type ShopLevel, type StripeMode } from "@/lib/shop-pref";
+import { DEFAULT_PREFS, encodeShopPrefs, readPrefs, writePrefs, type ProfilePrefs, type SeasonMode, type ShopLevel, type StripeMode, type VeilMode } from "@/lib/shop-pref";
 
 const ls = (): Storage | null => { try { return typeof window === "undefined" ? null : window.localStorage; } catch { return null; } };
 let prefs: ProfilePrefs | null = null;
@@ -14,6 +14,7 @@ const commit = (p: ProfilePrefs) => { prefs = p; writePrefs(ls(), PROFILE_KEY, p
 export const setSaleLocal = (on: boolean) => commit({ ...getPrefs(), sale: on });
 export const setBgLocal = (on: boolean) => commit({ ...getPrefs(), bg: on });
 export const setSeasonLocal = (mode: SeasonMode) => commit({ ...getPrefs(), ...chooseSeason(getPrefs(), mode) });   // Pictures switches Stripe off
+export const setVeilLocal = (mode: VeilMode) => commit({ ...getPrefs(), veil: mode });
 export const setMiniLocal = (on: boolean) => commit({ ...getPrefs(), mini: on });
 export const setStripeLocal = (mode: StripeMode) => commit({ ...getPrefs(), ...chooseStripe(getPrefs(), mode) });   // Colorful / Simple switches Pictures to Sprites
 export function setShopLevel(id: string, level: ShopLevel) {
