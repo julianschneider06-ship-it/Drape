@@ -109,3 +109,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 101: winter-active 5 imported; all three winter groups done (winter rugged empty); last commit on main: see git log.
 - Prompt 102: rugged background pictures, per group: autumn-rugged 5 imported (0 skipped, 0 duplicates); winter-rugged follows.
 - Prompt 102: winter-rugged 5 imported (1 upscaled, 0 skipped, 0 duplicates); both rugged groups done; last commit on main: see git log.
+- Prompt 103: background picture audit written to docs/background-audit.md (74 images, replace list, per-group counts); read-only, nothing changed in src/public.
