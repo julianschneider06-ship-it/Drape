@@ -107,3 +107,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 101: winter background pictures, delivered per group (message first line = group): winter-smart 5 imported (street/active follow); last commit on main: see git log.
 - Prompt 101: winter-street 4 imported (1 skipped: 236 px wide); street done, active follows.
 - Prompt 101: winter-active 5 imported; all three winter groups done (winter rugged empty); last commit on main: see git log.
+- Prompt 102: rugged background pictures, per group: autumn-rugged 5 imported (0 skipped, 0 duplicates); winter-rugged follows.
