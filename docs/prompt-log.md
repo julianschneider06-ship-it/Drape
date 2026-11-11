@@ -106,3 +106,4 @@ One line per prompt: number, short content, commit on main if known. Sessions st
 - Prompt 100: liquid glass bars (almost clear, light-based edge/highlight, lens copy of the background; `?glass=frosted|liquid`, `?glassfill/glassblur/glasszoom`, default liquid); last commit on main: see git log.
 - Prompt 101: winter background pictures, delivered per group (message first line = group): winter-smart 5 imported (street/active follow); last commit on main: see git log.
 - Prompt 101: winter-street 4 imported (1 skipped: 236 px wide); street done, active follows.
+- Prompt 101: winter-active 5 imported; all three winter groups done (winter rugged empty); last commit on main: see git log.
