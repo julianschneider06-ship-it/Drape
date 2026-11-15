@@ -1,5 +1,6 @@
 // Batched, append-only event tracking: events are queued and sent every few seconds, on tab hide, or at 20 events.
 import { getDeviceId } from "./device";
+import { trackingAllowed } from "@/lib/analytics-guard";
 
 export interface TrackEvent {
   event_type: "impression" | "dwell_ms" | "tap_product" | "view_product_click" | "scroll_past" | "outfit_up" | "outfit_down" | "outfit_clear" | "swap" | "search_started" | "search_submitted";
@@ -21,6 +22,7 @@ function send(useBeacon: boolean) {
 }
 
 export function track(e: TrackEvent) {
+  if (typeof navigator !== "undefined" && !trackingAllowed(navigator)) return;   // bots / automation send nothing
   queue.push({ ...e, client_ts: new Date().toISOString() });
   if (queue.length >= 20) { send(false); return; }
   if (!timer) timer = setTimeout(() => { timer = null; send(false); }, 5000);

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Permanent_Marker } from "next/font/google";
 import "./globals.css";
+import AnalyticsGate from "@/components/AnalyticsGate";
 
 // free kid-marker font for the red SALE label (same hand-drawn style as the outline)
 const marker = Permanent_Marker({ weight: "400", subsets: ["latin"], display: "swap", variable: "--font-marker" });
@@ -22,7 +23,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={marker.variable}>{children}</body>
+      <body className={marker.variable}>{children}<AnalyticsGate /></body>
     </html>
   );
 }
